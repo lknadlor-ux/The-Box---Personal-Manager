@@ -1,0 +1,17 @@
+{
+  "name": "The Box OS 5.0",
+  "short_name": "The Box",
+  "description": "Cloud-synced personal operating system for pharmacy, clinic, SK, finance, and productivity.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#090b10",
+  "theme_color": "#090b10",
+  "orientation": "any",
+  "lang": "en-PH",
+  "categories": [
+    "productivity",
+    "business",
+    "utilities"
+  ]
+}
