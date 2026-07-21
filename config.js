@@ -11,6 +11,6 @@
 */
 
 window.BOX_SUPABASE_CONFIG = {
-  url: "https://tmohmufbytcpmefiiqzx.supabase.co"
+  url: "https://tmohmufbytcpmefiiqzx.supabase.co",
   publishableKey: "sb_publishable_cA83tIaBFVn7Q8BGNY-QuQ_K_WXVqym"
 };
