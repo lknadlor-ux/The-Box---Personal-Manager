@@ -97,7 +97,7 @@ let timerInterval = null;
 let topWindowZ = 20;
 let toastTimer = null;
 
-const DOCUMENT_FOLDERS = [
+const DEFAULT_DOCUMENT_FOLDERS = [
   "FDA",
   "PhilHealth",
   "Suppliers",
@@ -109,6 +109,7 @@ const DOCUMENT_FOLDERS = [
 ];
 
 let documents = [];
+let documentFolders = [];
 let activeDocumentFolder = "all";
 let documentSearchTerm = "";
 let documentsLoading = false;
@@ -1137,18 +1138,123 @@ function formatDocumentDate(timestamp) {
   });
 }
 
+function normalizeFolderName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function getCustomDocumentFolderNames() {
+  return documentFolders
+    .map((folder) => normalizeFolderName(folder.name))
+    .filter(Boolean)
+    .sort((first, second) =>
+      first.localeCompare(second, undefined, { sensitivity: "base" })
+    );
+}
+
+function getAllDocumentFolderNames() {
+  const names = [...DEFAULT_DOCUMENT_FOLDERS, ...getCustomDocumentFolderNames()];
+  const seen = new Set();
+
+  return names.filter((name) => {
+    const key = name.toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getFolderIcon(folderName) {
+  const defaultIcons = {
+    FDA: "F",
+    PhilHealth: "P",
+    Suppliers: "S",
+    SK: "K",
+    HR: "H",
+    Finance: "₱",
+    Legal: "§",
+    Personal: "L"
+  };
+
+  return defaultIcons[folderName] || normalizeFolderName(folderName).charAt(0).toUpperCase() || "◆";
+}
+
+function selectDocumentFolder(folderName) {
+  activeDocumentFolder = folderName;
+  renderDocuments();
+}
+
+function renderDocumentFolderControls() {
+  const list = $("documentFolderList");
+  const select = $("documentUploadFolder");
+  if (!list || !select) return;
+
+  const previousSelection = select.value;
+  const folderNames = getAllDocumentFolderNames();
+
+  list.innerHTML = "";
+  folderNames.forEach((folderName) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "document-folder";
+    button.dataset.documentFolder = folderName;
+
+    const icon = document.createElement("span");
+    icon.textContent = getFolderIcon(folderName);
+
+    const label = document.createElement("strong");
+    label.textContent = folderName;
+
+    const count = document.createElement("small");
+    count.dataset.documentCount = folderName;
+    count.textContent = documents.filter(
+      (documentItem) => documentItem.folder === folderName
+    ).length;
+
+    button.append(icon, label, count);
+    button.addEventListener("click", () => selectDocumentFolder(folderName));
+    list.appendChild(button);
+  });
+
+  select.innerHTML = "";
+  folderNames.forEach((folderName) => {
+    const option = document.createElement("option");
+    option.value = folderName;
+    option.textContent = folderName;
+    select.appendChild(option);
+  });
+
+  const preferredSelection = folderNames.includes(previousSelection)
+    ? previousSelection
+    : folderNames.includes(activeDocumentFolder)
+      ? activeDocumentFolder
+      : folderNames.includes("Personal")
+        ? "Personal"
+        : folderNames[0] || "";
+
+  select.value = preferredSelection;
+}
+
 function getVisibleDocuments() {
+  const normalizedSearch = documentSearchTerm.toLocaleLowerCase();
+
   const filtered = documents.filter((documentItem) => {
     const matchesFolder =
       activeDocumentFolder === "all" ||
       (activeDocumentFolder === "favorites" && documentItem.is_favorite) ||
       documentItem.folder === activeDocumentFolder;
 
-    const matchesSearch = String(documentItem.name || "")
-      .toLowerCase()
-      .includes(documentSearchTerm.toLowerCase());
+    const searchableText = [
+      documentItem.name,
+      documentItem.folder,
+      documentItem.details
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase();
 
-    return matchesFolder && matchesSearch;
+    return matchesFolder && searchableText.includes(normalizedSearch);
   });
 
   const sortMode = $("documentSort")?.value || "newest";
@@ -1190,7 +1296,9 @@ function updateDocumentAccessUI() {
   [
     "chooseDocumentFilesButton",
     "documentUploadFolder",
-    "refreshDocumentsButton"
+    "documentUploadDetails",
+    "refreshDocumentsButton",
+    "addDocumentFolderButton"
   ].forEach((id) => {
     const element = $(id);
     if (element) element.disabled = !ready || documentsLoading;
@@ -1216,14 +1324,49 @@ function renderDocumentCounts() {
   $("documentAllFolderCount").textContent = documents.length;
   $("documentFavoritesFolderCount").textContent = favorites;
 
-  DOCUMENT_FOLDERS.forEach((folder) => {
-    const element = document.querySelector(`[data-document-count="${folder}"]`);
-    if (element) {
-      element.textContent = documents.filter(
-        (documentItem) => documentItem.folder === folder
-      ).length;
-    }
+  document.querySelectorAll("[data-document-count]").forEach((element) => {
+    const folder = element.dataset.documentCount;
+    element.textContent = documents.filter(
+      (documentItem) => documentItem.folder === folder
+    ).length;
   });
+}
+
+function openDocumentFolderModal() {
+  if (!window.BoxCloud?.isReady()) {
+    openAuthOverlay();
+    return;
+  }
+
+  $("documentFolderName").value = "";
+  $("documentFolderModal").classList.add("open");
+  $("documentFolderModal").setAttribute("aria-hidden", "false");
+  setTimeout(() => $("documentFolderName").focus(), 40);
+}
+
+function closeDocumentFolderModal() {
+  $("documentFolderModal").classList.remove("open");
+  $("documentFolderModal").setAttribute("aria-hidden", "true");
+}
+
+function updateDocumentDetailsCharacterCount() {
+  const value = $("documentDetailsInput")?.value || "";
+  $("documentDetailsCharacterCount").textContent = value.length;
+}
+
+function openDocumentDetailsModal(documentItem) {
+  $("documentDetailsId").value = documentItem.id;
+  $("documentDetailsFileName").textContent = documentItem.name;
+  $("documentDetailsInput").value = documentItem.details || "";
+  updateDocumentDetailsCharacterCount();
+  $("documentDetailsModal").classList.add("open");
+  $("documentDetailsModal").setAttribute("aria-hidden", "false");
+  setTimeout(() => $("documentDetailsInput").focus(), 40);
+}
+
+function closeDocumentDetailsModal() {
+  $("documentDetailsModal").classList.remove("open");
+  $("documentDetailsModal").setAttribute("aria-hidden", "true");
 }
 
 async function openDocumentPreview(documentItem) {
@@ -1379,6 +1522,15 @@ function buildDocumentCard(documentItem) {
 
   meta.append(folderChip, sizeChip);
 
+  const details = String(documentItem.details || "").trim();
+  let detailsBlock = null;
+  if (details) {
+    detailsBlock = document.createElement("p");
+    detailsBlock.className = "document-card-details";
+    detailsBlock.textContent = details;
+    detailsBlock.title = details;
+  }
+
   const actions = document.createElement("div");
   actions.className = "document-card-actions";
 
@@ -1394,6 +1546,11 @@ function buildDocumentCard(documentItem) {
     downloadStoredDocument(documentItem, downloadButton);
   });
 
+  const detailsButton = document.createElement("button");
+  detailsButton.type = "button";
+  detailsButton.textContent = details ? "Edit details" : "Add details";
+  detailsButton.addEventListener("click", () => openDocumentDetailsModal(documentItem));
+
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
   deleteButton.className = "document-delete-button";
@@ -1404,8 +1561,10 @@ function buildDocumentCard(documentItem) {
     removeStoredDocument(documentItem, deleteButton);
   });
 
-  actions.append(openButton, downloadButton, deleteButton);
-  card.append(top, meta, actions);
+  actions.append(openButton, downloadButton, detailsButton, deleteButton);
+  card.append(top, meta);
+  if (detailsBlock) card.appendChild(detailsBlock);
+  card.appendChild(actions);
   return card;
 }
 
@@ -1413,6 +1572,7 @@ function renderDocuments() {
   const list = $("documentList");
   if (!list) return;
 
+  renderDocumentFolderControls();
   updateDocumentAccessUI();
   renderDocumentCounts();
 
@@ -1470,23 +1630,29 @@ async function loadDocuments({ silent = false } = {}) {
   }
 
   documentsLoading = true;
-  if (!silent) setDocumentUploadStatus("Loading documents…");
+  if (!silent) setDocumentUploadStatus("Loading documents and folders…");
   renderDocuments();
 
-  const result = await window.BoxCloud.listDocuments();
+  const [documentResult, folderResult] = await Promise.all([
+    window.BoxCloud.listDocuments(),
+    window.BoxCloud.listDocumentFolders()
+  ]);
   documentsLoading = false;
 
-  if (result.error) {
+  const firstError = documentResult.error || folderResult.error;
+  if (firstError) {
     documents = [];
+    documentFolders = [];
     setDocumentUploadStatus(
-      `Document Vault unavailable: ${result.error.message}. Run the Phase 6A Supabase setup SQL if you have not done so yet.`,
+      `Document Vault unavailable: ${firstError.message}. Run the Phase 6A.3 Supabase migration SQL before using custom folders and document details.`,
       "error"
     );
     renderDocuments();
     return;
   }
 
-  documents = result.data || [];
+  documents = documentResult.data || [];
+  documentFolders = folderResult.data || [];
   if (!silent) setDocumentUploadStatus("Vault is up to date.", "success");
   renderDocuments();
 }
@@ -1515,6 +1681,7 @@ async function uploadSelectedDocuments() {
   }
 
   const folder = $("documentUploadFolder").value;
+  const details = $("documentUploadDetails").value.trim();
   const uploadButton = $("uploadDocumentsButton");
   uploadButton.disabled = true;
   $("chooseDocumentFilesButton").disabled = true;
@@ -1527,7 +1694,7 @@ async function uploadSelectedDocuments() {
       `Uploading ${index + 1} of ${files.length}: ${file.name}`
     );
 
-    const result = await window.BoxCloud.uploadDocument(file, folder);
+    const result = await window.BoxCloud.uploadDocument(file, folder, details);
 
     if (result.error) {
       setDocumentUploadStatus(
@@ -1542,6 +1709,7 @@ async function uploadSelectedDocuments() {
   }
 
   input.value = "";
+  $("documentUploadDetails").value = "";
   $("documentFileSelection").textContent =
     "Choose one or more files, up to 25 MB each.";
   $("chooseDocumentFilesButton").disabled = false;
@@ -1943,11 +2111,105 @@ document.querySelectorAll("[data-assistant-action]").forEach((button) => {
 });
 
 
-document.querySelectorAll(".document-folder").forEach((button) => {
+document.querySelectorAll(".document-sidebar > .document-folder").forEach((button) => {
   button.addEventListener("click", () => {
-    activeDocumentFolder = button.dataset.documentFolder;
-    renderDocuments();
+    selectDocumentFolder(button.dataset.documentFolder);
   });
+});
+
+$("addDocumentFolderButton").addEventListener("click", openDocumentFolderModal);
+$("closeDocumentFolderModalButton").addEventListener("click", closeDocumentFolderModal);
+$("cancelDocumentFolderButton").addEventListener("click", closeDocumentFolderModal);
+
+$("documentFolderModal").addEventListener("pointerdown", (event) => {
+  if (event.target === $("documentFolderModal")) closeDocumentFolderModal();
+});
+
+$("documentFolderForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const folderName = normalizeFolderName($("documentFolderName").value);
+  const saveButton = $("saveDocumentFolderButton");
+  const duplicate = getAllDocumentFolderNames().some(
+    (name) => name.toLocaleLowerCase() === folderName.toLocaleLowerCase()
+  );
+
+  if (!folderName) {
+    setDocumentUploadStatus("Enter a folder name.", "error");
+    $("documentFolderName").focus();
+    return;
+  }
+
+  if (duplicate) {
+    setDocumentUploadStatus(`A folder named “${folderName}” already exists.`, "error");
+    $("documentFolderName").focus();
+    return;
+  }
+
+  saveButton.disabled = true;
+  saveButton.textContent = "Creating…";
+  const result = await window.BoxCloud.createDocumentFolder(folderName);
+  saveButton.disabled = false;
+  saveButton.textContent = "Create folder";
+
+  if (result.error) {
+    setDocumentUploadStatus(result.error.message, "error");
+    return;
+  }
+
+  documentFolders.push(result.data);
+  activeDocumentFolder = result.data.name;
+  closeDocumentFolderModal();
+  renderDocuments();
+  $("documentUploadFolder").value = result.data.name;
+  setDocumentUploadStatus(`Folder “${result.data.name}” created.`, "success");
+  showToast("Folder created");
+});
+
+$("closeDocumentDetailsModalButton").addEventListener("click", closeDocumentDetailsModal);
+$("cancelDocumentDetailsButton").addEventListener("click", closeDocumentDetailsModal);
+
+$("documentDetailsModal").addEventListener("pointerdown", (event) => {
+  if (event.target === $("documentDetailsModal")) closeDocumentDetailsModal();
+});
+
+$("documentDetailsInput").addEventListener("input", updateDocumentDetailsCharacterCount);
+
+$("documentDetailsForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const documentId = $("documentDetailsId").value;
+  const documentItem = documents.find((item) => String(item.id) === String(documentId));
+  if (!documentItem) {
+    closeDocumentDetailsModal();
+    setDocumentUploadStatus("The selected document could not be found.", "error");
+    return;
+  }
+
+  const details = $("documentDetailsInput").value.trim();
+  const saveButton = $("saveDocumentDetailsButton");
+  saveButton.disabled = true;
+  saveButton.textContent = "Saving…";
+
+  const result = await window.BoxCloud.updateDocumentDetails(documentId, details);
+
+  saveButton.disabled = false;
+  saveButton.textContent = "Save details";
+
+  if (result.error) {
+    setDocumentUploadStatus(result.error.message, "error");
+    return;
+  }
+
+  documentItem.details = result.data?.details || "";
+  documentItem.updated_at = result.data?.updated_at || new Date().toISOString();
+  closeDocumentDetailsModal();
+  renderDocuments();
+  setDocumentUploadStatus(
+    documentItem.details ? "Document details saved." : "Document details cleared.",
+    "success"
+  );
+  showToast(documentItem.details ? "Details saved" : "Details cleared");
 });
 
 $("documentSearch").addEventListener("input", (event) => {
@@ -1989,6 +2251,16 @@ $("documentFiles").addEventListener("change", () => {
 $("documentUploadForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   await uploadSelectedDocuments();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+
+  if ($("documentDetailsModal").classList.contains("open")) {
+    closeDocumentDetailsModal();
+  } else if ($("documentFolderModal").classList.contains("open")) {
+    closeDocumentFolderModal();
+  }
 });
 
 
@@ -2113,6 +2385,7 @@ window.addEventListener("boxcloudstatus", (event) => {
   if (nextUserId !== currentDocumentUserId) {
     currentDocumentUserId = nextUserId;
     documents = [];
+    documentFolders = [];
     setDocumentUploadStatus("");
 
     if (nextUserId) {

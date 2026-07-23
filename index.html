@@ -508,7 +508,7 @@
               <div>
                 <small>PRIVATE CLOUD STORAGE</small>
                 <h2>Document Vault</h2>
-                <p>Organize FDA, PhilHealth, SK, finance, legal, and personal files in one secure workspace.</p>
+                <p>Create folders, add document details, and organize private files in one secure workspace.</p>
               </div>
               <div class="document-stats">
                 <div><strong id="documentTotalCount">0</strong><span>Files</span></div>
@@ -526,27 +526,23 @@
             <div class="documents-layout">
               <aside class="document-sidebar">
                 <div class="document-sidebar-heading">
-                  <span>Folders</span>
-                  <small>Cloud vault</small>
+                  <div>
+                    <span>Folders</span>
+                    <small>Cloud vault</small>
+                  </div>
+                  <button id="addDocumentFolderButton" class="document-add-folder-button" type="button" aria-label="Create a new document folder" title="Create folder">＋</button>
                 </div>
                 <button class="document-folder active" data-document-folder="all"><span>▦</span><strong>All files</strong><small id="documentAllFolderCount">0</small></button>
                 <button class="document-folder" data-document-folder="favorites"><span>★</span><strong>Favorites</strong><small id="documentFavoritesFolderCount">0</small></button>
                 <div class="document-folder-divider"></div>
-                <button class="document-folder" data-document-folder="FDA"><span>F</span><strong>FDA</strong><small data-document-count="FDA">0</small></button>
-                <button class="document-folder" data-document-folder="PhilHealth"><span>P</span><strong>PhilHealth</strong><small data-document-count="PhilHealth">0</small></button>
-                <button class="document-folder" data-document-folder="Suppliers"><span>S</span><strong>Suppliers</strong><small data-document-count="Suppliers">0</small></button>
-                <button class="document-folder" data-document-folder="SK"><span>K</span><strong>SK</strong><small data-document-count="SK">0</small></button>
-                <button class="document-folder" data-document-folder="HR"><span>H</span><strong>HR</strong><small data-document-count="HR">0</small></button>
-                <button class="document-folder" data-document-folder="Finance"><span>₱</span><strong>Finance</strong><small data-document-count="Finance">0</small></button>
-                <button class="document-folder" data-document-folder="Legal"><span>§</span><strong>Legal</strong><small data-document-count="Legal">0</small></button>
-                <button class="document-folder" data-document-folder="Personal"><span>L</span><strong>Personal</strong><small data-document-count="Personal">0</small></button>
+                <div id="documentFolderList" class="document-folder-list" aria-live="polite"></div>
               </aside>
 
               <section class="document-workspace">
                 <div class="document-toolbar">
                   <label class="document-search">
                     <span>⌕</span>
-                    <input id="documentSearch" type="search" placeholder="Search file names">
+                    <input id="documentSearch" type="search" placeholder="Search names, folders, or details">
                   </label>
                   <select id="documentSort" aria-label="Sort documents">
                     <option value="newest">Newest first</option>
@@ -564,17 +560,13 @@
                   </div>
                   <input id="documentFiles" type="file" multiple hidden>
                   <button id="chooseDocumentFilesButton" class="secondary-button" type="button">Choose files</button>
-                  <select id="documentUploadFolder" aria-label="Destination folder">
-                    <option value="FDA">FDA</option>
-                    <option value="PhilHealth">PhilHealth</option>
-                    <option value="Suppliers">Suppliers</option>
-                    <option value="SK">SK</option>
-                    <option value="HR">HR</option>
-                    <option value="Finance">Finance</option>
-                    <option value="Legal">Legal</option>
-                    <option value="Personal" selected>Personal</option>
-                  </select>
+                  <select id="documentUploadFolder" aria-label="Destination folder"></select>
                   <button id="uploadDocumentsButton" class="primary-button" type="submit" disabled>Upload</button>
+
+                  <label class="document-upload-details">
+                    <span>Document details <small>Optional</small></span>
+                    <textarea id="documentUploadDetails" maxlength="2000" rows="2" placeholder="Add a short description, reference number, owner, purpose, or other notes. When uploading multiple files, the same details will be applied to each file."></textarea>
+                  </label>
                 </form>
 
                 <div id="documentUploadStatus" class="document-upload-status" aria-live="polite"></div>
@@ -697,6 +689,56 @@
     </footer>
   </div>
 
+
+  <div id="documentFolderModal" class="vault-modal-overlay" aria-hidden="true">
+    <section class="vault-modal-card vault-modal-card-small" role="dialog" aria-modal="true" aria-labelledby="documentFolderModalHeading">
+      <div class="vault-modal-header">
+        <div>
+          <small>DOCUMENT VAULT</small>
+          <h2 id="documentFolderModalHeading">Create folder</h2>
+        </div>
+        <button id="closeDocumentFolderModalButton" class="window-button" type="button" aria-label="Close folder creator">✕</button>
+      </div>
+
+      <form id="documentFolderForm" class="vault-modal-form">
+        <label class="vault-field">
+          Folder name <span>*</span>
+          <input id="documentFolderName" type="text" maxlength="60" autocomplete="off" placeholder="Example: Business Permits" required>
+        </label>
+        <p class="vault-field-help">Folder names must be unique. Default folders cannot be duplicated.</p>
+        <div class="vault-modal-actions">
+          <button id="cancelDocumentFolderButton" class="secondary-button" type="button">Cancel</button>
+          <button id="saveDocumentFolderButton" class="primary-button" type="submit">Create folder</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <div id="documentDetailsModal" class="vault-modal-overlay" aria-hidden="true">
+    <section class="vault-modal-card" role="dialog" aria-modal="true" aria-labelledby="documentDetailsModalHeading">
+      <div class="vault-modal-header">
+        <div>
+          <small>DOCUMENT DETAILS</small>
+          <h2 id="documentDetailsModalHeading">Edit document details</h2>
+          <p id="documentDetailsFileName"></p>
+        </div>
+        <button id="closeDocumentDetailsModalButton" class="window-button" type="button" aria-label="Close document details editor">✕</button>
+      </div>
+
+      <form id="documentDetailsForm" class="vault-modal-form">
+        <input id="documentDetailsId" type="hidden">
+        <label class="vault-field">
+          Details <small>Optional</small>
+          <textarea id="documentDetailsInput" maxlength="2000" rows="7" placeholder="Add a description, reference number, owner, purpose, renewal information, or anything else you need to remember."></textarea>
+        </label>
+        <div class="vault-detail-counter"><span id="documentDetailsCharacterCount">0</span>/2000</div>
+        <div class="vault-modal-actions">
+          <button id="cancelDocumentDetailsButton" class="secondary-button" type="button">Cancel</button>
+          <button id="saveDocumentDetailsButton" class="primary-button" type="submit">Save details</button>
+        </div>
+      </form>
+    </section>
+  </div>
 
   <div id="taskModal" class="task-modal-overlay" aria-hidden="true">
     <section class="task-modal-card" role="dialog" aria-modal="true" aria-labelledby="taskModalHeading">

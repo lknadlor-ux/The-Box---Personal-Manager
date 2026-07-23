@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6a2-daily-quote-event-date";
+const CACHE_NAME = "the-box-os-phase-6a3-custom-folders-document-details";
 
 const APP_FILES = [
   "./",

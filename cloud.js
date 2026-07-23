@@ -148,14 +148,14 @@ window.BoxCloud = (() => {
 
     const { data, error } = await client
       .from("documents")
-      .select("id,name,storage_path,folder,mime_type,size_bytes,is_favorite,created_at,updated_at")
+      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,created_at,updated_at")
       .eq("user_id", session.user.id)
       .order("created_at", { ascending: false });
 
     return { data: data || [], error };
   }
 
-  async function uploadDocument(file, folder) {
+  async function uploadDocument(file, folder, details = "") {
     if (!isReady()) return { data: null, error: new Error("Sign in before uploading documents.") };
     if (!(file instanceof File)) return { data: null, error: new Error("Choose a valid file.") };
     if (file.size > MAX_DOCUMENT_SIZE) {
@@ -191,13 +191,14 @@ window.BoxCloud = (() => {
         user_id: session.user.id,
         name: file.name,
         storage_path: storagePath,
-        folder,
+        folder: String(folder || "Personal").trim().slice(0, 60) || "Personal",
+        details: String(details || "").trim().slice(0, 2000) || null,
         mime_type: file.type || null,
         size_bytes: file.size,
         is_favorite: false,
         updated_at: new Date().toISOString()
       })
-      .select("id,name,storage_path,folder,mime_type,size_bytes,is_favorite,created_at,updated_at")
+      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,created_at,updated_at")
       .single();
 
     if (metadataError) {
@@ -208,6 +209,64 @@ window.BoxCloud = (() => {
 
     emit("online", "Synced");
     return { data, error: null };
+  }
+
+  async function listDocumentFolders() {
+    if (!isReady()) return { data: [], error: new Error("Sign in to access document folders.") };
+
+    const { data, error } = await client
+      .from("document_folders")
+      .select("id,name,created_at,updated_at")
+      .eq("user_id", session.user.id)
+      .order("name", { ascending: true });
+
+    return { data: data || [], error };
+  }
+
+  async function createDocumentFolder(name) {
+    if (!isReady()) return { data: null, error: new Error("Sign in before creating a folder.") };
+
+    const cleanName = String(name || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .slice(0, 60);
+
+    if (!cleanName) {
+      return { data: null, error: new Error("Enter a folder name.") };
+    }
+
+    const { data, error } = await client
+      .from("document_folders")
+      .insert({
+        user_id: session.user.id,
+        name: cleanName,
+        updated_at: new Date().toISOString()
+      })
+      .select("id,name,created_at,updated_at")
+      .single();
+
+    emit(error ? "error" : "online", error ? "Folder error" : "Synced");
+    return { data, error };
+  }
+
+  async function updateDocumentDetails(documentId, details) {
+    if (!isReady()) return { data: null, error: new Error("Sign in first.") };
+
+    const cleanDetails = String(details || "").trim().slice(0, 2000);
+
+    const { data, error } = await client
+      .from("documents")
+      .update({
+        details: cleanDetails || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", documentId)
+      .eq("user_id", session.user.id)
+      .select("id,details,updated_at")
+      .single();
+
+    emit(error ? "error" : "online", error ? "Sync error" : "Synced");
+    return { data, error };
   }
 
   async function setDocumentFavorite(documentId, isFavorite) {
@@ -390,7 +449,10 @@ window.BoxCloud = (() => {
     queueCollectionSync,
     queueNoteSync,
     listDocuments,
+    listDocumentFolders,
+    createDocumentFolder,
     uploadDocument,
+    updateDocumentDetails,
     setDocumentFavorite,
     createDocumentUrl,
     downloadDocument,

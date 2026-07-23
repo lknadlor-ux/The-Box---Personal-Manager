@@ -2466,3 +2466,271 @@ body.light-theme .dock {
     min-height: 0;
   }
 }
+
+/* Phase 6A.3 — custom document folders and document details */
+.document-sidebar-heading > div {
+  min-width: 0;
+}
+
+.document-sidebar-heading > div span,
+.document-sidebar-heading > div small {
+  display: block;
+}
+
+.document-add-folder-button {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--accent);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.document-add-folder-button:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.document-add-folder-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.document-folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.document-upload-details {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.document-upload-details > span small {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.document-upload-details textarea {
+  width: 100%;
+  min-height: 74px;
+  padding: 11px 12px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.document-card-details {
+  display: -webkit-box;
+  margin: 0 0 12px;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.document-card-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+}
+
+.vault-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 370;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(5, 7, 11, 0.72);
+  backdrop-filter: blur(16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.2s ease;
+}
+
+.vault-modal-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.vault-modal-card {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 40px);
+  padding: 24px;
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 24px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow);
+  transform: translateY(14px) scale(0.98);
+  transition: 0.2s ease;
+}
+
+.vault-modal-card-small {
+  width: min(460px, 100%);
+}
+
+.vault-modal-overlay.open .vault-modal-card {
+  transform: translateY(0) scale(1);
+}
+
+.vault-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.vault-modal-header small {
+  color: var(--accent);
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.vault-modal-header h2 {
+  margin: 5px 0 0;
+}
+
+.vault-modal-header p {
+  max-width: 500px;
+  margin: 7px 0 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vault-modal-form {
+  display: grid;
+  gap: 12px;
+}
+
+.vault-field {
+  display: grid;
+  gap: 7px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.vault-field > span {
+  color: var(--danger);
+}
+
+.vault-field > small {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.vault-field input,
+.vault-field textarea {
+  width: 100%;
+}
+
+.vault-field textarea {
+  min-height: 170px;
+  padding: 13px;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.vault-field-help {
+  margin: -2px 0 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.vault-detail-counter {
+  margin-top: -7px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: right;
+}
+
+.vault-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 4px;
+}
+
+.vault-modal-actions button {
+  min-width: 120px;
+}
+
+@media (max-width: 760px) {
+  .document-folder-list {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .document-card-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .document-card-actions .document-delete-button {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 520px) {
+  .vault-modal-overlay {
+    align-items: end;
+    padding: 10px;
+  }
+
+  .vault-modal-card,
+  .vault-modal-card-small {
+    width: 100%;
+    max-height: calc(100vh - 20px);
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .vault-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .vault-modal-actions button {
+    width: 100%;
+  }
+
+  .document-folder-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.app-window.window-narrow .document-folder-list {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.app-window.window-compact .document-folder-list,
+.app-window.window-compact .document-card-actions {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-compact .document-card-actions .document-delete-button {
+  grid-column: auto;
+}
