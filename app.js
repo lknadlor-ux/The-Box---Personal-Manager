@@ -16,6 +16,46 @@ const DAVAO = {
   longitude: 125.6128
 };
 
+const DAILY_QUOTES = [
+  "Start where you are. Make the next move count.",
+  "Progress grows from the work you repeat.",
+  "Clear priorities create calmer days.",
+  "Small wins are still wins.",
+  "Do the important thing before the urgent noise.",
+  "Consistency turns plans into outcomes.",
+  "Protect your focus; it shapes your future.",
+  "One completed step is better than ten delayed plans.",
+  "Make today useful, not perfect.",
+  "Momentum begins with one honest action.",
+  "Your systems should make hard days easier.",
+  "Rest is part of sustainable progress.",
+  "Finish what matters, then let the rest wait.",
+  "Good work grows from clear attention.",
+  "A calm plan can carry a demanding day.",
+  "Choose progress over pressure.",
+  "Build the day you want, one decision at a time.",
+  "Your next action matters more than your last delay.",
+  "Keep moving, even when the step is small.",
+  "Direction matters more than speed.",
+  "Make room for the work that changes things.",
+  "Discipline is how goals survive busy days.",
+  "Focus on what you can finish today.",
+  "Reliable habits create remarkable results.",
+  "Today does not need to be perfect to be meaningful.",
+  "Plan clearly. Act steadily. Adjust wisely.",
+  "Work with purpose, then rest without guilt.",
+  "Let your priorities decide where your energy goes.",
+  "Progress is easier when the next step is visible.",
+  "Use the day; do not let the day use you.",
+  "Begin with clarity and end with peace."
+];
+
+function getDailyQuote(date = new Date()) {
+  const startOfYear = new Date(date.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date - startOfYear) / 86400000);
+  return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
+}
+
 const WEATHER_CODES = {
   0: ["Clear sky", "☀"],
   1: ["Mainly clear", "🌤"],
@@ -162,13 +202,10 @@ function updateClock() {
     hour < 18 ? "Good afternoon, Lance" :
     "Good evening, Lance";
 
-  const message =
-    hour < 12 ? "Your day is ready." :
-    hour < 18 ? "Keep your priorities moving." :
-    "Finish strong, then protect your rest.";
+  const dailyQuote = getDailyQuote(now);
 
   $("greeting").textContent = greeting;
-  $("welcomeMessage").textContent = message;
+  $("welcomeMessage").textContent = `“${dailyQuote}”`;
   $("welcomeDate").textContent = now.toLocaleDateString("en-PH", {
     weekday: "long",
     month: "long",
@@ -194,6 +231,7 @@ function openApp(appName) {
 
   windowElement.classList.add("open");
   windowElement.classList.remove("minimized");
+  updateWindowResponsiveState(windowElement);
   focusWindow(windowElement);
 
   $("activeAppLabel").textContent =
@@ -226,6 +264,61 @@ function focusWindow(windowElement) {
 
 function isCompactWindowMode() {
   return window.matchMedia("(max-width: 680px)").matches;
+}
+
+const WINDOW_LAYOUT_BREAKPOINTS = {
+  medium: 900,
+  narrow: 700,
+  compact: 500,
+  short: 520,
+  veryShort: 380
+};
+
+function updateWindowResponsiveState(windowElement, observedSize = null) {
+  if (!windowElement) return;
+
+  const rect = observedSize || windowElement.getBoundingClientRect();
+  const width = Number(rect.width) || 0;
+  const height = Number(rect.height) || 0;
+
+  windowElement.classList.toggle(
+    "window-medium",
+    width > 0 && width <= WINDOW_LAYOUT_BREAKPOINTS.medium
+  );
+  windowElement.classList.toggle(
+    "window-narrow",
+    width > 0 && width <= WINDOW_LAYOUT_BREAKPOINTS.narrow
+  );
+  windowElement.classList.toggle(
+    "window-compact",
+    width > 0 && width <= WINDOW_LAYOUT_BREAKPOINTS.compact
+  );
+  windowElement.classList.toggle(
+    "window-short",
+    height > 0 && height <= WINDOW_LAYOUT_BREAKPOINTS.short
+  );
+  windowElement.classList.toggle(
+    "window-very-short",
+    height > 0 && height <= WINDOW_LAYOUT_BREAKPOINTS.veryShort
+  );
+
+  windowElement.style.setProperty("--current-window-width", `${Math.round(width)}px`);
+  windowElement.style.setProperty("--current-window-height", `${Math.round(height)}px`);
+}
+
+function observeWindowResponsiveState(windowElement) {
+  updateWindowResponsiveState(windowElement);
+
+  if (!("ResizeObserver" in window)) return;
+
+  const observer = new ResizeObserver((entries) => {
+    const entry = entries[0];
+    if (!entry) return;
+    updateWindowResponsiveState(windowElement, entry.contentRect);
+  });
+
+  observer.observe(windowElement);
+  windowElement._boxResponsiveObserver = observer;
 }
 
 function readWindowLayouts() {
@@ -282,8 +375,8 @@ function clampWindowToDesktop(windowElement) {
   const rect = windowElement.getBoundingClientRect();
   if (!desktopRect.width || !desktopRect.height) return;
 
-  const minWidth = Math.min(320, desktopRect.width);
-  const minHeight = Math.min(260, desktopRect.height);
+  const minWidth = Math.min(300, desktopRect.width);
+  const minHeight = Math.min(230, desktopRect.height);
   const width = Math.min(Math.max(rect.width, minWidth), desktopRect.width);
   const height = Math.min(Math.max(rect.height, minHeight), desktopRect.height);
   const currentLeft = rect.left - desktopRect.left;
@@ -295,6 +388,7 @@ function clampWindowToDesktop(windowElement) {
   windowElement.style.top = `${top}px`;
   windowElement.style.width = `${width}px`;
   windowElement.style.height = `${height}px`;
+  updateWindowResponsiveState(windowElement);
 }
 
 function updateMaximizeButton(windowElement) {
@@ -318,6 +412,7 @@ function toggleMaximize(windowElement) {
   }
 
   updateMaximizeButton(windowElement);
+  requestAnimationFrame(() => updateWindowResponsiveState(windowElement));
   focusWindow(windowElement);
 }
 
@@ -358,6 +453,7 @@ function initializeWindowControls() {
 
     applyStoredWindowLayout(windowElement);
     updateMaximizeButton(windowElement);
+    observeWindowResponsiveState(windowElement);
     enableDragging(windowElement);
     enableResizing(windowElement, resizeHandle);
   });
@@ -476,8 +572,8 @@ function enableResizing(windowElement, resizeHandle) {
     if (!resizing) return;
 
     const desktopRect = $("desktop").getBoundingClientRect();
-    const minWidth = Math.min(320, desktopRect.width);
-    const minHeight = Math.min(260, desktopRect.height);
+    const minWidth = Math.min(300, desktopRect.width);
+    const minHeight = Math.min(230, desktopRect.height);
     const maxWidth = Math.max(minWidth, desktopRect.width - startLeft);
     const maxHeight = Math.max(minHeight, desktopRect.height - startTop);
     const width = Math.max(minWidth, Math.min(startWidth + event.clientX - startX, maxWidth));
@@ -485,6 +581,7 @@ function enableResizing(windowElement, resizeHandle) {
 
     windowElement.style.width = `${width}px`;
     windowElement.style.height = `${height}px`;
+    updateWindowResponsiveState(windowElement, { width, height });
   });
 
   const finishResize = (event) => {
@@ -510,6 +607,7 @@ window.addEventListener("resize", () => {
       applyStoredWindowLayout(windowElement);
       clampWindowToDesktop(windowElement);
     }
+    updateWindowResponsiveState(windowElement);
   });
 });
 
@@ -819,7 +917,12 @@ function renderDashboard() {
     `${open.filter((task) => task.workspace === "sk").length} open`;
 
   const upcoming = getUpcomingEvents();
-  $("desktopNextEvent").textContent = upcoming[0] ? upcoming[0].title : "None";
+  const nextEvent = upcoming[0];
+
+  $("desktopNextEvent").textContent = nextEvent ? nextEvent.title : "None";
+  $("desktopNextEventDate").textContent = nextEvent
+    ? formatEventDate(nextEvent.date)
+    : "No upcoming date";
 }
 
 function renderCalendar() {
@@ -865,6 +968,17 @@ function renderCalendar() {
 
     calendarDays.appendChild(element);
   }
+}
+
+function formatEventDate(dateString) {
+  if (!dateString) return "";
+
+  return new Date(`${dateString}T00:00:00`).toLocaleDateString("en-PH", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
 }
 
 function getUpcomingEvents() {

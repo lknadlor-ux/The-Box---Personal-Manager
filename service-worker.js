@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6a1-resizable-windows-v1";
+const CACHE_NAME = "the-box-os-phase-6a2-daily-quote-event-date";
 
 const APP_FILES = [
   "./",

@@ -197,7 +197,8 @@ body.light-theme .topbar {
   top: 32px;
   left: 35px;
   z-index: 1;
-  max-width: 520px;
+  width: min(980px, calc(100vw - 300px));
+  max-width: 980px;
 }
 
 .desktop-welcome small {
@@ -207,8 +208,12 @@ body.light-theme .topbar {
 
 .desktop-welcome h1 {
   margin: 7px 0;
-  font-size: clamp(34px, 5vw, 58px);
-  letter-spacing: -2px;
+  max-width: 100%;
+  font-size: clamp(32px, 4.6vw, 64px);
+  line-height: 1.02;
+  letter-spacing: -2.4px;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .desktop-welcome p {
@@ -250,6 +255,22 @@ body.light-theme .desktop-summary div {
   margin-top: 4px;
   color: var(--text-muted);
   font-size: 10px;
+}
+
+.desktop-summary .next-event-summary {
+  min-width: 250px;
+  max-width: min(460px, 48vw);
+}
+
+.desktop-summary .next-event-date {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.desktop-summary .summary-label {
+  margin-top: 5px;
 }
 
 .desktop-icons {
@@ -389,8 +410,8 @@ body.light-theme .desktop-summary div {
   z-index: 10;
   width: var(--w);
   height: var(--h);
-  min-width: 320px;
-  min-height: 260px;
+  min-width: 300px;
+  min-height: 230px;
   overflow: hidden;
   border: 1px solid var(--border-strong);
   border-radius: 20px;
@@ -506,7 +527,10 @@ body.light-theme .desktop-summary div {
 .window-content {
   height: calc(100% - 48px);
   padding: 20px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .dashboard-window {
@@ -1065,6 +1089,11 @@ body.light-theme .dock {
 }
 
 @media (max-width: 1050px) {
+  .desktop-welcome {
+    width: calc(100vw - 70px);
+    max-width: calc(100vw - 70px);
+  }
+
   .topbar {
     grid-template-columns: auto 1fr auto;
   }
@@ -1130,6 +1159,13 @@ body.light-theme .dock {
   .desktop-welcome {
     left: 20px;
     right: 20px;
+    width: auto;
+    max-width: none;
+  }
+
+  .desktop-welcome h1 {
+    font-size: clamp(29px, 10vw, 44px);
+    letter-spacing: -1.5px;
   }
 
   .desktop-summary {
@@ -2100,5 +2136,333 @@ body.light-theme .dock {
 
   .document-list {
     grid-template-columns: 1fr;
+  }
+}
+
+
+/* Phase 6A.1 Revision 2 — responsive layouts inside resizable windows */
+.window-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.window-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.window-controls {
+  flex: 0 0 auto;
+}
+
+.app-window .window-content > *,
+.app-window form,
+.app-window form > *,
+.app-window input,
+.app-window select,
+.app-window textarea,
+.app-window button,
+.app-window .toolbar > *,
+.app-window .document-workspace,
+.app-window .document-sidebar {
+  min-width: 0;
+}
+
+.app-window img,
+.app-window iframe,
+.app-window canvas,
+.app-window table {
+  max-width: 100%;
+}
+
+.app-window.window-medium .dashboard-grid,
+.app-window.window-medium .workspace-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.app-window.window-medium .calendar-layout {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-medium .finance-form,
+.app-window.window-medium .full-form,
+.app-window.window-medium .quick-capture form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.app-window.window-medium .documents-layout {
+  grid-template-columns: 170px minmax(0, 1fr);
+}
+
+.app-window.window-medium .document-upload-panel {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.app-window.window-medium .document-upload-copy {
+  grid-column: 1 / -1;
+}
+
+.app-window.window-narrow .window-content {
+  padding: 14px;
+}
+
+.app-window.window-narrow .dashboard-window,
+.app-window.window-narrow .workspace-dashboard,
+.app-window.window-narrow .documents-window {
+  gap: 12px;
+}
+
+.app-window.window-narrow .dashboard-hero,
+.app-window.window-narrow .workspace-hero,
+.app-window.window-narrow .documents-hero {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 14px;
+  padding: 15px;
+}
+
+.app-window.window-narrow .progress-ring {
+  width: 105px;
+  height: 105px;
+}
+
+.app-window.window-narrow .progress-ring div {
+  width: 79px;
+  height: 79px;
+}
+
+.app-window.window-narrow .dashboard-grid,
+.app-window.window-narrow .workspace-cards,
+.app-window.window-narrow .finance-summary,
+.app-window.window-narrow .finance-form,
+.app-window.window-narrow .full-form,
+.app-window.window-narrow .quick-capture form {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-narrow .toolbar {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.app-window.window-narrow .toolbar select {
+  width: 100%;
+}
+
+.app-window.window-narrow .filter-group,
+.app-window.window-narrow .timer-presets,
+.app-window.window-narrow .timer-actions,
+.app-window.window-narrow .assistant-actions {
+  max-width: 100%;
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+.app-window.window-narrow .calendar-layout,
+.app-window.window-narrow .documents-layout {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-narrow .document-stats {
+  width: 100%;
+  min-width: 0;
+}
+
+.app-window.window-narrow .document-notice {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.app-window.window-narrow .document-notice button {
+  width: 100%;
+}
+
+.app-window.window-narrow .document-sidebar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: none;
+  overflow: visible;
+}
+
+.app-window.window-narrow .document-sidebar-heading,
+.app-window.window-narrow .document-folder-divider {
+  grid-column: 1 / -1;
+}
+
+.app-window.window-narrow .document-toolbar,
+.app-window.window-narrow .document-upload-panel {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-narrow .document-upload-copy {
+  grid-column: auto;
+}
+
+.app-window.window-narrow .document-toolbar > *,
+.app-window.window-narrow .document-upload-panel > *,
+.app-window.window-narrow .document-upload-panel button {
+  width: 100%;
+}
+
+.app-window.window-narrow .document-list {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-compact .window-titlebar {
+  padding: 0 8px 0 10px;
+}
+
+.app-window.window-compact .window-title {
+  gap: 6px;
+}
+
+.app-window.window-compact .window-controls {
+  gap: 4px;
+}
+
+.app-window.window-compact .window-button {
+  width: 28px;
+  height: 28px;
+}
+
+.app-window.window-compact .window-content {
+  padding: 10px;
+}
+
+.app-window.window-compact .dashboard-hero,
+.app-window.window-compact .workspace-hero,
+.app-window.window-compact .documents-hero,
+.app-window.window-compact .dashboard-card,
+.app-window.window-compact .workspace-card,
+.app-window.window-compact .finance-summary div {
+  padding: 12px;
+}
+
+.app-window.window-compact .document-stats,
+.app-window.window-compact .dashboard-grid,
+.app-window.window-compact .workspace-cards,
+.app-window.window-compact .finance-summary {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-compact .document-sidebar {
+  grid-template-columns: 1fr;
+  max-height: none;
+}
+
+.app-window.window-compact .document-card-actions {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-compact .document-card-actions button {
+  width: 100%;
+}
+
+.app-window.window-compact .task-item {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.app-window.window-compact .task-actions {
+  grid-column: 2;
+  justify-content: flex-end;
+}
+
+.app-window.window-compact .event-item {
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+
+.app-window.window-compact .event-item .delete-button {
+  grid-column: 2;
+  justify-self: end;
+}
+
+.app-window.window-compact .finance-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.app-window.window-compact .finance-item .delete-button {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+}
+
+.app-window.window-compact .document-list-heading,
+.app-window.window-compact .notes-meta {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.app-window.window-compact .calendar-day {
+  min-height: 36px;
+}
+
+.app-window.window-compact .calendar-nav {
+  gap: 6px;
+}
+
+.app-window.window-compact .calendar-nav strong {
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-window.window-short .window-content {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.app-window.window-short .dashboard-window,
+.app-window.window-short .workspace-dashboard,
+.app-window.window-short .documents-window {
+  gap: 10px;
+}
+
+.app-window.window-short .dashboard-hero,
+.app-window.window-short .workspace-hero,
+.app-window.window-short .documents-hero {
+  padding: 12px;
+}
+
+.app-window.window-short .timer-display {
+  margin: 0 0 10px;
+  font-size: clamp(42px, 7vw, 68px);
+  letter-spacing: -2px;
+}
+
+.app-window.window-short .timer-actions {
+  margin-top: 8px;
+}
+
+.app-window.window-short #quickNotes {
+  min-height: 170px;
+}
+
+.app-window.window-very-short .window-content {
+  padding: 8px 10px;
+}
+
+.app-window.window-very-short .dashboard-hero h2,
+.app-window.window-very-short .workspace-hero h2,
+.app-window.window-very-short .documents-hero h2 {
+  margin: 3px 0;
+  font-size: 18px;
+}
+
+.app-window.window-very-short .dashboard-card strong,
+.app-window.window-very-short .finance-summary strong {
+  font-size: 19px;
+}
+
+.app-window.window-very-short .workspace-card {
+  min-height: 0;
+}
+
+@media (max-width: 680px) {
+  .app-window {
+    min-width: 0;
+    min-height: 0;
   }
 }
