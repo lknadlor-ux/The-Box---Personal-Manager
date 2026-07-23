@@ -91,15 +91,28 @@ function showToast(message) {
   toastTimer = setTimeout(() => toast.classList.remove("show"), 2400);
 }
 
-function normalizeData() {
-  tasks = tasks.map((task) => ({
+function normalizeTask(task = {}) {
+  const createdAt = task.createdAt || new Date().toISOString();
+
+  return {
     id: task.id || Date.now() + Math.random(),
     text: task.text || "Untitled task",
+    details: typeof task.details === "string"
+      ? task.details
+      : (typeof task.notes === "string" ? task.notes : ""),
+    dueDate: /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate || "")
+      ? task.dueDate
+      : "",
     workspace: task.workspace || "personal",
     priority: task.priority || "normal",
     completed: Boolean(task.completed),
-    createdAt: task.createdAt || new Date().toISOString()
-  }));
+    createdAt,
+    updatedAt: task.updatedAt || createdAt
+  };
+}
+
+function normalizeData() {
+  tasks = tasks.map(normalizeTask);
 
   events = events.map((event) => ({
     id: event.id || Date.now() + Math.random(),
@@ -263,22 +276,130 @@ function enableDragging(windowElement) {
   });
 }
 
-function createTask(text, workspace, priority) {
+let editingTaskId = null;
+let pendingTaskSource = null;
+
+function createTask({ text, workspace, priority, details = "", dueDate = "" }) {
   const cleanText = text.trim();
   if (!cleanText) return false;
+
+  const timestamp = new Date().toISOString();
 
   tasks.unshift({
     id: Date.now() + Math.random(),
     text: cleanText,
+    details: details.trim(),
+    dueDate,
     workspace,
     priority,
     completed: false,
-    createdAt: new Date().toISOString()
+    createdAt: timestamp,
+    updatedAt: timestamp
   });
 
   saveJSON(STORAGE.tasks, tasks);
   renderAll();
   return true;
+}
+
+function updateTask(taskId, values) {
+  const task = tasks.find((item) => String(item.id) === String(taskId));
+  if (!task) return false;
+
+  const cleanText = values.text.trim();
+  if (!cleanText) return false;
+
+  task.text = cleanText;
+  task.details = values.details.trim();
+  task.dueDate = values.dueDate;
+  task.workspace = values.workspace;
+  task.priority = values.priority;
+  task.updatedAt = new Date().toISOString();
+
+  saveJSON(STORAGE.tasks, tasks);
+  renderAll();
+  return true;
+}
+
+function openTaskModal(defaults = {}, source = null, taskId = null) {
+  editingTaskId = taskId;
+  pendingTaskSource = source;
+
+  $("taskModalTitle").value = defaults.text || "";
+  $("taskModalWorkspace").value = defaults.workspace || "personal";
+  $("taskModalPriority").value = defaults.priority || "normal";
+  $("taskModalDueDate").value = defaults.dueDate || "";
+  $("taskModalDetails").value = defaults.details || "";
+
+  $("taskModalHeading").textContent = taskId ? "Edit task" : "Create task";
+  $("saveTaskModalButton").textContent = taskId ? "Save changes" : "Create task";
+
+  const modal = $("taskModal");
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+
+  setTimeout(() => {
+    $("taskModalTitle").focus();
+    $("taskModalTitle").select();
+  }, 30);
+}
+
+function closeTaskModal() {
+  const modal = $("taskModal");
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+  editingTaskId = null;
+  pendingTaskSource = null;
+}
+
+function formatTaskDate(dateString) {
+  if (!dateString) return "";
+
+  return new Date(`${dateString}T00:00:00`).toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+}
+
+function getDueDateInfo(task) {
+  if (!task.dueDate) return null;
+
+  const due = new Date(`${task.dueDate}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const daysAway = Math.round((due - today) / 86400000);
+
+  if (task.completed) {
+    return { className: "completed", label: `Due ${formatTaskDate(task.dueDate)}` };
+  }
+
+  if (daysAway < 0) {
+    return { className: "overdue", label: `Overdue · ${formatTaskDate(task.dueDate)}` };
+  }
+
+  if (daysAway === 0) {
+    return { className: "today", label: "Due today" };
+  }
+
+  if (daysAway === 1) {
+    return { className: "tomorrow", label: "Due tomorrow" };
+  }
+
+  return { className: "upcoming", label: `Due ${formatTaskDate(task.dueDate)}` };
+}
+
+function formatTaskTimestamp(timestamp) {
+  if (!timestamp) return "";
+
+  return new Date(timestamp).toLocaleString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
 }
 
 function getVisibleTasks() {
@@ -292,42 +413,101 @@ function getVisibleTasks() {
       activeWorkspaceFilter === "all" ||
       task.workspace === activeWorkspaceFilter;
 
-    const matchesSearch =
-      task.text.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchableText = `${task.text} ${task.details || ""}`.toLowerCase();
+    const matchesSearch = searchableText.includes(searchTerm.toLowerCase());
 
     return matchesStatus && matchesWorkspace && matchesSearch;
   });
 }
 
 function buildTaskRow(task) {
+  const dueInfo = getDueDateInfo(task);
   const row = document.createElement("div");
-  row.className = `task-item${task.completed ? " done" : ""}`;
+  row.className = [
+    "task-item",
+    task.completed ? "done" : "",
+    dueInfo ? `due-${dueInfo.className}` : ""
+  ].filter(Boolean).join(" ");
 
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.checked = task.completed;
+  checkbox.setAttribute("aria-label", `Mark ${task.text} as ${task.completed ? "open" : "complete"}`);
 
   checkbox.addEventListener("change", () => {
     task.completed = checkbox.checked;
+    task.updatedAt = new Date().toISOString();
     saveJSON(STORAGE.tasks, tasks);
     renderAll();
   });
 
   const content = document.createElement("div");
+  content.className = "task-content";
 
-  const title = document.createElement("span");
+  const title = document.createElement("strong");
   title.className = "task-title";
   title.textContent = task.text;
 
-  const meta = document.createElement("span");
+  const meta = document.createElement("div");
   meta.className = "task-meta";
-  meta.textContent = `${task.workspace} · ${task.priority}`;
+
+  const workspaceBadge = document.createElement("span");
+  workspaceBadge.className = `task-badge workspace-${task.workspace}`;
+  workspaceBadge.textContent = task.workspace;
+
+  const priorityBadge = document.createElement("span");
+  priorityBadge.className = `task-badge priority-${task.priority}`;
+  priorityBadge.textContent = task.priority;
+
+  meta.append(workspaceBadge, priorityBadge);
+
+  if (dueInfo) {
+    const dueBadge = document.createElement("span");
+    dueBadge.className = `task-badge due-badge ${dueInfo.className}`;
+    dueBadge.textContent = dueInfo.label;
+    meta.appendChild(dueBadge);
+  }
 
   content.append(title, meta);
 
+  if (task.details) {
+    const details = document.createElement("details");
+    details.className = "task-details-block";
+
+    const summary = document.createElement("summary");
+    summary.textContent = "View notes/details";
+
+    const detailsText = document.createElement("p");
+    detailsText.textContent = task.details;
+
+    const timestamps = document.createElement("small");
+    timestamps.className = "task-timestamps";
+    timestamps.textContent = `Created ${formatTaskTimestamp(task.createdAt)} · Updated ${formatTaskTimestamp(task.updatedAt || task.createdAt)}`;
+
+    details.append(summary, detailsText, timestamps);
+    content.appendChild(details);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "task-actions";
+
+  const editButton = document.createElement("button");
+  editButton.className = "edit-button";
+  editButton.type = "button";
+  editButton.textContent = "✎";
+  editButton.title = "Edit task";
+  editButton.setAttribute("aria-label", `Edit ${task.text}`);
+
+  editButton.addEventListener("click", () => {
+    openTaskModal(task, null, task.id);
+  });
+
   const deleteButton = document.createElement("button");
   deleteButton.className = "delete-button";
+  deleteButton.type = "button";
   deleteButton.textContent = "✕";
+  deleteButton.title = "Delete task";
+  deleteButton.setAttribute("aria-label", `Delete ${task.text}`);
 
   deleteButton.addEventListener("click", () => {
     tasks = tasks.filter((item) => item.id !== task.id);
@@ -336,7 +516,8 @@ function buildTaskRow(task) {
     showToast("Task deleted");
   });
 
-  row.append(checkbox, content, deleteButton);
+  actions.append(editButton, deleteButton);
+  row.append(checkbox, content, actions);
   return row;
 }
 
@@ -439,6 +620,10 @@ function renderCalendar() {
 
     if (events.some((event) => event.date === dateKey)) {
       element.classList.add("has-event");
+    }
+
+    if (tasks.some((task) => !task.completed && task.dueDate === dateKey)) {
+      element.classList.add("has-task-due");
     }
 
     calendarDays.appendChild(element);
@@ -711,13 +896,17 @@ function runAssistant(action) {
       );
 
       if (!duplicate) {
+        const timestamp = new Date().toISOString();
         tasks.unshift({
           id: Date.now() + Math.random(),
           text: line,
+          details: "",
+          dueDate: "",
           workspace: "personal",
           priority: "normal",
           completed: false,
-          createdAt: new Date().toISOString()
+          createdAt: timestamp,
+          updatedAt: timestamp
         });
         added += 1;
       }
@@ -753,38 +942,86 @@ $("themeButton").addEventListener("click", () => {
 $("quickTaskForm").addEventListener("submit", (event) => {
   event.preventDefault();
 
-  if (createTask(
-    $("quickTaskInput").value,
-    $("quickTaskWorkspace").value,
-    $("quickTaskPriority").value
-  )) {
-    $("quickTaskInput").value = "";
-    showToast("Task added");
+  const text = $("quickTaskInput").value.trim();
+  if (!text) {
+    $("quickTaskInput").focus();
+    return;
   }
+
+  openTaskModal({
+    text,
+    workspace: $("quickTaskWorkspace").value,
+    priority: $("quickTaskPriority").value
+  }, "quick");
 });
 
 $("taskForm").addEventListener("submit", (event) => {
   event.preventDefault();
 
-  if (createTask(
-    $("taskInput").value,
-    $("taskWorkspace").value,
-    $("taskPriority").value
-  )) {
-    $("taskInput").value = "";
-    showToast("Task added");
+  const text = $("taskInput").value.trim();
+  if (!text) {
+    $("taskInput").focus();
+    return;
   }
+
+  openTaskModal({
+    text,
+    workspace: $("taskWorkspace").value,
+    priority: $("taskPriority").value
+  }, "tasks");
 });
 
 document.querySelectorAll("[data-template-task]").forEach((button) => {
   button.addEventListener("click", () => {
-    createTask(
-      button.dataset.templateTask,
-      button.dataset.templateWorkspace,
-      "important"
-    );
-    showToast("Workspace task added");
+    openTaskModal({
+      text: button.dataset.templateTask,
+      workspace: button.dataset.templateWorkspace,
+      priority: "important"
+    }, "template");
   });
+});
+
+$("taskModalForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const values = {
+    text: $("taskModalTitle").value,
+    details: $("taskModalDetails").value,
+    dueDate: $("taskModalDueDate").value,
+    workspace: $("taskModalWorkspace").value,
+    priority: $("taskModalPriority").value
+  };
+
+  const wasEditing = editingTaskId !== null;
+  const saved = wasEditing
+    ? updateTask(editingTaskId, values)
+    : createTask(values);
+
+  if (!saved) return;
+
+  if (!wasEditing && pendingTaskSource === "quick") {
+    $("quickTaskInput").value = "";
+  }
+
+  if (!wasEditing && pendingTaskSource === "tasks") {
+    $("taskInput").value = "";
+  }
+
+  closeTaskModal();
+  showToast(wasEditing ? "Task updated" : "Task added");
+});
+
+$("closeTaskModalButton").addEventListener("click", closeTaskModal);
+$("cancelTaskModalButton").addEventListener("click", closeTaskModal);
+
+$("taskModal").addEventListener("pointerdown", (event) => {
+  if (event.target === $("taskModal")) closeTaskModal();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && $("taskModal").classList.contains("open")) {
+    closeTaskModal();
+  }
 });
 
 document.querySelectorAll(".filter").forEach((button) => {
@@ -925,7 +1162,7 @@ function updateAuthUI(session) {
 }
 
 window.BoxOSCloudHydrate = function cloudHydrate(data) {
-  if (Array.isArray(data.tasks)) tasks = data.tasks;
+  if (Array.isArray(data.tasks)) tasks = data.tasks.map(normalizeTask);
   if (Array.isArray(data.events)) events = data.events;
   if (Array.isArray(data.finance_entries)) financeEntries = data.finance_entries;
 
