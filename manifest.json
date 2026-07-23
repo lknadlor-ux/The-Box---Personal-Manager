@@ -1,7 +1,7 @@
 {
-  "name": "The Box OS 5.0",
+  "name": "The Box OS 6.0",
   "short_name": "The Box",
-  "description": "Cloud-synced personal operating system for pharmacy, clinic, SK, finance, and productivity.",
+  "description": "Cloud-synced personal operating system with tasks, calendar, finance, and a private document vault.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

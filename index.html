@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#0a0c11">
-  <meta name="description" content="The Box OS — Lance's personal operating system">
+  <meta name="description" content="The Box OS — personal productivity and private document management">
   <title>The Box OS</title>
 
   <link rel="manifest" href="manifest.json">
@@ -74,6 +74,12 @@
           <span class="app-icon">✎</span>
           <strong>Notes</strong>
           <small>Quick capture</small>
+        </button>
+
+        <button class="app-tile" data-open-app="documents">
+          <span class="app-icon">▣</span>
+          <strong>Documents</strong>
+          <small>Private cloud vault</small>
         </button>
 
         <button class="app-tile" data-open-app="pharmacy">
@@ -157,6 +163,11 @@
         <button class="desktop-icon" data-open-app="finance">
           <span>₱</span>
           <strong>Finance</strong>
+        </button>
+
+        <button class="desktop-icon" data-open-app="documents">
+          <span>▣</span>
+          <strong>Documents</strong>
         </button>
 
         <button class="desktop-icon" data-open-app="notes">
@@ -481,6 +492,107 @@
           </div>
         </article>
 
+        <article class="app-window" data-app-window="documents" style="--x: 10%; --y: 7%; --w: 76%; --h: 80%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>▣</span><strong>Document Vault</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content documents-window">
+            <section class="documents-hero">
+              <div>
+                <small>PRIVATE CLOUD STORAGE</small>
+                <h2>Document Vault</h2>
+                <p>Organize FDA, PhilHealth, SK, finance, legal, and personal files in one secure workspace.</p>
+              </div>
+              <div class="document-stats">
+                <div><strong id="documentTotalCount">0</strong><span>Files</span></div>
+                <div><strong id="documentFavoriteCount">0</strong><span>Favorites</span></div>
+                <div><strong id="documentStorageUsed">0 B</strong><span>Stored</span></div>
+              </div>
+            </section>
+
+            <div id="documentAuthNotice" class="document-notice">
+              <strong>Sign in required</strong>
+              <span>The Document Vault uses your private Supabase account and is unavailable in local-only mode.</span>
+              <button id="documentSignInButton" class="secondary-button" type="button">Open account</button>
+            </div>
+
+            <div class="documents-layout">
+              <aside class="document-sidebar">
+                <div class="document-sidebar-heading">
+                  <span>Folders</span>
+                  <small>Cloud vault</small>
+                </div>
+                <button class="document-folder active" data-document-folder="all"><span>▦</span><strong>All files</strong><small id="documentAllFolderCount">0</small></button>
+                <button class="document-folder" data-document-folder="favorites"><span>★</span><strong>Favorites</strong><small id="documentFavoritesFolderCount">0</small></button>
+                <div class="document-folder-divider"></div>
+                <button class="document-folder" data-document-folder="FDA"><span>F</span><strong>FDA</strong><small data-document-count="FDA">0</small></button>
+                <button class="document-folder" data-document-folder="PhilHealth"><span>P</span><strong>PhilHealth</strong><small data-document-count="PhilHealth">0</small></button>
+                <button class="document-folder" data-document-folder="Suppliers"><span>S</span><strong>Suppliers</strong><small data-document-count="Suppliers">0</small></button>
+                <button class="document-folder" data-document-folder="SK"><span>K</span><strong>SK</strong><small data-document-count="SK">0</small></button>
+                <button class="document-folder" data-document-folder="HR"><span>H</span><strong>HR</strong><small data-document-count="HR">0</small></button>
+                <button class="document-folder" data-document-folder="Finance"><span>₱</span><strong>Finance</strong><small data-document-count="Finance">0</small></button>
+                <button class="document-folder" data-document-folder="Legal"><span>§</span><strong>Legal</strong><small data-document-count="Legal">0</small></button>
+                <button class="document-folder" data-document-folder="Personal"><span>L</span><strong>Personal</strong><small data-document-count="Personal">0</small></button>
+              </aside>
+
+              <section class="document-workspace">
+                <div class="document-toolbar">
+                  <label class="document-search">
+                    <span>⌕</span>
+                    <input id="documentSearch" type="search" placeholder="Search file names">
+                  </label>
+                  <select id="documentSort" aria-label="Sort documents">
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="name">Name A–Z</option>
+                    <option value="size">Largest first</option>
+                  </select>
+                  <button id="refreshDocumentsButton" class="secondary-button" type="button">Refresh</button>
+                </div>
+
+                <form id="documentUploadForm" class="document-upload-panel">
+                  <div class="document-upload-copy">
+                    <strong>Upload documents</strong>
+                    <span id="documentFileSelection">Choose one or more files, up to 25 MB each.</span>
+                  </div>
+                  <input id="documentFiles" type="file" multiple hidden>
+                  <button id="chooseDocumentFilesButton" class="secondary-button" type="button">Choose files</button>
+                  <select id="documentUploadFolder" aria-label="Destination folder">
+                    <option value="FDA">FDA</option>
+                    <option value="PhilHealth">PhilHealth</option>
+                    <option value="Suppliers">Suppliers</option>
+                    <option value="SK">SK</option>
+                    <option value="HR">HR</option>
+                    <option value="Finance">Finance</option>
+                    <option value="Legal">Legal</option>
+                    <option value="Personal" selected>Personal</option>
+                  </select>
+                  <button id="uploadDocumentsButton" class="primary-button" type="submit" disabled>Upload</button>
+                </form>
+
+                <div id="documentUploadStatus" class="document-upload-status" aria-live="polite"></div>
+
+                <div class="document-list-heading">
+                  <div>
+                    <small id="documentFolderEyebrow">ALL FILES</small>
+                    <h3 id="documentFolderTitle">All files</h3>
+                  </div>
+                  <span id="documentResultCount">0 documents</span>
+                </div>
+
+                <div id="documentList" class="document-list"></div>
+                <p id="emptyDocuments" class="empty-state">No documents found in this view.</p>
+              </section>
+            </div>
+          </div>
+        </article>
+
         <article class="app-window" data-app-window="finance" style="--x: 20%; --y: 12%; --w: 62%; --h: 68%;">
           <div class="window-titlebar">
             <div class="window-title"><span>₱</span><strong>Finance</strong></div>
@@ -574,6 +686,7 @@
       <button class="dock-item" data-open-app="tasks" title="Tasks">✓</button>
       <button class="dock-item" data-open-app="calendar" title="Calendar">◫</button>
       <button class="dock-item" data-open-app="notes" title="Notes">✎</button>
+      <button class="dock-item" data-open-app="documents" title="Documents">▣</button>
       <button class="dock-item" data-open-app="pharmacy" title="Pharmacy">⚕</button>
       <button class="dock-item" data-open-app="clinic" title="Clinic">✚</button>
       <button class="dock-item" data-open-app="sk" title="SK">🏛</button>
@@ -642,13 +755,13 @@
       <div class="auth-brand">
         <div class="auth-logo">T</div>
         <div>
-          <small>THE BOX OS 5.0</small>
+          <small>THE BOX OS 6.0</small>
           <h2>Cloud workspace</h2>
         </div>
       </div>
 
       <p id="authMessage">
-        Sign in to sync tasks, events, notes, and finance entries across your devices.
+        Sign in to sync your workspace and access your private Document Vault across devices.
         You may continue locally while Supabase is not configured.
       </p>
 

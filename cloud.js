@@ -23,6 +23,9 @@ window.BoxCloud = (() => {
   let collectionTimers = {};
   let noteTimer = null;
 
+  const DOCUMENT_BUCKET = "box-documents";
+  const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
+
   function emit(state, label) {
     window.dispatchEvent(new CustomEvent("boxcloudstatus", {
       detail: { state, label, session }
@@ -116,6 +119,153 @@ window.BoxCloud = (() => {
   function queueNoteSync(text) {
     clearTimeout(noteTimer);
     noteTimer = setTimeout(() => saveNote(text), 700);
+  }
+
+  function createUuid() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+      const random = Math.floor(Math.random() * 16);
+      const value = character === "x" ? random : (random & 0x3) | 0x8;
+      return value.toString(16);
+    });
+  }
+
+  function sanitizeFileName(name) {
+    const clean = String(name || "document")
+      .normalize("NFKD")
+      .replace(/[^a-zA-Z0-9._ -]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^[-.]+|[-.]+$/g, "")
+      .slice(-140);
+
+    return clean || "document";
+  }
+
+  async function listDocuments() {
+    if (!isReady()) return { data: [], error: new Error("Sign in to access documents.") };
+
+    const { data, error } = await client
+      .from("documents")
+      .select("id,name,storage_path,folder,mime_type,size_bytes,is_favorite,created_at,updated_at")
+      .eq("user_id", session.user.id)
+      .order("created_at", { ascending: false });
+
+    return { data: data || [], error };
+  }
+
+  async function uploadDocument(file, folder) {
+    if (!isReady()) return { data: null, error: new Error("Sign in before uploading documents.") };
+    if (!(file instanceof File)) return { data: null, error: new Error("Choose a valid file.") };
+    if (file.size > MAX_DOCUMENT_SIZE) {
+      return { data: null, error: new Error(`${file.name} is larger than 25 MB.`) };
+    }
+
+    const documentId = createUuid();
+    const safeName = sanitizeFileName(file.name);
+    const storagePath = `${session.user.id}/${documentId}-${safeName}`;
+
+    emit("syncing", "Uploading");
+
+    const uploadOptions = {
+      cacheControl: "3600",
+      upsert: false
+    };
+
+    if (file.type) uploadOptions.contentType = file.type;
+
+    const { error: uploadError } = await client.storage
+      .from(DOCUMENT_BUCKET)
+      .upload(storagePath, file, uploadOptions);
+
+    if (uploadError) {
+      emit("error", "Upload error");
+      return { data: null, error: uploadError };
+    }
+
+    const { data, error: metadataError } = await client
+      .from("documents")
+      .insert({
+        id: documentId,
+        user_id: session.user.id,
+        name: file.name,
+        storage_path: storagePath,
+        folder,
+        mime_type: file.type || null,
+        size_bytes: file.size,
+        is_favorite: false,
+        updated_at: new Date().toISOString()
+      })
+      .select("id,name,storage_path,folder,mime_type,size_bytes,is_favorite,created_at,updated_at")
+      .single();
+
+    if (metadataError) {
+      await client.storage.from(DOCUMENT_BUCKET).remove([storagePath]);
+      emit("error", "Upload error");
+      return { data: null, error: metadataError };
+    }
+
+    emit("online", "Synced");
+    return { data, error: null };
+  }
+
+  async function setDocumentFavorite(documentId, isFavorite) {
+    if (!isReady()) return { data: null, error: new Error("Sign in first.") };
+
+    const { data, error } = await client
+      .from("documents")
+      .update({
+        is_favorite: Boolean(isFavorite),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", documentId)
+      .eq("user_id", session.user.id)
+      .select("id,is_favorite,updated_at")
+      .single();
+
+    emit(error ? "error" : "online", error ? "Sync error" : "Synced");
+    return { data, error };
+  }
+
+  async function createDocumentUrl(storagePath, expiresIn = 120) {
+    if (!isReady()) return { data: null, error: new Error("Sign in first.") };
+
+    return client.storage
+      .from(DOCUMENT_BUCKET)
+      .createSignedUrl(storagePath, expiresIn);
+  }
+
+  async function downloadDocument(storagePath) {
+    if (!isReady()) return { data: null, error: new Error("Sign in first.") };
+
+    return client.storage
+      .from(DOCUMENT_BUCKET)
+      .download(storagePath);
+  }
+
+  async function deleteDocument(documentId, storagePath) {
+    if (!isReady()) return { error: new Error("Sign in first.") };
+
+    emit("syncing", "Deleting");
+
+    const { error: storageError } = await client.storage
+      .from(DOCUMENT_BUCKET)
+      .remove([storagePath]);
+
+    if (storageError) {
+      emit("error", "Delete error");
+      return { error: storageError };
+    }
+
+    const { error: metadataError } = await client
+      .from("documents")
+      .delete()
+      .eq("id", documentId)
+      .eq("user_id", session.user.id);
+
+    emit(metadataError ? "error" : "online", metadataError ? "Delete error" : "Synced");
+    return { error: metadataError };
   }
 
   async function fetchCollection(table) {
@@ -238,6 +388,12 @@ window.BoxCloud = (() => {
     signOut,
     syncNow,
     queueCollectionSync,
-    queueNoteSync
+    queueNoteSync,
+    listDocuments,
+    uploadDocument,
+    setDocumentFavorite,
+    createDocumentUrl,
+    downloadDocument,
+    deleteDocument
   };
 })();

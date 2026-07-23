@@ -56,6 +56,23 @@ let timerInterval = null;
 let topWindowZ = 20;
 let toastTimer = null;
 
+const DOCUMENT_FOLDERS = [
+  "FDA",
+  "PhilHealth",
+  "Suppliers",
+  "SK",
+  "HR",
+  "Finance",
+  "Legal",
+  "Personal"
+];
+
+let documents = [];
+let activeDocumentFolder = "all";
+let documentSearchTerm = "";
+let documentsLoading = false;
+let currentDocumentUserId = null;
+
 function loadJSON(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -186,6 +203,10 @@ function openApp(appName) {
   });
 
   closeLauncher();
+
+  if (appName === "documents" && window.BoxCloud?.isReady()) {
+    loadDocuments({ silent: documents.length > 0 });
+  }
 }
 
 function closeApp(windowElement) {
@@ -749,12 +770,470 @@ function renderFinance() {
   $("emptyFinance").style.display = financeEntries.length ? "none" : "block";
 }
 
+function formatBytes(bytes) {
+  const value = Number(bytes) || 0;
+  if (value < 1024) return `${value} B`;
+
+  const units = ["KB", "MB", "GB", "TB"];
+  let size = value / 1024;
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+
+  const digits = size >= 10 ? 0 : 1;
+  return `${size.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function getDocumentTypeLabel(documentItem) {
+  const name = String(documentItem.name || "");
+  const extension = name.includes(".")
+    ? name.split(".").pop().toUpperCase().slice(0, 4)
+    : "FILE";
+
+  if ((documentItem.mime_type || "").startsWith("image/")) return "IMG";
+  return extension || "FILE";
+}
+
+function formatDocumentDate(timestamp) {
+  if (!timestamp) return "Unknown date";
+
+  return new Date(timestamp).toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+}
+
+function getVisibleDocuments() {
+  const filtered = documents.filter((documentItem) => {
+    const matchesFolder =
+      activeDocumentFolder === "all" ||
+      (activeDocumentFolder === "favorites" && documentItem.is_favorite) ||
+      documentItem.folder === activeDocumentFolder;
+
+    const matchesSearch = String(documentItem.name || "")
+      .toLowerCase()
+      .includes(documentSearchTerm.toLowerCase());
+
+    return matchesFolder && matchesSearch;
+  });
+
+  const sortMode = $("documentSort")?.value || "newest";
+
+  return [...filtered].sort((first, second) => {
+    if (sortMode === "oldest") {
+      return String(first.created_at).localeCompare(String(second.created_at));
+    }
+
+    if (sortMode === "name") {
+      return String(first.name).localeCompare(String(second.name), undefined, {
+        sensitivity: "base"
+      });
+    }
+
+    if (sortMode === "size") {
+      return Number(second.size_bytes || 0) - Number(first.size_bytes || 0);
+    }
+
+    return String(second.created_at).localeCompare(String(first.created_at));
+  });
+}
+
+function setDocumentUploadStatus(message = "", type = "") {
+  const element = $("documentUploadStatus");
+  if (!element) return;
+
+  element.textContent = message;
+  element.className = `document-upload-status ${type}`.trim();
+}
+
+function updateDocumentAccessUI() {
+  const ready = Boolean(window.BoxCloud?.isReady());
+  const notice = $("documentAuthNotice");
+  if (!notice) return;
+
+  notice.classList.toggle("hidden", ready);
+
+  [
+    "chooseDocumentFilesButton",
+    "documentUploadFolder",
+    "refreshDocumentsButton"
+  ].forEach((id) => {
+    const element = $(id);
+    if (element) element.disabled = !ready || documentsLoading;
+  });
+
+  const uploadButton = $("uploadDocumentsButton");
+  const selectedFiles = $("documentFiles")?.files?.length || 0;
+  if (uploadButton) {
+    uploadButton.disabled = !ready || documentsLoading || selectedFiles === 0;
+  }
+}
+
+function renderDocumentCounts() {
+  const totalSize = documents.reduce(
+    (sum, documentItem) => sum + Number(documentItem.size_bytes || 0),
+    0
+  );
+  const favorites = documents.filter((documentItem) => documentItem.is_favorite).length;
+
+  $("documentTotalCount").textContent = documents.length;
+  $("documentFavoriteCount").textContent = favorites;
+  $("documentStorageUsed").textContent = formatBytes(totalSize);
+  $("documentAllFolderCount").textContent = documents.length;
+  $("documentFavoritesFolderCount").textContent = favorites;
+
+  DOCUMENT_FOLDERS.forEach((folder) => {
+    const element = document.querySelector(`[data-document-count="${folder}"]`);
+    if (element) {
+      element.textContent = documents.filter(
+        (documentItem) => documentItem.folder === folder
+      ).length;
+    }
+  });
+}
+
+async function openDocumentPreview(documentItem) {
+  const previewTab = window.open("about:blank", "_blank");
+
+  if (!previewTab) {
+    showToast("Allow pop-ups to open document previews");
+    return;
+  }
+
+  previewTab.document.title = "Opening document…";
+  previewTab.document.body.textContent = "Opening your private document…";
+
+  const result = await window.BoxCloud.createDocumentUrl(
+    documentItem.storage_path,
+    120
+  );
+
+  const signedUrl = result.data?.signedUrl || result.data?.signedURL;
+
+  if (result.error || !signedUrl) {
+    previewTab.close();
+    setDocumentUploadStatus(
+      result.error?.message || "Could not open this document.",
+      "error"
+    );
+    return;
+  }
+
+  previewTab.location.href = signedUrl;
+}
+
+async function downloadStoredDocument(documentItem, button) {
+  button.disabled = true;
+  const previousText = button.textContent;
+  button.textContent = "Loading…";
+
+  const result = await window.BoxCloud.downloadDocument(documentItem.storage_path);
+
+  button.disabled = false;
+  button.textContent = previousText;
+
+  if (result.error || !result.data) {
+    setDocumentUploadStatus(
+      result.error?.message || "Could not download this document.",
+      "error"
+    );
+    return;
+  }
+
+  const objectUrl = URL.createObjectURL(result.data);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = documentItem.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+}
+
+async function toggleDocumentFavorite(documentItem, button) {
+  button.disabled = true;
+  const nextValue = !documentItem.is_favorite;
+  const result = await window.BoxCloud.setDocumentFavorite(
+    documentItem.id,
+    nextValue
+  );
+  button.disabled = false;
+
+  if (result.error) {
+    setDocumentUploadStatus(result.error.message, "error");
+    return;
+  }
+
+  documentItem.is_favorite = nextValue;
+  documentItem.updated_at = result.data?.updated_at || new Date().toISOString();
+  renderDocuments();
+  showToast(nextValue ? "Added to favorites" : "Removed from favorites");
+}
+
+async function removeStoredDocument(documentItem, button) {
+  const confirmed = window.confirm(
+    `Delete “${documentItem.name}”? This permanently removes the cloud file.`
+  );
+
+  if (!confirmed) return;
+
+  button.disabled = true;
+  const result = await window.BoxCloud.deleteDocument(
+    documentItem.id,
+    documentItem.storage_path
+  );
+
+  if (result.error) {
+    button.disabled = false;
+    setDocumentUploadStatus(result.error.message, "error");
+    return;
+  }
+
+  documents = documents.filter((item) => item.id !== documentItem.id);
+  renderDocuments();
+  showToast("Document deleted");
+}
+
+function buildDocumentCard(documentItem) {
+  const card = document.createElement("article");
+  card.className = "document-card";
+
+  const top = document.createElement("div");
+  top.className = "document-card-top";
+
+  const icon = document.createElement("div");
+  icon.className = "document-type-icon";
+  icon.textContent = getDocumentTypeLabel(documentItem);
+
+  const titleBlock = document.createElement("div");
+  titleBlock.className = "document-card-title";
+
+  const title = document.createElement("strong");
+  title.textContent = documentItem.name;
+  title.title = documentItem.name;
+
+  const date = document.createElement("span");
+  date.textContent = `Uploaded ${formatDocumentDate(documentItem.created_at)}`;
+
+  titleBlock.append(title, date);
+
+  const favoriteButton = document.createElement("button");
+  favoriteButton.type = "button";
+  favoriteButton.className = `document-favorite-button ${
+    documentItem.is_favorite ? "active" : ""
+  }`;
+  favoriteButton.textContent = documentItem.is_favorite ? "★" : "☆";
+  favoriteButton.title = documentItem.is_favorite
+    ? "Remove from favorites"
+    : "Add to favorites";
+  favoriteButton.addEventListener("click", () => {
+    toggleDocumentFavorite(documentItem, favoriteButton);
+  });
+
+  top.append(icon, titleBlock, favoriteButton);
+
+  const meta = document.createElement("div");
+  meta.className = "document-card-meta";
+
+  const folderChip = document.createElement("span");
+  folderChip.className = "document-chip";
+  folderChip.textContent = documentItem.folder || "Personal";
+
+  const sizeChip = document.createElement("span");
+  sizeChip.className = "document-chip";
+  sizeChip.textContent = formatBytes(documentItem.size_bytes);
+
+  meta.append(folderChip, sizeChip);
+
+  const actions = document.createElement("div");
+  actions.className = "document-card-actions";
+
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.textContent = "Open";
+  openButton.addEventListener("click", () => openDocumentPreview(documentItem));
+
+  const downloadButton = document.createElement("button");
+  downloadButton.type = "button";
+  downloadButton.textContent = "Download";
+  downloadButton.addEventListener("click", () => {
+    downloadStoredDocument(documentItem, downloadButton);
+  });
+
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.className = "document-delete-button";
+  deleteButton.textContent = "✕";
+  deleteButton.title = "Delete document";
+  deleteButton.setAttribute("aria-label", `Delete ${documentItem.name}`);
+  deleteButton.addEventListener("click", () => {
+    removeStoredDocument(documentItem, deleteButton);
+  });
+
+  actions.append(openButton, downloadButton, deleteButton);
+  card.append(top, meta, actions);
+  return card;
+}
+
+function renderDocuments() {
+  const list = $("documentList");
+  if (!list) return;
+
+  updateDocumentAccessUI();
+  renderDocumentCounts();
+
+  document.querySelectorAll(".document-folder").forEach((button) => {
+    button.classList.toggle(
+      "active",
+      button.dataset.documentFolder === activeDocumentFolder
+    );
+  });
+
+  const folderTitle =
+    activeDocumentFolder === "all"
+      ? "All files"
+      : activeDocumentFolder === "favorites"
+        ? "Favorites"
+        : activeDocumentFolder;
+
+  $("documentFolderTitle").textContent = folderTitle;
+  $("documentFolderEyebrow").textContent = folderTitle.toUpperCase();
+
+  list.innerHTML = "";
+
+  if (documentsLoading) {
+    const loading = document.createElement("div");
+    loading.className = "document-loading";
+    loading.textContent = "Loading your private documents…";
+    list.appendChild(loading);
+    $("emptyDocuments").style.display = "none";
+    $("documentResultCount").textContent = "Loading";
+    return;
+  }
+
+  if (!window.BoxCloud?.isReady()) {
+    $("emptyDocuments").textContent = "Sign in to view and upload private documents.";
+    $("emptyDocuments").style.display = "block";
+    $("documentResultCount").textContent = "0 documents";
+    return;
+  }
+
+  const visibleDocuments = getVisibleDocuments();
+  visibleDocuments.forEach((documentItem) => {
+    list.appendChild(buildDocumentCard(documentItem));
+  });
+
+  $("emptyDocuments").textContent = "No documents found in this view.";
+  $("emptyDocuments").style.display = visibleDocuments.length ? "none" : "block";
+  $("documentResultCount").textContent =
+    `${visibleDocuments.length} document${visibleDocuments.length === 1 ? "" : "s"}`;
+}
+
+async function loadDocuments({ silent = false } = {}) {
+  if (!window.BoxCloud?.isReady() || documentsLoading) {
+    renderDocuments();
+    return;
+  }
+
+  documentsLoading = true;
+  if (!silent) setDocumentUploadStatus("Loading documents…");
+  renderDocuments();
+
+  const result = await window.BoxCloud.listDocuments();
+  documentsLoading = false;
+
+  if (result.error) {
+    documents = [];
+    setDocumentUploadStatus(
+      `Document Vault unavailable: ${result.error.message}. Run the Phase 6A Supabase setup SQL if you have not done so yet.`,
+      "error"
+    );
+    renderDocuments();
+    return;
+  }
+
+  documents = result.data || [];
+  if (!silent) setDocumentUploadStatus("Vault is up to date.", "success");
+  renderDocuments();
+}
+
+async function uploadSelectedDocuments() {
+  const input = $("documentFiles");
+  const files = Array.from(input.files || []);
+
+  if (!window.BoxCloud?.isReady()) {
+    openAuthOverlay();
+    return;
+  }
+
+  if (!files.length) {
+    input.click();
+    return;
+  }
+
+  const oversizedFile = files.find((file) => file.size > 25 * 1024 * 1024);
+  if (oversizedFile) {
+    setDocumentUploadStatus(
+      `${oversizedFile.name} is larger than the 25 MB limit.`,
+      "error"
+    );
+    return;
+  }
+
+  const folder = $("documentUploadFolder").value;
+  const uploadButton = $("uploadDocumentsButton");
+  uploadButton.disabled = true;
+  $("chooseDocumentFilesButton").disabled = true;
+
+  let uploaded = 0;
+
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    setDocumentUploadStatus(
+      `Uploading ${index + 1} of ${files.length}: ${file.name}`
+    );
+
+    const result = await window.BoxCloud.uploadDocument(file, folder);
+
+    if (result.error) {
+      setDocumentUploadStatus(
+        `Upload stopped at ${file.name}: ${result.error.message}`,
+        "error"
+      );
+      break;
+    }
+
+    documents.unshift(result.data);
+    uploaded += 1;
+  }
+
+  input.value = "";
+  $("documentFileSelection").textContent =
+    "Choose one or more files, up to 25 MB each.";
+  $("chooseDocumentFilesButton").disabled = false;
+  updateDocumentAccessUI();
+  renderDocuments();
+
+  if (uploaded) {
+    setDocumentUploadStatus(
+      `${uploaded} file${uploaded === 1 ? "" : "s"} uploaded to ${folder}.`,
+      "success"
+    );
+    showToast(`${uploaded} document${uploaded === 1 ? "" : "s"} uploaded`);
+  }
+}
+
 function renderAll() {
   renderTasks();
   renderDashboard();
   renderCalendar();
   renderEvents();
   renderFinance();
+  renderDocuments();
 }
 
 async function loadWeather() {
@@ -1134,6 +1613,55 @@ document.querySelectorAll("[data-assistant-action]").forEach((button) => {
 });
 
 
+document.querySelectorAll(".document-folder").forEach((button) => {
+  button.addEventListener("click", () => {
+    activeDocumentFolder = button.dataset.documentFolder;
+    renderDocuments();
+  });
+});
+
+$("documentSearch").addEventListener("input", (event) => {
+  documentSearchTerm = event.target.value.trim();
+  renderDocuments();
+});
+
+$("documentSort").addEventListener("change", renderDocuments);
+
+$("refreshDocumentsButton").addEventListener("click", () => {
+  loadDocuments();
+});
+
+$("documentSignInButton").addEventListener("click", openAuthOverlay);
+
+$("chooseDocumentFilesButton").addEventListener("click", () => {
+  if (!window.BoxCloud?.isReady()) {
+    openAuthOverlay();
+    return;
+  }
+
+  $("documentFiles").click();
+});
+
+$("documentFiles").addEventListener("change", () => {
+  const files = Array.from($("documentFiles").files || []);
+  const label = files.length
+    ? files.length === 1
+      ? `${files[0].name} · ${formatBytes(files[0].size)}`
+      : `${files.length} files selected · ${formatBytes(
+          files.reduce((sum, file) => sum + file.size, 0)
+        )}`
+    : "Choose one or more files, up to 25 MB each.";
+
+  $("documentFileSelection").textContent = label;
+  updateDocumentAccessUI();
+});
+
+$("documentUploadForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await uploadSelectedDocuments();
+});
+
+
 function setCloudStatus(state, label) {
   const element = $("cloudStatus");
   element.className = `cloud-status ${state}`;
@@ -1247,8 +1775,24 @@ $("signOutButton").addEventListener("click", async () => {
 
 window.addEventListener("boxcloudstatus", (event) => {
   const detail = event.detail || {};
+  const nextUserId = detail.session?.user?.id || null;
+
   setCloudStatus(detail.state || "offline", detail.label || "Local");
   updateAuthUI(detail.session || null);
+
+  if (nextUserId !== currentDocumentUserId) {
+    currentDocumentUserId = nextUserId;
+    documents = [];
+    setDocumentUploadStatus("");
+
+    if (nextUserId) {
+      loadDocuments();
+    } else {
+      renderDocuments();
+    }
+  } else {
+    updateDocumentAccessUI();
+  }
 });
 
 
