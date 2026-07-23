@@ -7,7 +7,8 @@ const STORAGE = {
   finance: "theBoxOS4Finance",
   theme: "theBoxOS4Theme",
   timerMinutes: "theBoxOS4TimerMinutes",
-  focusTotal: "theBoxOS4FocusTotal"
+  focusTotal: "theBoxOS4FocusTotal",
+  windowLayouts: "theBoxOSWindowLayouts"
 };
 
 const DAVAO = {
@@ -211,6 +212,7 @@ function openApp(appName) {
 
 function closeApp(windowElement) {
   windowElement.classList.remove("open", "maximized", "minimized");
+  updateMaximizeButton(windowElement);
 }
 
 function focusWindow(windowElement) {
@@ -222,8 +224,100 @@ function focusWindow(windowElement) {
   });
 }
 
+function isCompactWindowMode() {
+  return window.matchMedia("(max-width: 680px)").matches;
+}
+
+function readWindowLayouts() {
+  return loadJSON(STORAGE.windowLayouts, {});
+}
+
+function writeWindowLayouts(layouts) {
+  try {
+    localStorage.setItem(STORAGE.windowLayouts, JSON.stringify(layouts));
+  } catch (error) {
+    console.error("Could not save window layouts:", error);
+  }
+}
+
+function saveWindowLayout(windowElement) {
+  if (isCompactWindowMode() || windowElement.classList.contains("maximized")) return;
+
+  const desktopRect = $("desktop").getBoundingClientRect();
+  const rect = windowElement.getBoundingClientRect();
+  const appName = windowElement.dataset.appWindow;
+  if (!appName || !desktopRect.width || !desktopRect.height) return;
+
+  const layouts = readWindowLayouts();
+  layouts[appName] = {
+    left: Math.max(0, rect.left - desktopRect.left),
+    top: Math.max(0, rect.top - desktopRect.top),
+    width: rect.width,
+    height: rect.height
+  };
+  writeWindowLayouts(layouts);
+}
+
+function applyStoredWindowLayout(windowElement) {
+  if (isCompactWindowMode()) return;
+
+  const appName = windowElement.dataset.appWindow;
+  const layout = readWindowLayouts()[appName];
+  if (!layout) return;
+
+  const values = [layout.left, layout.top, layout.width, layout.height];
+  if (!values.every(Number.isFinite)) return;
+
+  windowElement.style.left = `${layout.left}px`;
+  windowElement.style.top = `${layout.top}px`;
+  windowElement.style.width = `${layout.width}px`;
+  windowElement.style.height = `${layout.height}px`;
+  clampWindowToDesktop(windowElement);
+}
+
+function clampWindowToDesktop(windowElement) {
+  if (isCompactWindowMode() || windowElement.classList.contains("maximized")) return;
+
+  const desktopRect = $("desktop").getBoundingClientRect();
+  const rect = windowElement.getBoundingClientRect();
+  if (!desktopRect.width || !desktopRect.height) return;
+
+  const minWidth = Math.min(320, desktopRect.width);
+  const minHeight = Math.min(260, desktopRect.height);
+  const width = Math.min(Math.max(rect.width, minWidth), desktopRect.width);
+  const height = Math.min(Math.max(rect.height, minHeight), desktopRect.height);
+  const currentLeft = rect.left - desktopRect.left;
+  const currentTop = rect.top - desktopRect.top;
+  const left = Math.max(0, Math.min(currentLeft, desktopRect.width - width));
+  const top = Math.max(0, Math.min(currentTop, desktopRect.height - height));
+
+  windowElement.style.left = `${left}px`;
+  windowElement.style.top = `${top}px`;
+  windowElement.style.width = `${width}px`;
+  windowElement.style.height = `${height}px`;
+}
+
+function updateMaximizeButton(windowElement) {
+  const button = windowElement.querySelector(".maximize-button");
+  if (!button) return;
+
+  const maximized = windowElement.classList.contains("maximized");
+  button.textContent = maximized ? "❐" : "□";
+  button.title = maximized ? "Restore window" : "Maximize window";
+  button.setAttribute("aria-label", button.title);
+}
+
 function toggleMaximize(windowElement) {
-  windowElement.classList.toggle("maximized");
+  if (windowElement.classList.contains("maximized")) {
+    windowElement.classList.remove("maximized");
+    applyStoredWindowLayout(windowElement);
+    clampWindowToDesktop(windowElement);
+  } else {
+    saveWindowLayout(windowElement);
+    windowElement.classList.add("maximized");
+  }
+
+  updateMaximizeButton(windowElement);
   focusWindow(windowElement);
 }
 
@@ -255,20 +349,43 @@ function initializeWindowControls() {
       toggleMaximize(windowElement);
     });
 
+    const resizeHandle = document.createElement("div");
+    resizeHandle.className = "window-resize-handle";
+    resizeHandle.setAttribute("role", "button");
+    resizeHandle.setAttribute("aria-label", "Resize window");
+    resizeHandle.title = "Drag to resize";
+    windowElement.appendChild(resizeHandle);
+
+    applyStoredWindowLayout(windowElement);
+    updateMaximizeButton(windowElement);
     enableDragging(windowElement);
+    enableResizing(windowElement, resizeHandle);
   });
 }
 
 function enableDragging(windowElement) {
   const titlebar = windowElement.querySelector(".window-titlebar");
   let dragging = false;
+  let moved = false;
   let offsetX = 0;
   let offsetY = 0;
+  let startX = 0;
+  let startY = 0;
+  let lastTouchTap = 0;
+
+  titlebar.addEventListener("dblclick", (event) => {
+    if (event.target.closest("button")) return;
+    event.preventDefault();
+    toggleMaximize(windowElement);
+  });
 
   titlebar.addEventListener("pointerdown", (event) => {
     if (event.target.closest("button") || windowElement.classList.contains("maximized")) return;
 
     dragging = true;
+    moved = false;
+    startX = event.clientX;
+    startY = event.clientY;
     const rect = windowElement.getBoundingClientRect();
     offsetX = event.clientX - rect.left;
     offsetY = event.clientY - rect.top;
@@ -278,6 +395,10 @@ function enableDragging(windowElement) {
 
   titlebar.addEventListener("pointermove", (event) => {
     if (!dragging) return;
+
+    if (Math.abs(event.clientX - startX) > 4 || Math.abs(event.clientY - startY) > 4) {
+      moved = true;
+    }
 
     const desktopRect = $("desktop").getBoundingClientRect();
     const windowRect = windowElement.getBoundingClientRect();
@@ -292,10 +413,105 @@ function enableDragging(windowElement) {
     windowElement.style.top = `${nextTop}px`;
   });
 
-  titlebar.addEventListener("pointerup", () => {
+  const finishDrag = (event) => {
+    if (!dragging) return;
     dragging = false;
-  });
+
+    if (titlebar.hasPointerCapture?.(event.pointerId)) {
+      titlebar.releasePointerCapture(event.pointerId);
+    }
+
+    if (moved) {
+      saveWindowLayout(windowElement);
+      return;
+    }
+
+    if (event.pointerType !== "mouse") {
+      const now = Date.now();
+      if (now - lastTouchTap < 360) {
+        lastTouchTap = 0;
+        toggleMaximize(windowElement);
+      } else {
+        lastTouchTap = now;
+      }
+    }
+  };
+
+  titlebar.addEventListener("pointerup", finishDrag);
+  titlebar.addEventListener("pointercancel", finishDrag);
 }
+
+function enableResizing(windowElement, resizeHandle) {
+  let resizing = false;
+  let startX = 0;
+  let startY = 0;
+  let startWidth = 0;
+  let startHeight = 0;
+  let startLeft = 0;
+  let startTop = 0;
+
+  resizeHandle.addEventListener("pointerdown", (event) => {
+    if (isCompactWindowMode() || windowElement.classList.contains("maximized")) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    clampWindowToDesktop(windowElement);
+
+    const desktopRect = $("desktop").getBoundingClientRect();
+    const rect = windowElement.getBoundingClientRect();
+    resizing = true;
+    startX = event.clientX;
+    startY = event.clientY;
+    startWidth = rect.width;
+    startHeight = rect.height;
+    startLeft = rect.left - desktopRect.left;
+    startTop = rect.top - desktopRect.top;
+
+    windowElement.classList.add("resizing");
+    resizeHandle.setPointerCapture(event.pointerId);
+    focusWindow(windowElement);
+  });
+
+  resizeHandle.addEventListener("pointermove", (event) => {
+    if (!resizing) return;
+
+    const desktopRect = $("desktop").getBoundingClientRect();
+    const minWidth = Math.min(320, desktopRect.width);
+    const minHeight = Math.min(260, desktopRect.height);
+    const maxWidth = Math.max(minWidth, desktopRect.width - startLeft);
+    const maxHeight = Math.max(minHeight, desktopRect.height - startTop);
+    const width = Math.max(minWidth, Math.min(startWidth + event.clientX - startX, maxWidth));
+    const height = Math.max(minHeight, Math.min(startHeight + event.clientY - startY, maxHeight));
+
+    windowElement.style.width = `${width}px`;
+    windowElement.style.height = `${height}px`;
+  });
+
+  const finishResize = (event) => {
+    if (!resizing) return;
+    resizing = false;
+    windowElement.classList.remove("resizing");
+
+    if (resizeHandle.hasPointerCapture?.(event.pointerId)) {
+      resizeHandle.releasePointerCapture(event.pointerId);
+    }
+
+    clampWindowToDesktop(windowElement);
+    saveWindowLayout(windowElement);
+  };
+
+  resizeHandle.addEventListener("pointerup", finishResize);
+  resizeHandle.addEventListener("pointercancel", finishResize);
+}
+
+window.addEventListener("resize", () => {
+  document.querySelectorAll(".app-window").forEach((windowElement) => {
+    if (!isCompactWindowMode()) {
+      applyStoredWindowLayout(windowElement);
+      clampWindowToDesktop(windowElement);
+    }
+  });
+});
 
 let editingTaskId = null;
 let pendingTaskSource = null;

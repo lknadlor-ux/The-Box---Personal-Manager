@@ -401,6 +401,7 @@ body.light-theme .desktop-summary div {
   pointer-events: none;
   transform: translateY(18px) scale(0.97);
   transition: opacity 0.2s ease, transform 0.2s ease;
+  contain: layout paint;
 }
 
 .app-window.open {
@@ -432,6 +433,11 @@ body.light-theme .desktop-summary div {
   background: rgba(255,255,255,0.02);
   cursor: grab;
   user-select: none;
+  touch-action: none;
+}
+
+.window-titlebar:active {
+  cursor: grabbing;
 }
 
 .window-title {
@@ -453,6 +459,48 @@ body.light-theme .desktop-summary div {
   width: 30px;
   height: 30px;
   border-radius: 9px;
+}
+
+.window-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 8;
+  width: 34px;
+  height: 34px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.window-resize-handle::before,
+.window-resize-handle::after {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  width: 13px;
+  height: 13px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  border-radius: 0 0 3px 0;
+  content: "";
+  opacity: 0.75;
+}
+
+.window-resize-handle::after {
+  right: 12px;
+  bottom: 12px;
+  width: 6px;
+  height: 6px;
+  opacity: 0.45;
+}
+
+.app-window.resizing {
+  transition: none;
+  user-select: none;
+}
+
+.app-window.maximized .window-resize-handle {
+  display: none;
 }
 
 .window-content {
@@ -1031,10 +1079,8 @@ body.light-theme .dock {
   }
 
   .app-window {
-    left: 3% !important;
-    top: 3% !important;
-    width: 94% !important;
-    height: 94% !important;
+    max-width: calc(100% - 20px);
+    max-height: calc(100% - 20px);
   }
 
   .workspace-cards,
@@ -1061,6 +1107,19 @@ body.light-theme .dock {
 
   .topbar-brand,
   .profile {
+    display: none;
+  }
+
+  .app-window {
+    left: 3% !important;
+    top: 3% !important;
+    width: 94% !important;
+    height: 94% !important;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .window-resize-handle {
     display: none;
   }
 
