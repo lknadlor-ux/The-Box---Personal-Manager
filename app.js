@@ -8,7 +8,8 @@ const STORAGE = {
   theme: "theBoxOS4Theme",
   timerMinutes: "theBoxOS4TimerMinutes",
   focusTotal: "theBoxOS4FocusTotal",
-  windowLayouts: "theBoxOSWindowLayouts"
+  windowLayouts: "theBoxOSWindowLayouts",
+  documentView: "theBoxOSDocumentView"
 };
 
 const DAVAO = {
@@ -114,6 +115,9 @@ let activeDocumentFolder = "all";
 let documentSearchTerm = "";
 let documentsLoading = false;
 let currentDocumentUserId = null;
+let documentViewMode = localStorage.getItem(STORAGE.documentView) === "list" ? "list" : "grid";
+let previewDocumentItem = null;
+let previewDocumentSignedUrl = "";
 
 function loadJSON(key, fallback) {
   try {
@@ -1209,7 +1213,7 @@ function renderDocumentFolderControls() {
     const count = document.createElement("small");
     count.dataset.documentCount = folderName;
     count.textContent = documents.filter(
-      (documentItem) => documentItem.folder === folderName
+      (documentItem) => !documentItem.deleted_at && documentItem.folder === folderName
     ).length;
 
     button.append(icon, label, count);
@@ -1240,10 +1244,14 @@ function getVisibleDocuments() {
   const normalizedSearch = documentSearchTerm.toLocaleLowerCase();
 
   const filtered = documents.filter((documentItem) => {
-    const matchesFolder =
-      activeDocumentFolder === "all" ||
-      (activeDocumentFolder === "favorites" && documentItem.is_favorite) ||
-      documentItem.folder === activeDocumentFolder;
+    const isDeleted = Boolean(documentItem.deleted_at);
+    const matchesFolder = activeDocumentFolder === "trash"
+      ? isDeleted
+      : !isDeleted && (
+          activeDocumentFolder === "all" ||
+          (activeDocumentFolder === "favorites" && documentItem.is_favorite) ||
+          documentItem.folder === activeDocumentFolder
+        );
 
     const searchableText = [
       documentItem.name,
@@ -1312,21 +1320,24 @@ function updateDocumentAccessUI() {
 }
 
 function renderDocumentCounts() {
-  const totalSize = documents.reduce(
+  const activeDocuments = documents.filter((documentItem) => !documentItem.deleted_at);
+  const trashedDocuments = documents.filter((documentItem) => documentItem.deleted_at);
+  const totalSize = activeDocuments.reduce(
     (sum, documentItem) => sum + Number(documentItem.size_bytes || 0),
     0
   );
-  const favorites = documents.filter((documentItem) => documentItem.is_favorite).length;
+  const favorites = activeDocuments.filter((documentItem) => documentItem.is_favorite).length;
 
-  $("documentTotalCount").textContent = documents.length;
+  $("documentTotalCount").textContent = activeDocuments.length;
   $("documentFavoriteCount").textContent = favorites;
   $("documentStorageUsed").textContent = formatBytes(totalSize);
-  $("documentAllFolderCount").textContent = documents.length;
+  $("documentAllFolderCount").textContent = activeDocuments.length;
   $("documentFavoritesFolderCount").textContent = favorites;
+  $("documentTrashFolderCount").textContent = trashedDocuments.length;
 
   document.querySelectorAll("[data-document-count]").forEach((element) => {
     const folder = element.dataset.documentCount;
-    element.textContent = documents.filter(
+    element.textContent = activeDocuments.filter(
       (documentItem) => documentItem.folder === folder
     ).length;
   });
@@ -1370,33 +1381,68 @@ function closeDocumentDetailsModal() {
 }
 
 async function openDocumentPreview(documentItem) {
-  const previewTab = window.open("about:blank", "_blank");
-
-  if (!previewTab) {
-    showToast("Allow pop-ups to open document previews");
+  if (!window.BoxCloud?.isReady()) {
+    openAuthOverlay();
     return;
   }
 
-  previewTab.document.title = "Opening document…";
-  previewTab.document.body.textContent = "Opening your private document…";
+  previewDocumentItem = documentItem;
+  previewDocumentSignedUrl = "";
+  $("documentPreviewHeading").textContent = documentItem.name;
+  $("documentPreviewFileName").textContent = documentItem.name;
+  $("documentPreviewType").textContent = getDocumentTypeLabel(documentItem);
+  $("documentPreviewFolder").textContent = documentItem.folder || "Personal";
+  $("documentPreviewMime").textContent = documentItem.mime_type || "Unknown file type";
+  $("documentPreviewSize").textContent = formatBytes(documentItem.size_bytes);
+  $("documentPreviewUploaded").textContent = formatDocumentDate(documentItem.created_at);
+  $("documentPreviewDetails").textContent = String(documentItem.details || "").trim() || "No details added.";
+  $("documentPreviewStage").innerHTML = '<div class="document-preview-loading">Preparing private preview…</div>';
+  $("documentPreviewModal").classList.add("open");
+  $("documentPreviewModal").setAttribute("aria-hidden", "false");
 
-  const result = await window.BoxCloud.createDocumentUrl(
-    documentItem.storage_path,
-    120
-  );
-
+  const result = await window.BoxCloud.createDocumentUrl(documentItem.storage_path, 600);
   const signedUrl = result.data?.signedUrl || result.data?.signedURL;
 
   if (result.error || !signedUrl) {
-    previewTab.close();
-    setDocumentUploadStatus(
-      result.error?.message || "Could not open this document.",
-      "error"
-    );
+    $("documentPreviewStage").innerHTML = '<div class="document-preview-empty"><strong>Preview unavailable</strong><span>The private file link could not be created.</span></div>';
+    setDocumentUploadStatus(result.error?.message || "Could not preview this document.", "error");
     return;
   }
 
-  previewTab.location.href = signedUrl;
+  previewDocumentSignedUrl = signedUrl;
+  const stage = $("documentPreviewStage");
+  stage.innerHTML = "";
+  const mime = String(documentItem.mime_type || "").toLowerCase();
+  const name = String(documentItem.name || "").toLowerCase();
+  const isImage = mime.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name);
+  const isPdf = mime === "application/pdf" || name.endsWith(".pdf");
+
+  if (isImage) {
+    const image = document.createElement("img");
+    image.className = "document-preview-image";
+    image.src = signedUrl;
+    image.alt = documentItem.name;
+    stage.appendChild(image);
+  } else if (isPdf) {
+    const frame = document.createElement("iframe");
+    frame.className = "document-preview-frame";
+    frame.src = signedUrl;
+    frame.title = `Preview of ${documentItem.name}`;
+    stage.appendChild(frame);
+  } else {
+    const empty = document.createElement("div");
+    empty.className = "document-preview-empty";
+    empty.innerHTML = `<strong>${getDocumentTypeLabel(documentItem)} file</strong><span>Built-in preview is available for PDFs and images. Use Open separately or Download for this file.</span>`;
+    stage.appendChild(empty);
+  }
+}
+
+function closeDocumentPreview() {
+  $("documentPreviewModal").classList.remove("open");
+  $("documentPreviewModal").setAttribute("aria-hidden", "true");
+  $("documentPreviewStage").innerHTML = "";
+  previewDocumentItem = null;
+  previewDocumentSignedUrl = "";
 }
 
 async function downloadStoredDocument(documentItem, button) {
@@ -1447,15 +1493,47 @@ async function toggleDocumentFavorite(documentItem, button) {
   showToast(nextValue ? "Added to favorites" : "Removed from favorites");
 }
 
-async function removeStoredDocument(documentItem, button) {
-  const confirmed = window.confirm(
-    `Delete “${documentItem.name}”? This permanently removes the cloud file.`
-  );
-
+async function moveStoredDocumentToTrash(documentItem, button) {
+  const confirmed = window.confirm(`Move “${documentItem.name}” to the Recycle Bin?`);
   if (!confirmed) return;
 
   button.disabled = true;
-  const result = await window.BoxCloud.deleteDocument(
+  const result = await window.BoxCloud.moveDocumentToTrash(documentItem.id);
+  button.disabled = false;
+
+  if (result.error) {
+    setDocumentUploadStatus(result.error.message, "error");
+    return;
+  }
+
+  documentItem.deleted_at = result.data?.deleted_at || new Date().toISOString();
+  documentItem.updated_at = result.data?.updated_at || documentItem.deleted_at;
+  renderDocuments();
+  showToast("Moved to Recycle Bin");
+}
+
+async function restoreStoredDocument(documentItem, button) {
+  button.disabled = true;
+  const result = await window.BoxCloud.restoreDocument(documentItem.id);
+  button.disabled = false;
+
+  if (result.error) {
+    setDocumentUploadStatus(result.error.message, "error");
+    return;
+  }
+
+  documentItem.deleted_at = null;
+  documentItem.updated_at = result.data?.updated_at || new Date().toISOString();
+  renderDocuments();
+  showToast("Document restored");
+}
+
+async function permanentlyDeleteStoredDocument(documentItem, button) {
+  const confirmed = window.confirm(`Permanently delete “${documentItem.name}”? This cannot be undone.`);
+  if (!confirmed) return;
+
+  button.disabled = true;
+  const result = await window.BoxCloud.permanentlyDeleteDocument(
     documentItem.id,
     documentItem.storage_path
   );
@@ -1468,12 +1546,14 @@ async function removeStoredDocument(documentItem, button) {
 
   documents = documents.filter((item) => item.id !== documentItem.id);
   renderDocuments();
-  showToast("Document deleted");
+  showToast("Document permanently deleted");
 }
 
 function buildDocumentCard(documentItem) {
   const card = document.createElement("article");
-  card.className = "document-card";
+  const isDeleted = Boolean(documentItem.deleted_at);
+  card.className = `document-card ${isDeleted ? "document-card-trashed" : ""}`.trim();
+  card.addEventListener("dblclick", () => openDocumentPreview(documentItem));
 
   const top = document.createElement("div");
   top.className = "document-card-top";
@@ -1490,37 +1570,30 @@ function buildDocumentCard(documentItem) {
   title.title = documentItem.name;
 
   const date = document.createElement("span");
-  date.textContent = `Uploaded ${formatDocumentDate(documentItem.created_at)}`;
+  date.textContent = isDeleted
+    ? `Deleted ${formatDocumentDate(documentItem.deleted_at)}`
+    : `Uploaded ${formatDocumentDate(documentItem.created_at)}`;
 
   titleBlock.append(title, date);
 
   const favoriteButton = document.createElement("button");
   favoriteButton.type = "button";
-  favoriteButton.className = `document-favorite-button ${
-    documentItem.is_favorite ? "active" : ""
-  }`;
+  favoriteButton.className = `document-favorite-button ${documentItem.is_favorite ? "active" : ""}`;
   favoriteButton.textContent = documentItem.is_favorite ? "★" : "☆";
-  favoriteButton.title = documentItem.is_favorite
-    ? "Remove from favorites"
-    : "Add to favorites";
-  favoriteButton.addEventListener("click", () => {
-    toggleDocumentFavorite(documentItem, favoriteButton);
-  });
+  favoriteButton.title = documentItem.is_favorite ? "Remove from favorites" : "Add to favorites";
+  favoriteButton.disabled = isDeleted;
+  favoriteButton.addEventListener("click", () => toggleDocumentFavorite(documentItem, favoriteButton));
 
   top.append(icon, titleBlock, favoriteButton);
 
   const meta = document.createElement("div");
   meta.className = "document-card-meta";
-
-  const folderChip = document.createElement("span");
-  folderChip.className = "document-chip";
-  folderChip.textContent = documentItem.folder || "Personal";
-
-  const sizeChip = document.createElement("span");
-  sizeChip.className = "document-chip";
-  sizeChip.textContent = formatBytes(documentItem.size_bytes);
-
-  meta.append(folderChip, sizeChip);
+  [documentItem.folder || "Personal", getDocumentTypeLabel(documentItem), formatBytes(documentItem.size_bytes)].forEach((value) => {
+    const chip = document.createElement("span");
+    chip.className = "document-chip";
+    chip.textContent = value;
+    meta.appendChild(chip);
+  });
 
   const details = String(documentItem.details || "").trim();
   let detailsBlock = null;
@@ -1534,34 +1607,46 @@ function buildDocumentCard(documentItem) {
   const actions = document.createElement("div");
   actions.className = "document-card-actions";
 
-  const openButton = document.createElement("button");
-  openButton.type = "button";
-  openButton.textContent = "Open";
-  openButton.addEventListener("click", () => openDocumentPreview(documentItem));
+  if (isDeleted) {
+    const restoreButton = document.createElement("button");
+    restoreButton.type = "button";
+    restoreButton.textContent = "Restore";
+    restoreButton.addEventListener("click", () => restoreStoredDocument(documentItem, restoreButton));
 
-  const downloadButton = document.createElement("button");
-  downloadButton.type = "button";
-  downloadButton.textContent = "Download";
-  downloadButton.addEventListener("click", () => {
-    downloadStoredDocument(documentItem, downloadButton);
-  });
+    const deleteForeverButton = document.createElement("button");
+    deleteForeverButton.type = "button";
+    deleteForeverButton.className = "document-delete-forever-button";
+    deleteForeverButton.textContent = "Delete forever";
+    deleteForeverButton.addEventListener("click", () => permanentlyDeleteStoredDocument(documentItem, deleteForeverButton));
 
-  const detailsButton = document.createElement("button");
-  detailsButton.type = "button";
-  detailsButton.textContent = details ? "Edit details" : "Add details";
-  detailsButton.addEventListener("click", () => openDocumentDetailsModal(documentItem));
+    actions.append(restoreButton, deleteForeverButton);
+  } else {
+    const previewButton = document.createElement("button");
+    previewButton.type = "button";
+    previewButton.textContent = "Preview";
+    previewButton.addEventListener("click", () => openDocumentPreview(documentItem));
 
-  const deleteButton = document.createElement("button");
-  deleteButton.type = "button";
-  deleteButton.className = "document-delete-button";
-  deleteButton.textContent = "✕";
-  deleteButton.title = "Delete document";
-  deleteButton.setAttribute("aria-label", `Delete ${documentItem.name}`);
-  deleteButton.addEventListener("click", () => {
-    removeStoredDocument(documentItem, deleteButton);
-  });
+    const downloadButton = document.createElement("button");
+    downloadButton.type = "button";
+    downloadButton.textContent = "Download";
+    downloadButton.addEventListener("click", () => downloadStoredDocument(documentItem, downloadButton));
 
-  actions.append(openButton, downloadButton, detailsButton, deleteButton);
+    const detailsButton = document.createElement("button");
+    detailsButton.type = "button";
+    detailsButton.textContent = details ? "Edit details" : "Add details";
+    detailsButton.addEventListener("click", () => openDocumentDetailsModal(documentItem));
+
+    const trashButton = document.createElement("button");
+    trashButton.type = "button";
+    trashButton.className = "document-delete-button";
+    trashButton.textContent = "♲";
+    trashButton.title = "Move to Recycle Bin";
+    trashButton.setAttribute("aria-label", `Move ${documentItem.name} to Recycle Bin`);
+    trashButton.addEventListener("click", () => moveStoredDocumentToTrash(documentItem, trashButton));
+
+    actions.append(previewButton, downloadButton, detailsButton, trashButton);
+  }
+
   card.append(top, meta);
   if (detailsBlock) card.appendChild(detailsBlock);
   card.appendChild(actions);
@@ -1588,12 +1673,17 @@ function renderDocuments() {
       ? "All files"
       : activeDocumentFolder === "favorites"
         ? "Favorites"
-        : activeDocumentFolder;
+        : activeDocumentFolder === "trash"
+          ? "Recycle Bin"
+          : activeDocumentFolder;
 
   $("documentFolderTitle").textContent = folderTitle;
   $("documentFolderEyebrow").textContent = folderTitle.toUpperCase();
 
   list.innerHTML = "";
+  list.classList.toggle("document-list-view", documentViewMode === "list");
+  $("documentGridViewButton").classList.toggle("active", documentViewMode === "grid");
+  $("documentListViewButton").classList.toggle("active", documentViewMode === "list");
 
   if (documentsLoading) {
     const loading = document.createElement("div");
@@ -1617,7 +1707,9 @@ function renderDocuments() {
     list.appendChild(buildDocumentCard(documentItem));
   });
 
-  $("emptyDocuments").textContent = "No documents found in this view.";
+  $("emptyDocuments").textContent = activeDocumentFolder === "trash"
+    ? "The Recycle Bin is empty."
+    : "No documents found in this view.";
   $("emptyDocuments").style.display = visibleDocuments.length ? "none" : "block";
   $("documentResultCount").textContent =
     `${visibleDocuments.length} document${visibleDocuments.length === 1 ? "" : "s"}`;
@@ -2212,6 +2304,34 @@ $("documentDetailsForm").addEventListener("submit", async (event) => {
   showToast(documentItem.details ? "Details saved" : "Details cleared");
 });
 
+$("closeDocumentPreviewButton").addEventListener("click", closeDocumentPreview);
+$("documentPreviewModal").addEventListener("pointerdown", (event) => {
+  if (event.target === $("documentPreviewModal")) closeDocumentPreview();
+});
+$("openDocumentExternallyButton").addEventListener("click", async () => {
+  if (!previewDocumentItem) return;
+  if (!previewDocumentSignedUrl) {
+    const result = await window.BoxCloud.createDocumentUrl(previewDocumentItem.storage_path, 600);
+    previewDocumentSignedUrl = result.data?.signedUrl || result.data?.signedURL || "";
+  }
+  if (previewDocumentSignedUrl) window.open(previewDocumentSignedUrl, "_blank", "noopener");
+});
+$("downloadPreviewDocumentButton").addEventListener("click", () => {
+  if (previewDocumentItem) {
+    downloadStoredDocument(previewDocumentItem, $("downloadPreviewDocumentButton"));
+  }
+});
+$("documentGridViewButton").addEventListener("click", () => {
+  documentViewMode = "grid";
+  localStorage.setItem(STORAGE.documentView, documentViewMode);
+  renderDocuments();
+});
+$("documentListViewButton").addEventListener("click", () => {
+  documentViewMode = "list";
+  localStorage.setItem(STORAGE.documentView, documentViewMode);
+  renderDocuments();
+});
+
 $("documentSearch").addEventListener("input", (event) => {
   documentSearchTerm = event.target.value.trim();
   renderDocuments();
@@ -2256,7 +2376,9 @@ $("documentUploadForm").addEventListener("submit", async (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
 
-  if ($("documentDetailsModal").classList.contains("open")) {
+  if ($("documentPreviewModal").classList.contains("open")) {
+    closeDocumentPreview();
+  } else if ($("documentDetailsModal").classList.contains("open")) {
     closeDocumentDetailsModal();
   } else if ($("documentFolderModal").classList.contains("open")) {
     closeDocumentFolderModal();

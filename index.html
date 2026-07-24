@@ -534,6 +534,7 @@
                 </div>
                 <button class="document-folder active" data-document-folder="all"><span>▦</span><strong>All files</strong><small id="documentAllFolderCount">0</small></button>
                 <button class="document-folder" data-document-folder="favorites"><span>★</span><strong>Favorites</strong><small id="documentFavoritesFolderCount">0</small></button>
+                <button class="document-folder document-recycle-folder" data-document-folder="trash"><span>♲</span><strong>Recycle Bin</strong><small id="documentTrashFolderCount">0</small></button>
                 <div class="document-folder-divider"></div>
                 <div id="documentFolderList" class="document-folder-list" aria-live="polite"></div>
               </aside>
@@ -550,6 +551,10 @@
                     <option value="name">Name A–Z</option>
                     <option value="size">Largest first</option>
                   </select>
+                  <div class="document-view-toggle" role="group" aria-label="Document view">
+                    <button id="documentGridViewButton" class="document-view-button active" type="button" aria-label="Grid view" title="Grid view">▦</button>
+                    <button id="documentListViewButton" class="document-view-button" type="button" aria-label="List view" title="List view">☷</button>
+                  </div>
                   <button id="refreshDocumentsButton" class="secondary-button" type="button">Refresh</button>
                 </div>
 
@@ -737,6 +742,43 @@
           <button id="saveDocumentDetailsButton" class="primary-button" type="submit">Save details</button>
         </div>
       </form>
+    </section>
+  </div>
+
+  <div id="documentPreviewModal" class="vault-modal-overlay document-preview-overlay" aria-hidden="true">
+    <section class="vault-modal-card document-preview-card" role="dialog" aria-modal="true" aria-labelledby="documentPreviewHeading">
+      <div class="vault-modal-header document-preview-header">
+        <div>
+          <small>DOCUMENT PREVIEW</small>
+          <h2 id="documentPreviewHeading">Preview</h2>
+          <p id="documentPreviewFileName"></p>
+        </div>
+        <button id="closeDocumentPreviewButton" class="window-button" type="button" aria-label="Close document preview">✕</button>
+      </div>
+
+      <div class="document-preview-layout">
+        <div id="documentPreviewStage" class="document-preview-stage" aria-live="polite">
+          <div class="document-preview-loading">Preparing private preview…</div>
+        </div>
+
+        <aside class="document-preview-info">
+          <div class="document-preview-type" id="documentPreviewType">FILE</div>
+          <dl>
+            <div><dt>Folder</dt><dd id="documentPreviewFolder">—</dd></div>
+            <div><dt>File type</dt><dd id="documentPreviewMime">—</dd></div>
+            <div><dt>File size</dt><dd id="documentPreviewSize">—</dd></div>
+            <div><dt>Uploaded</dt><dd id="documentPreviewUploaded">—</dd></div>
+          </dl>
+          <div class="document-preview-details-wrap">
+            <span>Details</span>
+            <p id="documentPreviewDetails">No details added.</p>
+          </div>
+          <div class="document-preview-actions">
+            <button id="openDocumentExternallyButton" class="secondary-button" type="button">Open separately</button>
+            <button id="downloadPreviewDocumentButton" class="primary-button" type="button">Download</button>
+          </div>
+        </aside>
+      </div>
     </section>
   </div>
 

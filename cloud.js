@@ -148,7 +148,7 @@ window.BoxCloud = (() => {
 
     const { data, error } = await client
       .from("documents")
-      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,created_at,updated_at")
+      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,deleted_at,created_at,updated_at")
       .eq("user_id", session.user.id)
       .order("created_at", { ascending: false });
 
@@ -198,7 +198,7 @@ window.BoxCloud = (() => {
         is_favorite: false,
         updated_at: new Date().toISOString()
       })
-      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,created_at,updated_at")
+      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,deleted_at,created_at,updated_at")
       .single();
 
     if (metadataError) {
@@ -303,7 +303,38 @@ window.BoxCloud = (() => {
       .download(storagePath);
   }
 
-  async function deleteDocument(documentId, storagePath) {
+  async function moveDocumentToTrash(documentId) {
+    if (!isReady()) return { data: null, error: new Error("Sign in first.") };
+
+    const deletedAt = new Date().toISOString();
+    const { data, error } = await client
+      .from("documents")
+      .update({ deleted_at: deletedAt, updated_at: deletedAt })
+      .eq("id", documentId)
+      .eq("user_id", session.user.id)
+      .select("id,deleted_at,updated_at")
+      .single();
+
+    emit(error ? "error" : "online", error ? "Recycle error" : "Synced");
+    return { data, error };
+  }
+
+  async function restoreDocument(documentId) {
+    if (!isReady()) return { data: null, error: new Error("Sign in first.") };
+
+    const { data, error } = await client
+      .from("documents")
+      .update({ deleted_at: null, updated_at: new Date().toISOString() })
+      .eq("id", documentId)
+      .eq("user_id", session.user.id)
+      .select("id,deleted_at,updated_at")
+      .single();
+
+    emit(error ? "error" : "online", error ? "Restore error" : "Synced");
+    return { data, error };
+  }
+
+  async function permanentlyDeleteDocument(documentId, storagePath) {
     if (!isReady()) return { error: new Error("Sign in first.") };
 
     emit("syncing", "Deleting");
@@ -456,6 +487,8 @@ window.BoxCloud = (() => {
     setDocumentFavorite,
     createDocumentUrl,
     downloadDocument,
-    deleteDocument
+    moveDocumentToTrash,
+    restoreDocument,
+    permanentlyDeleteDocument
   };
 })();
