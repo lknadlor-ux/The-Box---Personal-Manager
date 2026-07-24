@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6b1-preview-recycle-view-controls";
+const CACHE_NAME = "the-box-os-phase-6b2-compliance-expiry-tags";
 
 const APP_FILES = [
   "./",

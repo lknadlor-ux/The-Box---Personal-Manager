@@ -143,19 +143,44 @@ window.BoxCloud = (() => {
     return clean || "document";
   }
 
+  function normalizeExpiryDate(value) {
+    const text = String(value || "").trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+  }
+
+  function normalizeReminderDays(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.min(365, Math.max(0, Math.round(number))) : 30;
+  }
+
+  function normalizeDocumentTags(value) {
+    const raw = Array.isArray(value) ? value : String(value || "").split(",");
+    const seen = new Set();
+    return raw
+      .map((item) => String(item || "").trim().replace(/\s+/g, " ").slice(0, 40))
+      .filter((item) => {
+        if (!item) return false;
+        const key = item.toLocaleLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 20);
+  }
+
   async function listDocuments() {
     if (!isReady()) return { data: [], error: new Error("Sign in to access documents.") };
 
     const { data, error } = await client
       .from("documents")
-      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,deleted_at,created_at,updated_at")
+      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,deleted_at,expiry_date,reminder_days,tags,created_at,updated_at")
       .eq("user_id", session.user.id)
       .order("created_at", { ascending: false });
 
     return { data: data || [], error };
   }
 
-  async function uploadDocument(file, folder, details = "") {
+  async function uploadDocument(file, folder, details = "", compliance = {}) {
     if (!isReady()) return { data: null, error: new Error("Sign in before uploading documents.") };
     if (!(file instanceof File)) return { data: null, error: new Error("Choose a valid file.") };
     if (file.size > MAX_DOCUMENT_SIZE) {
@@ -193,12 +218,15 @@ window.BoxCloud = (() => {
         storage_path: storagePath,
         folder: String(folder || "Personal").trim().slice(0, 60) || "Personal",
         details: String(details || "").trim().slice(0, 2000) || null,
+        expiry_date: normalizeExpiryDate(compliance.expiryDate),
+        reminder_days: normalizeReminderDays(compliance.reminderDays),
+        tags: normalizeDocumentTags(compliance.tags),
         mime_type: file.type || null,
         size_bytes: file.size,
         is_favorite: false,
         updated_at: new Date().toISOString()
       })
-      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,deleted_at,created_at,updated_at")
+      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,deleted_at,expiry_date,reminder_days,tags,created_at,updated_at")
       .single();
 
     if (metadataError) {
@@ -249,20 +277,22 @@ window.BoxCloud = (() => {
     return { data, error };
   }
 
-  async function updateDocumentDetails(documentId, details) {
+  async function updateDocumentMetadata(documentId, metadata = {}) {
     if (!isReady()) return { data: null, error: new Error("Sign in first.") };
 
-    const cleanDetails = String(details || "").trim().slice(0, 2000);
-
+    const cleanDetails = String(metadata.details || "").trim().slice(0, 2000);
     const { data, error } = await client
       .from("documents")
       .update({
         details: cleanDetails || null,
+        expiry_date: normalizeExpiryDate(metadata.expiryDate),
+        reminder_days: normalizeReminderDays(metadata.reminderDays),
+        tags: normalizeDocumentTags(metadata.tags),
         updated_at: new Date().toISOString()
       })
       .eq("id", documentId)
       .eq("user_id", session.user.id)
-      .select("id,details,updated_at")
+      .select("id,details,expiry_date,reminder_days,tags,updated_at")
       .single();
 
     emit(error ? "error" : "online", error ? "Sync error" : "Synced");
@@ -483,7 +513,7 @@ window.BoxCloud = (() => {
     listDocumentFolders,
     createDocumentFolder,
     uploadDocument,
-    updateDocumentDetails,
+    updateDocumentMetadata,
     setDocumentFavorite,
     createDocumentUrl,
     downloadDocument,

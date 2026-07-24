@@ -508,7 +508,7 @@
               <div>
                 <small>PRIVATE CLOUD STORAGE</small>
                 <h2>Document Vault</h2>
-                <p>Create folders, add document details, and organize private files in one secure workspace.</p>
+                <p>Organize private files, track expiry dates, add tags, and stay ahead of compliance deadlines.</p>
               </div>
               <div class="document-stats">
                 <div><strong id="documentTotalCount">0</strong><span>Files</span></div>
@@ -516,6 +516,18 @@
                 <div><strong id="documentStorageUsed">0 B</strong><span>Stored</span></div>
               </div>
             </section>
+
+            <section class="document-compliance-summary" aria-label="Document compliance summary">
+              <div><span>Tracked expiry</span><strong id="documentTrackedExpiryCount">0</strong><small>documents</small></div>
+              <div class="compliance-summary-expiring"><span>Expiring soon</span><strong id="documentExpiringCount">0</strong><small>need review</small></div>
+              <div class="compliance-summary-expired"><span>Expired</span><strong id="documentExpiredCount">0</strong><small>overdue</small></div>
+            </section>
+
+            <div id="documentComplianceNotice" class="document-notice document-compliance-notice hidden" role="status">
+              <strong>Compliance reminder</strong>
+              <span id="documentComplianceNoticeText">No document deadlines need attention.</span>
+              <button id="showAttentionDocumentsButton" class="secondary-button" type="button">Review</button>
+            </div>
 
             <div id="documentAuthNotice" class="document-notice">
               <strong>Sign in required</strong>
@@ -543,13 +555,23 @@
                 <div class="document-toolbar">
                   <label class="document-search">
                     <span>⌕</span>
-                    <input id="documentSearch" type="search" placeholder="Search names, folders, or details">
+                    <input id="documentSearch" type="search" placeholder="Search names, folders, details, or tags">
                   </label>
+                  <select id="documentComplianceFilter" aria-label="Filter by compliance status">
+                    <option value="all">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="expiring">Expiring soon</option>
+                    <option value="expired">Expired</option>
+                    <option value="no-expiry">No expiry date</option>
+                    <option value="attention">Needs attention</option>
+                  </select>
                   <select id="documentSort" aria-label="Sort documents">
                     <option value="newest">Newest first</option>
                     <option value="oldest">Oldest first</option>
                     <option value="name">Name A–Z</option>
                     <option value="size">Largest first</option>
+                    <option value="expirySoon">Expiry date — soonest</option>
+                    <option value="expiryLatest">Expiry date — latest</option>
                   </select>
                   <div class="document-view-toggle" role="group" aria-label="Document view">
                     <button id="documentGridViewButton" class="document-view-button active" type="button" aria-label="Grid view" title="Grid view">▦</button>
@@ -572,6 +594,27 @@
                     <span>Document details <small>Optional</small></span>
                     <textarea id="documentUploadDetails" maxlength="2000" rows="2" placeholder="Add a short description, reference number, owner, purpose, or other notes. When uploading multiple files, the same details will be applied to each file."></textarea>
                   </label>
+
+                  <div class="document-upload-compliance">
+                    <label>
+                      <span>Expiry date <small>Optional</small></span>
+                      <input id="documentUploadExpiryDate" type="date">
+                    </label>
+                    <label>
+                      <span>Remind me</span>
+                      <select id="documentUploadReminderDays">
+                        <option value="7">7 days before</option>
+                        <option value="14">14 days before</option>
+                        <option value="30" selected>30 days before</option>
+                        <option value="60">60 days before</option>
+                        <option value="90">90 days before</option>
+                      </select>
+                    </label>
+                    <label class="document-upload-tags">
+                      <span>Tags <small>Optional</small></span>
+                      <input id="documentUploadTags" type="text" maxlength="300" placeholder="license, renewal, 2026">
+                    </label>
+                  </div>
                 </form>
 
                 <div id="documentUploadStatus" class="document-upload-status" aria-live="polite"></div>
@@ -724,7 +767,7 @@
       <div class="vault-modal-header">
         <div>
           <small>DOCUMENT DETAILS</small>
-          <h2 id="documentDetailsModalHeading">Edit document details</h2>
+          <h2 id="documentDetailsModalHeading">Edit document information</h2>
           <p id="documentDetailsFileName"></p>
         </div>
         <button id="closeDocumentDetailsModalButton" class="window-button" type="button" aria-label="Close document details editor">✕</button>
@@ -732,14 +775,34 @@
 
       <form id="documentDetailsForm" class="vault-modal-form">
         <input id="documentDetailsId" type="hidden">
+        <div class="vault-compliance-grid">
+          <label class="vault-field">
+            Expiry date <small>Optional</small>
+            <input id="documentDetailsExpiryDate" type="date">
+          </label>
+          <label class="vault-field">
+            Reminder window
+            <select id="documentDetailsReminderDays">
+              <option value="7">7 days before</option>
+              <option value="14">14 days before</option>
+              <option value="30">30 days before</option>
+              <option value="60">60 days before</option>
+              <option value="90">90 days before</option>
+            </select>
+          </label>
+        </div>
+        <label class="vault-field">
+          Tags <small>Optional — separate with commas</small>
+          <input id="documentDetailsTags" type="text" maxlength="300" placeholder="FDA, license, renewal, 2026">
+        </label>
         <label class="vault-field">
           Details <small>Optional</small>
-          <textarea id="documentDetailsInput" maxlength="2000" rows="7" placeholder="Add a description, reference number, owner, purpose, renewal information, or anything else you need to remember."></textarea>
+          <textarea id="documentDetailsInput" maxlength="2000" rows="6" placeholder="Add a description, reference number, owner, purpose, renewal information, or anything else you need to remember."></textarea>
         </label>
         <div class="vault-detail-counter"><span id="documentDetailsCharacterCount">0</span>/2000</div>
         <div class="vault-modal-actions">
           <button id="cancelDocumentDetailsButton" class="secondary-button" type="button">Cancel</button>
-          <button id="saveDocumentDetailsButton" class="primary-button" type="submit">Save details</button>
+          <button id="saveDocumentDetailsButton" class="primary-button" type="submit">Save changes</button>
         </div>
       </form>
     </section>
@@ -768,7 +831,14 @@
             <div><dt>File type</dt><dd id="documentPreviewMime">—</dd></div>
             <div><dt>File size</dt><dd id="documentPreviewSize">—</dd></div>
             <div><dt>Uploaded</dt><dd id="documentPreviewUploaded">—</dd></div>
+            <div><dt>Expiry date</dt><dd id="documentPreviewExpiry">Not set</dd></div>
+            <div><dt>Status</dt><dd id="documentPreviewStatus">No expiry date</dd></div>
+            <div><dt>Reminder</dt><dd id="documentPreviewReminder">30 days before</dd></div>
           </dl>
+          <div class="document-preview-tags-wrap">
+            <span>Tags</span>
+            <div id="documentPreviewTags" class="document-preview-tags"><em>No tags added.</em></div>
+          </div>
           <div class="document-preview-details-wrap">
             <span>Details</span>
             <p id="documentPreviewDetails">No details added.</p>

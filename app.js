@@ -113,7 +113,9 @@ let documents = [];
 let documentFolders = [];
 let activeDocumentFolder = "all";
 let documentSearchTerm = "";
+let documentComplianceFilter = "all";
 let documentsLoading = false;
+let complianceReminderShown = false;
 let currentDocumentUserId = null;
 let documentViewMode = localStorage.getItem(STORAGE.documentView) === "list" ? "list" : "grid";
 let previewDocumentItem = null;
@@ -1142,6 +1144,57 @@ function formatDocumentDate(timestamp) {
   });
 }
 
+function parseDocumentExpiryDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getDocumentTags(documentItem) {
+  const source = Array.isArray(documentItem.tags)
+    ? documentItem.tags
+    : String(documentItem.tags || "").split(",");
+  const seen = new Set();
+  return source
+    .map((tag) => String(tag || "").trim().replace(/\s+/g, " ").slice(0, 40))
+    .filter((tag) => {
+      if (!tag) return false;
+      const key = tag.toLocaleLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 20);
+}
+
+function getDocumentCompliance(documentItem) {
+  const expiry = parseDocumentExpiryDate(documentItem.expiry_date);
+  const reminderValue = Number(documentItem.reminder_days ?? 30);
+  const reminderDays = Number.isFinite(reminderValue) ? Math.max(0, reminderValue) : 30;
+  if (!expiry) return { key: "no-expiry", label: "No expiry date", days: null, expiry: null, reminderDays };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((expiry.getTime() - today.getTime()) / 86400000);
+  if (days < 0) return { key: "expired", label: `Expired ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago`, days, expiry, reminderDays };
+  if (days <= reminderDays) {
+    const label = days === 0 ? "Expires today" : `Expires in ${days} day${days === 1 ? "" : "s"}`;
+    return { key: "expiring", label, days, expiry, reminderDays };
+  }
+  return { key: "active", label: "Active", days, expiry, reminderDays };
+}
+
+function formatDocumentExpiryDate(value) {
+  const date = parseDocumentExpiryDate(value);
+  if (!date) return "Not set";
+  return date.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+}
+
+function normalizeDocumentTagInput(value) {
+  return getDocumentTags({ tags: value });
+}
+
 function normalizeFolderName(value) {
   return String(value || "")
     .trim()
@@ -1256,13 +1309,19 @@ function getVisibleDocuments() {
     const searchableText = [
       documentItem.name,
       documentItem.folder,
-      documentItem.details
+      documentItem.details,
+      ...getDocumentTags(documentItem)
     ]
       .filter(Boolean)
       .join(" ")
       .toLocaleLowerCase();
 
-    return matchesFolder && searchableText.includes(normalizedSearch);
+    const compliance = getDocumentCompliance(documentItem);
+    const matchesCompliance = documentComplianceFilter === "all" ||
+      compliance.key === documentComplianceFilter ||
+      (documentComplianceFilter === "attention" && ["expiring", "expired"].includes(compliance.key));
+
+    return matchesFolder && matchesCompliance && searchableText.includes(normalizedSearch);
   });
 
   const sortMode = $("documentSort")?.value || "newest";
@@ -1280,6 +1339,15 @@ function getVisibleDocuments() {
 
     if (sortMode === "size") {
       return Number(second.size_bytes || 0) - Number(first.size_bytes || 0);
+    }
+
+    if (sortMode === "expirySoon" || sortMode === "expiryLatest") {
+      const firstTime = parseDocumentExpiryDate(first.expiry_date)?.getTime();
+      const secondTime = parseDocumentExpiryDate(second.expiry_date)?.getTime();
+      if (firstTime == null && secondTime == null) return String(first.name).localeCompare(String(second.name));
+      if (firstTime == null) return 1;
+      if (secondTime == null) return -1;
+      return sortMode === "expirySoon" ? firstTime - secondTime : secondTime - firstTime;
     }
 
     return String(second.created_at).localeCompare(String(first.created_at));
@@ -1305,6 +1373,10 @@ function updateDocumentAccessUI() {
     "chooseDocumentFilesButton",
     "documentUploadFolder",
     "documentUploadDetails",
+    "documentUploadExpiryDate",
+    "documentUploadReminderDays",
+    "documentUploadTags",
+    "documentComplianceFilter",
     "refreshDocumentsButton",
     "addDocumentFolderButton"
   ].forEach((id) => {
@@ -1334,6 +1406,32 @@ function renderDocumentCounts() {
   $("documentAllFolderCount").textContent = activeDocuments.length;
   $("documentFavoritesFolderCount").textContent = favorites;
   $("documentTrashFolderCount").textContent = trashedDocuments.length;
+
+  const complianceItems = activeDocuments.map((documentItem) => ({
+    documentItem,
+    compliance: getDocumentCompliance(documentItem)
+  }));
+  const tracked = complianceItems.filter((item) => item.compliance.expiry).length;
+  const expiring = complianceItems.filter((item) => item.compliance.key === "expiring").length;
+  const expired = complianceItems.filter((item) => item.compliance.key === "expired").length;
+  $("documentTrackedExpiryCount").textContent = tracked;
+  $("documentExpiringCount").textContent = expiring;
+  $("documentExpiredCount").textContent = expired;
+
+  const notice = $("documentComplianceNotice");
+  const noticeText = $("documentComplianceNoticeText");
+  const attention = expiring + expired;
+  notice.classList.toggle("hidden", attention === 0 || !window.BoxCloud?.isReady());
+  if (attention) {
+    const parts = [];
+    if (expired) parts.push(`${expired} expired`);
+    if (expiring) parts.push(`${expiring} expiring soon`);
+    noticeText.textContent = `${parts.join(" and ")} document${attention === 1 ? "" : "s"} need attention.`;
+    if (!complianceReminderShown && !documentsLoading) {
+      complianceReminderShown = true;
+      setTimeout(() => showToast(`${attention} document deadline${attention === 1 ? "" : "s"} need attention`), 250);
+    }
+  }
 
   document.querySelectorAll("[data-document-count]").forEach((element) => {
     const folder = element.dataset.documentCount;
@@ -1369,6 +1467,9 @@ function openDocumentDetailsModal(documentItem) {
   $("documentDetailsId").value = documentItem.id;
   $("documentDetailsFileName").textContent = documentItem.name;
   $("documentDetailsInput").value = documentItem.details || "";
+  $("documentDetailsExpiryDate").value = documentItem.expiry_date || "";
+  $("documentDetailsReminderDays").value = String(documentItem.reminder_days ?? 30);
+  $("documentDetailsTags").value = getDocumentTags(documentItem).join(", ");
   updateDocumentDetailsCharacterCount();
   $("documentDetailsModal").classList.add("open");
   $("documentDetailsModal").setAttribute("aria-hidden", "false");
@@ -1395,6 +1496,27 @@ async function openDocumentPreview(documentItem) {
   $("documentPreviewMime").textContent = documentItem.mime_type || "Unknown file type";
   $("documentPreviewSize").textContent = formatBytes(documentItem.size_bytes);
   $("documentPreviewUploaded").textContent = formatDocumentDate(documentItem.created_at);
+  const compliance = getDocumentCompliance(documentItem);
+  $("documentPreviewExpiry").textContent = formatDocumentExpiryDate(documentItem.expiry_date);
+  $("documentPreviewStatus").textContent = compliance.label;
+  $("documentPreviewStatus").className = `document-preview-status ${compliance.key}`;
+  $("documentPreviewReminder").textContent = documentItem.expiry_date
+    ? `${compliance.reminderDays} day${compliance.reminderDays === 1 ? "" : "s"} before`
+    : "Not applicable";
+  const previewTags = $("documentPreviewTags");
+  previewTags.innerHTML = "";
+  const tags = getDocumentTags(documentItem);
+  if (tags.length) {
+    tags.forEach((tag) => {
+      const chip = document.createElement("span");
+      chip.textContent = tag;
+      previewTags.appendChild(chip);
+    });
+  } else {
+    const empty = document.createElement("em");
+    empty.textContent = "No tags added.";
+    previewTags.appendChild(empty);
+  }
   $("documentPreviewDetails").textContent = String(documentItem.details || "").trim() || "No details added.";
   $("documentPreviewStage").innerHTML = '<div class="document-preview-loading">Preparing private preview…</div>';
   $("documentPreviewModal").classList.add("open");
@@ -1595,6 +1717,31 @@ function buildDocumentCard(documentItem) {
     meta.appendChild(chip);
   });
 
+  const compliance = getDocumentCompliance(documentItem);
+  const statusChip = document.createElement("span");
+  statusChip.className = `document-compliance-badge ${compliance.key}`;
+  statusChip.textContent = compliance.label;
+  meta.appendChild(statusChip);
+
+  if (documentItem.expiry_date) {
+    const expiryChip = document.createElement("span");
+    expiryChip.className = "document-chip document-expiry-chip";
+    expiryChip.textContent = formatDocumentExpiryDate(documentItem.expiry_date);
+    meta.appendChild(expiryChip);
+  }
+
+  const tags = getDocumentTags(documentItem);
+  let tagsBlock = null;
+  if (tags.length) {
+    tagsBlock = document.createElement("div");
+    tagsBlock.className = "document-card-tags";
+    tags.forEach((tag) => {
+      const tagChip = document.createElement("span");
+      tagChip.textContent = tag;
+      tagsBlock.appendChild(tagChip);
+    });
+  }
+
   const details = String(documentItem.details || "").trim();
   let detailsBlock = null;
   if (details) {
@@ -1633,7 +1780,7 @@ function buildDocumentCard(documentItem) {
 
     const detailsButton = document.createElement("button");
     detailsButton.type = "button";
-    detailsButton.textContent = details ? "Edit details" : "Add details";
+    detailsButton.textContent = "Edit info";
     detailsButton.addEventListener("click", () => openDocumentDetailsModal(documentItem));
 
     const trashButton = document.createElement("button");
@@ -1648,6 +1795,7 @@ function buildDocumentCard(documentItem) {
   }
 
   card.append(top, meta);
+  if (tagsBlock) card.appendChild(tagsBlock);
   if (detailsBlock) card.appendChild(detailsBlock);
   card.appendChild(actions);
   return card;
@@ -1736,7 +1884,7 @@ async function loadDocuments({ silent = false } = {}) {
     documents = [];
     documentFolders = [];
     setDocumentUploadStatus(
-      `Document Vault unavailable: ${firstError.message}. Run the Phase 6A.3 Supabase migration SQL before using custom folders and document details.`,
+      `Document Vault unavailable: ${firstError.message}. Run the Phase 6B.2 Supabase migration SQL before using compliance tracking.`,
       "error"
     );
     renderDocuments();
@@ -1774,6 +1922,11 @@ async function uploadSelectedDocuments() {
 
   const folder = $("documentUploadFolder").value;
   const details = $("documentUploadDetails").value.trim();
+  const compliance = {
+    expiryDate: $("documentUploadExpiryDate").value,
+    reminderDays: Number($("documentUploadReminderDays").value || 30),
+    tags: normalizeDocumentTagInput($("documentUploadTags").value)
+  };
   const uploadButton = $("uploadDocumentsButton");
   uploadButton.disabled = true;
   $("chooseDocumentFilesButton").disabled = true;
@@ -1786,7 +1939,7 @@ async function uploadSelectedDocuments() {
       `Uploading ${index + 1} of ${files.length}: ${file.name}`
     );
 
-    const result = await window.BoxCloud.uploadDocument(file, folder, details);
+    const result = await window.BoxCloud.uploadDocument(file, folder, details, compliance);
 
     if (result.error) {
       setDocumentUploadStatus(
@@ -1802,6 +1955,9 @@ async function uploadSelectedDocuments() {
 
   input.value = "";
   $("documentUploadDetails").value = "";
+  $("documentUploadExpiryDate").value = "";
+  $("documentUploadReminderDays").value = "30";
+  $("documentUploadTags").value = "";
   $("documentFileSelection").textContent =
     "Choose one or more files, up to 25 MB each.";
   $("chooseDocumentFilesButton").disabled = false;
@@ -2278,15 +2434,20 @@ $("documentDetailsForm").addEventListener("submit", async (event) => {
     return;
   }
 
-  const details = $("documentDetailsInput").value.trim();
+  const metadata = {
+    details: $("documentDetailsInput").value.trim(),
+    expiryDate: $("documentDetailsExpiryDate").value,
+    reminderDays: Number($("documentDetailsReminderDays").value || 30),
+    tags: normalizeDocumentTagInput($("documentDetailsTags").value)
+  };
   const saveButton = $("saveDocumentDetailsButton");
   saveButton.disabled = true;
   saveButton.textContent = "Saving…";
 
-  const result = await window.BoxCloud.updateDocumentDetails(documentId, details);
+  const result = await window.BoxCloud.updateDocumentMetadata(documentId, metadata);
 
   saveButton.disabled = false;
-  saveButton.textContent = "Save details";
+  saveButton.textContent = "Save changes";
 
   if (result.error) {
     setDocumentUploadStatus(result.error.message, "error");
@@ -2294,14 +2455,14 @@ $("documentDetailsForm").addEventListener("submit", async (event) => {
   }
 
   documentItem.details = result.data?.details || "";
+  documentItem.expiry_date = result.data?.expiry_date || null;
+  documentItem.reminder_days = result.data?.reminder_days ?? 30;
+  documentItem.tags = result.data?.tags || [];
   documentItem.updated_at = result.data?.updated_at || new Date().toISOString();
   closeDocumentDetailsModal();
   renderDocuments();
-  setDocumentUploadStatus(
-    documentItem.details ? "Document details saved." : "Document details cleared.",
-    "success"
-  );
-  showToast(documentItem.details ? "Details saved" : "Details cleared");
+  setDocumentUploadStatus("Document information saved.", "success");
+  showToast("Document information saved");
 });
 
 $("closeDocumentPreviewButton").addEventListener("click", closeDocumentPreview);
@@ -2338,6 +2499,16 @@ $("documentSearch").addEventListener("input", (event) => {
 });
 
 $("documentSort").addEventListener("change", renderDocuments);
+$("documentComplianceFilter").addEventListener("change", (event) => {
+  documentComplianceFilter = event.target.value;
+  renderDocuments();
+});
+$("showAttentionDocumentsButton").addEventListener("click", () => {
+  documentComplianceFilter = "attention";
+  $("documentComplianceFilter").value = "attention";
+  activeDocumentFolder = "all";
+  renderDocuments();
+});
 
 $("refreshDocumentsButton").addEventListener("click", () => {
   loadDocuments();
