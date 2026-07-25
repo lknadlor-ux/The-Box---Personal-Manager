@@ -5377,3 +5377,224 @@ html.safe-render-ui .template-editor-actions > button {
     max-height: 250px;
   }
 }
+
+
+/* Phase 6C.2.3 — Cross-device Templates layout repair
+   Root cause: template-center-window was a vertical flex container. Its large
+   template grid was allowed to shrink, while the editor content overflowed
+   outside the shrunken grid and covered the report section. This repair removes
+   that shrink behavior on every device, including Windows PCs and tablets. */
+
+.template-center-window {
+  display: block !important;
+  overflow-x: hidden;
+}
+
+.template-center-window > .template-center-hero,
+.template-center-window > .template-center-notice,
+.template-center-window > .template-center-layout,
+.template-center-window > .compliance-report-panel {
+  display: block;
+  width: 100%;
+  margin: 0 0 16px;
+  flex: none !important;
+  min-height: auto !important;
+  height: auto !important;
+}
+
+.template-center-window > .template-center-hero {
+  display: flex;
+}
+
+.template-center-layout {
+  display: grid !important;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.7fr);
+  grid-auto-rows: max-content;
+  align-items: start !important;
+  align-content: start;
+  gap: 14px;
+  min-height: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  contain: none !important;
+}
+
+.template-center-layout > .template-library-panel,
+.template-center-layout > .template-editor-panel {
+  position: relative;
+  align-self: start;
+  width: 100%;
+  min-width: 0;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none;
+  overflow: visible;
+}
+
+.template-editor-panel {
+  display: grid !important;
+  grid-template-rows: auto auto auto auto auto auto;
+  align-content: start;
+}
+
+.template-content-field {
+  display: grid;
+  flex: none !important;
+  min-height: 0 !important;
+}
+
+#templateEditorContent {
+  display: block;
+  width: 100%;
+  height: clamp(220px, 31vh, 310px);
+  min-height: 180px;
+  max-height: 330px;
+  overflow: auto;
+  resize: none;
+}
+
+.template-placeholder-bar {
+  display: flex;
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+.template-editor-actions {
+  position: static !important;
+  inset: auto !important;
+  z-index: auto !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(125px, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 12px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--border);
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.template-editor-actions > button {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+}
+
+.compliance-report-panel {
+  position: relative !important;
+  inset: auto !important;
+  z-index: auto !important;
+  clear: both;
+  width: 100%;
+  min-height: auto !important;
+  height: auto !important;
+  overflow: visible;
+  transform: none !important;
+}
+
+.compliance-report-actions {
+  position: static !important;
+  inset: auto !important;
+}
+
+.compliance-report-preview {
+  min-height: 190px;
+}
+
+/* Remove any previous tablet-only height constraints that could recreate the
+   same overflow problem. */
+html.safe-render-ui .template-center-layout,
+html.safe-render-ui .template-editor-panel {
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+html.safe-render-ui .template-library-panel {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+html.safe-render-ui .template-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+html.safe-render-ui .template-editor-actions {
+  position: static !important;
+  inset: auto !important;
+  z-index: auto !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.app-window.window-short #templateEditorContent,
+html.safe-render-ui .app-window.window-short #templateEditorContent {
+  height: 190px;
+  min-height: 165px;
+  max-height: 210px;
+}
+
+.app-window.window-very-short #templateEditorContent,
+html.safe-render-ui .app-window.window-very-short #templateEditorContent {
+  height: 150px;
+  min-height: 135px;
+  max-height: 170px;
+}
+
+.app-window.window-narrow .template-center-layout,
+.app-window.window-compact .template-center-layout {
+  grid-template-columns: 1fr !important;
+}
+
+.app-window.window-narrow .template-editor-actions,
+.app-window.window-compact .template-editor-actions {
+  grid-template-columns: repeat(2, minmax(125px, 1fr));
+}
+
+@media (max-width: 980px) {
+  .template-center-layout {
+    grid-template-columns: minmax(200px, 0.65fr) minmax(0, 1.35fr);
+  }
+
+  .template-editor-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .template-editor-actions {
+    grid-template-columns: repeat(2, minmax(125px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .template-center-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .template-library-panel,
+  html.safe-render-ui .template-library-panel {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .template-list,
+  html.safe-render-ui .template-list {
+    max-height: 260px;
+    overflow-y: auto;
+  }
+
+  .template-editor-actions {
+    grid-template-columns: 1fr;
+  }
+
+  #templateEditorContent,
+  html.safe-render-ui #templateEditorContent {
+    height: 220px;
+    min-height: 180px;
+    max-height: 250px;
+  }
+}

@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6c2-2-honor-pad-layout-correction";
+const CACHE_NAME = "the-box-os-phase-6c2-3-cross-device-layout-repair";
 
 const APP_FILES = [
   "./",
