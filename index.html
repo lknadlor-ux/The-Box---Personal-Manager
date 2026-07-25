@@ -580,6 +580,11 @@
                   <button id="refreshDocumentsButton" class="secondary-button" type="button">Refresh</button>
                 </div>
 
+                <div id="documentLinkFilterBanner" class="document-link-filter-banner hidden" role="status">
+                  <span id="documentLinkFilterText">Showing documents linked to a task or event.</span>
+                  <button id="clearDocumentLinkFilterButton" type="button">Clear link filter</button>
+                </div>
+
                 <form id="documentUploadForm" class="document-upload-panel">
                   <div class="document-upload-copy">
                     <strong>Upload documents</strong>
@@ -795,6 +800,17 @@
           Tags <small>Optional — separate with commas</small>
           <input id="documentDetailsTags" type="text" maxlength="300" placeholder="FDA, license, renewal, 2026">
         </label>
+        <div class="vault-related-grid">
+          <label class="vault-field">
+            Linked tasks <small>Optional — select one or more</small>
+            <select id="documentDetailsTaskLinks" multiple size="5" aria-label="Linked tasks"></select>
+          </label>
+          <label class="vault-field">
+            Linked calendar events <small>Optional — select one or more</small>
+            <select id="documentDetailsEventLinks" multiple size="5" aria-label="Linked calendar events"></select>
+          </label>
+        </div>
+        <p class="vault-field-help">On a tablet, tap selections while holding Ctrl is not required; each tap toggles the selected item.</p>
         <label class="vault-field">
           Details <small>Optional</small>
           <textarea id="documentDetailsInput" maxlength="2000" rows="6" placeholder="Add a description, reference number, owner, purpose, renewal information, or anything else you need to remember."></textarea>
@@ -834,7 +850,12 @@
             <div><dt>Expiry date</dt><dd id="documentPreviewExpiry">Not set</dd></div>
             <div><dt>Status</dt><dd id="documentPreviewStatus">No expiry date</dd></div>
             <div><dt>Reminder</dt><dd id="documentPreviewReminder">30 days before</dd></div>
+            <div><dt>Current version</dt><dd id="documentPreviewVersion">Version 1</dd></div>
           </dl>
+          <div class="document-preview-related-wrap">
+            <span>Related items</span>
+            <div id="documentPreviewRelated" class="document-preview-related"><em>No linked tasks or events.</em></div>
+          </div>
           <div class="document-preview-tags-wrap">
             <span>Tags</span>
             <div id="documentPreviewTags" class="document-preview-tags"><em>No tags added.</em></div>
@@ -844,11 +865,58 @@
             <p id="documentPreviewDetails">No details added.</p>
           </div>
           <div class="document-preview-actions">
+            <button id="previewDocumentVersionsButton" class="secondary-button" type="button">Version history</button>
             <button id="openDocumentExternallyButton" class="secondary-button" type="button">Open separately</button>
             <button id="downloadPreviewDocumentButton" class="primary-button" type="button">Download</button>
           </div>
         </aside>
       </div>
+    </section>
+  </div>
+
+  <div id="documentVersionModal" class="vault-modal-overlay document-version-overlay" aria-hidden="true">
+    <section class="vault-modal-card document-version-card" role="dialog" aria-modal="true" aria-labelledby="documentVersionHeading">
+      <div class="vault-modal-header">
+        <div>
+          <small>VERSION HISTORY</small>
+          <h2 id="documentVersionHeading">Document versions</h2>
+          <p id="documentVersionFileName"></p>
+        </div>
+        <button id="closeDocumentVersionModalButton" class="window-button" type="button" aria-label="Close version history">✕</button>
+      </div>
+
+      <div class="document-current-version">
+        <div>
+          <small>CURRENT FILE</small>
+          <strong id="documentCurrentVersionLabel">Version 1</strong>
+          <span id="documentCurrentVersionMeta">—</span>
+        </div>
+        <button id="previewCurrentVersionButton" class="secondary-button" type="button">Preview current</button>
+      </div>
+
+      <form id="documentVersionUploadForm" class="document-version-upload-form">
+        <div>
+          <strong>Upload a new version</strong>
+          <span id="documentVersionSelection">Choose one replacement file, up to 25 MB.</span>
+        </div>
+        <input id="documentVersionFile" type="file" hidden>
+        <button id="chooseDocumentVersionButton" class="secondary-button" type="button">Choose file</button>
+        <label class="vault-field document-version-note">
+          Version note <small>Optional</small>
+          <input id="documentVersionNote" type="text" maxlength="500" placeholder="Example: Renewed permit signed July 2026">
+        </label>
+        <button id="uploadDocumentVersionButton" class="primary-button" type="submit" disabled>Upload new version</button>
+      </form>
+
+      <div class="document-version-heading-row">
+        <div>
+          <small>PREVIOUS FILES</small>
+          <h3>Version history</h3>
+        </div>
+        <button id="refreshDocumentVersionsButton" class="secondary-button" type="button">Refresh</button>
+      </div>
+      <div id="documentVersionList" class="document-version-list" aria-live="polite"></div>
+      <p id="emptyDocumentVersions" class="empty-state">No previous versions yet.</p>
     </section>
   </div>
 
@@ -910,7 +978,7 @@
       <div class="auth-brand">
         <div class="auth-logo">T</div>
         <div>
-          <small>THE BOX OS 6.0</small>
+          <small>THE BOX OS 6.1</small>
           <h2>Cloud workspace</h2>
         </div>
       </div>

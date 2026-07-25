@@ -120,6 +120,10 @@ let currentDocumentUserId = null;
 let documentViewMode = localStorage.getItem(STORAGE.documentView) === "list" ? "list" : "grid";
 let previewDocumentItem = null;
 let previewDocumentSignedUrl = "";
+let activeDocumentLinkFilter = null;
+let versionDocumentItem = null;
+let documentVersions = [];
+let documentVersionsLoading = false;
 
 function loadJSON(key, fallback) {
   try {
@@ -844,6 +848,18 @@ function buildTaskRow(task) {
     openTaskModal(task, null, task.id);
   });
 
+  const linkedDocuments = getLinkedDocuments("task", task.id);
+  if (linkedDocuments.length) {
+    const documentsButton = document.createElement("button");
+    documentsButton.className = "linked-documents-button";
+    documentsButton.type = "button";
+    documentsButton.textContent = `▣ ${linkedDocuments.length}`;
+    documentsButton.title = `${linkedDocuments.length} linked document${linkedDocuments.length === 1 ? "" : "s"}`;
+    documentsButton.setAttribute("aria-label", `Open documents linked to ${task.text}`);
+    documentsButton.addEventListener("click", () => openDocumentsForLinkedItem("task", task));
+    actions.appendChild(documentsButton);
+  }
+
   const deleteButton = document.createElement("button");
   deleteButton.className = "delete-button";
   deleteButton.type = "button";
@@ -1030,6 +1046,19 @@ function renderEvents() {
 
     content.append(title, meta);
 
+    const actions = document.createElement("div");
+    actions.className = "event-actions";
+    const linkedDocuments = getLinkedDocuments("event", event.id);
+    if (linkedDocuments.length) {
+      const documentsButton = document.createElement("button");
+      documentsButton.className = "linked-documents-button";
+      documentsButton.type = "button";
+      documentsButton.textContent = `▣ ${linkedDocuments.length}`;
+      documentsButton.title = `${linkedDocuments.length} linked document${linkedDocuments.length === 1 ? "" : "s"}`;
+      documentsButton.addEventListener("click", () => openDocumentsForLinkedItem("event", event));
+      actions.appendChild(documentsButton);
+    }
+
     const deleteButton = document.createElement("button");
     deleteButton.className = "delete-button";
     deleteButton.textContent = "✕";
@@ -1041,7 +1070,8 @@ function renderEvents() {
       showToast("Event deleted");
     });
 
-    row.append(dateBox, content, deleteButton);
+    actions.appendChild(deleteButton);
+    row.append(dateBox, content, actions);
     list.appendChild(row);
   });
 
@@ -1195,6 +1225,167 @@ function normalizeDocumentTagInput(value) {
   return getDocumentTags({ tags: value });
 }
 
+function normalizeDocumentLinkIds(value) {
+  const raw = Array.isArray(value) ? value : [];
+  const seen = new Set();
+  return raw
+    .map((item) => String(item ?? "").trim())
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
+}
+
+function getDocumentLinkedTaskIds(documentItem) {
+  return normalizeDocumentLinkIds(documentItem?.linked_task_ids);
+}
+
+function getDocumentLinkedEventIds(documentItem) {
+  return normalizeDocumentLinkIds(documentItem?.linked_event_ids);
+}
+
+function getLinkedDocuments(type, itemId) {
+  const id = String(itemId);
+  return documents.filter((documentItem) => {
+    if (documentItem.deleted_at) return false;
+    const ids = type === "task"
+      ? getDocumentLinkedTaskIds(documentItem)
+      : getDocumentLinkedEventIds(documentItem);
+    return ids.includes(id);
+  });
+}
+
+function openDocumentsForLinkedItem(type, item) {
+  activeDocumentLinkFilter = {
+    type,
+    id: String(item.id),
+    label: type === "task" ? item.text : item.title
+  };
+  activeDocumentFolder = "all";
+  documentSearchTerm = "";
+  documentComplianceFilter = "all";
+  if ($("documentSearch")) $("documentSearch").value = "";
+  if ($("documentComplianceFilter")) $("documentComplianceFilter").value = "all";
+  openApp("documents");
+  renderDocuments();
+}
+
+function clearDocumentLinkFilter() {
+  activeDocumentLinkFilter = null;
+  renderDocuments();
+}
+
+function getSelectedOptionValues(selectElement) {
+  return Array.from(selectElement?.selectedOptions || []).map((option) => option.value);
+}
+
+function populateDocumentLinkSelectors(documentItem) {
+  const taskSelect = $("documentDetailsTaskLinks");
+  const eventSelect = $("documentDetailsEventLinks");
+  if (!taskSelect || !eventSelect) return;
+
+  const linkedTaskIds = new Set(getDocumentLinkedTaskIds(documentItem));
+  const linkedEventIds = new Set(getDocumentLinkedEventIds(documentItem));
+
+  taskSelect.innerHTML = "";
+  [...tasks]
+    .sort((first, second) => Number(first.completed) - Number(second.completed) || String(first.text).localeCompare(String(second.text)))
+    .forEach((task) => {
+      const option = document.createElement("option");
+      option.value = String(task.id);
+      option.textContent = `${task.completed ? "✓" : "○"} ${task.text} · ${task.workspace}`;
+      option.selected = linkedTaskIds.has(option.value);
+      taskSelect.appendChild(option);
+    });
+
+  eventSelect.innerHTML = "";
+  [...events]
+    .sort((first, second) => String(first.date).localeCompare(String(second.date)))
+    .forEach((event) => {
+      const option = document.createElement("option");
+      option.value = String(event.id);
+      option.textContent = `${formatEventDate(event.date)} · ${event.title}`;
+      option.selected = linkedEventIds.has(option.value);
+      eventSelect.appendChild(option);
+    });
+
+  if (!tasks.length) {
+    const option = document.createElement("option");
+    option.disabled = true;
+    option.textContent = "No tasks available";
+    taskSelect.appendChild(option);
+  }
+
+  if (!events.length) {
+    const option = document.createElement("option");
+    option.disabled = true;
+    option.textContent = "No calendar events available";
+    eventSelect.appendChild(option);
+  }
+}
+
+function renderDocumentLinkFilterBanner() {
+  const banner = $("documentLinkFilterBanner");
+  if (!banner) return;
+  banner.classList.toggle("hidden", !activeDocumentLinkFilter);
+  if (activeDocumentLinkFilter) {
+    const typeLabel = activeDocumentLinkFilter.type === "task" ? "task" : "event";
+    $("documentLinkFilterText").textContent = `Showing documents linked to ${typeLabel}: ${activeDocumentLinkFilter.label}`;
+  }
+}
+
+function buildDocumentRelatedItems(documentItem, container, { interactive = true } = {}) {
+  container.innerHTML = "";
+  const taskIds = new Set(getDocumentLinkedTaskIds(documentItem));
+  const eventIds = new Set(getDocumentLinkedEventIds(documentItem));
+  const linkedTasks = tasks.filter((task) => taskIds.has(String(task.id)));
+  const linkedEvents = events.filter((event) => eventIds.has(String(event.id)));
+
+  if (!linkedTasks.length && !linkedEvents.length) {
+    const empty = document.createElement("em");
+    empty.textContent = "No linked tasks or events.";
+    container.appendChild(empty);
+    return;
+  }
+
+  linkedTasks.forEach((task) => {
+    const chip = document.createElement(interactive ? "button" : "span");
+    if (interactive) chip.type = "button";
+    chip.className = "document-related-chip task-link";
+    chip.textContent = `Task · ${task.text}`;
+    if (interactive) chip.addEventListener("click", () => {
+      closeDocumentPreview();
+      activeFilter = "all";
+      activeWorkspaceFilter = "all";
+      document.querySelectorAll(".filter").forEach((button) => {
+        button.classList.toggle("active", button.dataset.filter === "all");
+      });
+      $("workspaceFilter").value = "all";
+      openApp("tasks");
+      searchTerm = task.text;
+      $("globalSearch").value = task.text;
+      renderTasks();
+    });
+    container.appendChild(chip);
+  });
+
+  linkedEvents.forEach((eventItem) => {
+    const chip = document.createElement(interactive ? "button" : "span");
+    if (interactive) chip.type = "button";
+    chip.className = "document-related-chip event-link";
+    chip.textContent = `Event · ${eventItem.title}`;
+    if (interactive) chip.addEventListener("click", () => {
+      closeDocumentPreview();
+      shownMonth = new Date(`${eventItem.date}T00:00:00`).getMonth();
+      shownYear = new Date(`${eventItem.date}T00:00:00`).getFullYear();
+      openApp("calendar");
+      renderCalendar();
+    });
+    container.appendChild(chip);
+  });
+}
+
 function normalizeFolderName(value) {
   return String(value || "")
     .trim()
@@ -1239,6 +1430,7 @@ function getFolderIcon(folderName) {
 
 function selectDocumentFolder(folderName) {
   activeDocumentFolder = folderName;
+  activeDocumentLinkFilter = null;
   renderDocuments();
 }
 
@@ -1321,7 +1513,12 @@ function getVisibleDocuments() {
       compliance.key === documentComplianceFilter ||
       (documentComplianceFilter === "attention" && ["expiring", "expired"].includes(compliance.key));
 
-    return matchesFolder && matchesCompliance && searchableText.includes(normalizedSearch);
+    const linkedIds = activeDocumentLinkFilter?.type === "task"
+      ? getDocumentLinkedTaskIds(documentItem)
+      : getDocumentLinkedEventIds(documentItem);
+    const matchesLinkedItem = !activeDocumentLinkFilter || linkedIds.includes(activeDocumentLinkFilter.id);
+
+    return matchesFolder && matchesCompliance && matchesLinkedItem && searchableText.includes(normalizedSearch);
   });
 
   const sortMode = $("documentSort")?.value || "newest";
@@ -1470,6 +1667,7 @@ function openDocumentDetailsModal(documentItem) {
   $("documentDetailsExpiryDate").value = documentItem.expiry_date || "";
   $("documentDetailsReminderDays").value = String(documentItem.reminder_days ?? 30);
   $("documentDetailsTags").value = getDocumentTags(documentItem).join(", ");
+  populateDocumentLinkSelectors(documentItem);
   updateDocumentDetailsCharacterCount();
   $("documentDetailsModal").classList.add("open");
   $("documentDetailsModal").setAttribute("aria-hidden", "false");
@@ -1503,6 +1701,8 @@ async function openDocumentPreview(documentItem) {
   $("documentPreviewReminder").textContent = documentItem.expiry_date
     ? `${compliance.reminderDays} day${compliance.reminderDays === 1 ? "" : "s"} before`
     : "Not applicable";
+  $("documentPreviewVersion").textContent = `Version ${Math.max(1, Number(documentItem.current_version || 1))}`;
+  buildDocumentRelatedItems(documentItem, $("documentPreviewRelated"));
   const previewTags = $("documentPreviewTags");
   previewTags.innerHTML = "";
   const tags = getDocumentTags(documentItem);
@@ -1565,6 +1765,195 @@ function closeDocumentPreview() {
   $("documentPreviewStage").innerHTML = "";
   previewDocumentItem = null;
   previewDocumentSignedUrl = "";
+}
+
+function updateVersionDocumentFromCloud(updatedDocument) {
+  if (!updatedDocument?.id) return;
+  const index = documents.findIndex((item) => String(item.id) === String(updatedDocument.id));
+  if (index >= 0) documents[index] = { ...documents[index], ...updatedDocument };
+  if (versionDocumentItem && String(versionDocumentItem.id) === String(updatedDocument.id)) {
+    versionDocumentItem = documents[index] || updatedDocument;
+  }
+  if (previewDocumentItem && String(previewDocumentItem.id) === String(updatedDocument.id)) {
+    previewDocumentItem = documents[index] || updatedDocument;
+  }
+}
+
+function openDocumentVersionModal(documentItem) {
+  if (!window.BoxCloud?.isReady()) {
+    openAuthOverlay();
+    return;
+  }
+
+  versionDocumentItem = documentItem;
+  documentVersions = [];
+  $("documentVersionHeading").textContent = "Document versions";
+  $("documentVersionFileName").textContent = documentItem.name;
+  $("documentVersionFile").value = "";
+  $("documentVersionNote").value = "";
+  $("documentVersionSelection").textContent = "Choose one replacement file, up to 25 MB.";
+  $("uploadDocumentVersionButton").disabled = true;
+  $("documentVersionModal").classList.add("open");
+  $("documentVersionModal").setAttribute("aria-hidden", "false");
+  renderDocumentVersions();
+  loadDocumentVersions();
+}
+
+function closeDocumentVersionModal() {
+  $("documentVersionModal").classList.remove("open");
+  $("documentVersionModal").setAttribute("aria-hidden", "true");
+  $("documentVersionFile").value = "";
+  versionDocumentItem = null;
+  documentVersions = [];
+  documentVersionsLoading = false;
+}
+
+async function loadDocumentVersions() {
+  if (!versionDocumentItem || documentVersionsLoading) return;
+  documentVersionsLoading = true;
+  renderDocumentVersions();
+  const result = await window.BoxCloud.listDocumentVersions(versionDocumentItem.id);
+  documentVersionsLoading = false;
+  if (result.error) {
+    setDocumentUploadStatus(result.error.message, "error");
+    documentVersions = [];
+  } else {
+    documentVersions = result.data || [];
+  }
+  renderDocumentVersions();
+}
+
+function renderDocumentVersions() {
+  const list = $("documentVersionList");
+  if (!list || !versionDocumentItem) return;
+
+  const currentVersion = Math.max(1, Number(versionDocumentItem.current_version || 1));
+  $("documentCurrentVersionLabel").textContent = `Version ${currentVersion}`;
+  $("documentCurrentVersionMeta").textContent = `${versionDocumentItem.name} · ${formatBytes(versionDocumentItem.size_bytes)} · Updated ${formatDocumentDate(versionDocumentItem.updated_at || versionDocumentItem.created_at)}${versionDocumentItem.current_version_note ? ` · ${versionDocumentItem.current_version_note}` : ""}`;
+  list.innerHTML = "";
+
+  if (documentVersionsLoading) {
+    const loading = document.createElement("div");
+    loading.className = "document-version-loading";
+    loading.textContent = "Loading version history…";
+    list.appendChild(loading);
+    $("emptyDocumentVersions").style.display = "none";
+    return;
+  }
+
+  documentVersions.forEach((versionItem) => {
+    const row = document.createElement("article");
+    row.className = "document-version-item";
+
+    const number = document.createElement("div");
+    number.className = "document-version-number";
+    number.textContent = `v${versionItem.version_number}`;
+
+    const content = document.createElement("div");
+    content.className = "document-version-content";
+    const title = document.createElement("strong");
+    title.textContent = versionItem.name;
+    const meta = document.createElement("span");
+    meta.textContent = `${formatBytes(versionItem.size_bytes)} · ${formatDocumentDate(versionItem.created_at)}`;
+    content.append(title, meta);
+    if (versionItem.notes) {
+      const note = document.createElement("p");
+      note.textContent = versionItem.notes;
+      content.appendChild(note);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "document-version-actions";
+
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.textContent = "Open";
+    openButton.addEventListener("click", async () => {
+      openButton.disabled = true;
+      const result = await window.BoxCloud.createDocumentUrl(versionItem.storage_path, 600);
+      openButton.disabled = false;
+      const signedUrl = result.data?.signedUrl || result.data?.signedURL;
+      if (signedUrl) window.open(signedUrl, "_blank", "noopener");
+      else setDocumentUploadStatus(result.error?.message || "Could not open this version.", "error");
+    });
+
+    const downloadButton = document.createElement("button");
+    downloadButton.type = "button";
+    downloadButton.textContent = "Download";
+    downloadButton.addEventListener("click", () => downloadStoredDocument({
+      storage_path: versionItem.storage_path,
+      name: versionItem.name
+    }, downloadButton));
+
+    const restoreButton = document.createElement("button");
+    restoreButton.type = "button";
+    restoreButton.className = "document-version-restore";
+    restoreButton.textContent = "Restore as latest";
+    restoreButton.addEventListener("click", async () => {
+      const confirmed = window.confirm(`Restore version ${versionItem.version_number} as the newest version of “${versionDocumentItem.name}”? The current file will be preserved in history.`);
+      if (!confirmed) return;
+      restoreButton.disabled = true;
+      restoreButton.textContent = "Restoring…";
+      const result = await window.BoxCloud.restoreDocumentVersion(versionDocumentItem, versionItem);
+      restoreButton.disabled = false;
+      restoreButton.textContent = "Restore as latest";
+      if (result.error) {
+        setDocumentUploadStatus(result.error.message, "error");
+        return;
+      }
+      updateVersionDocumentFromCloud(result.data.document);
+      setDocumentUploadStatus("Previous version restored as the latest file.", "success");
+      showToast("Version restored");
+      await loadDocumentVersions();
+      renderTasks();
+      renderEvents();
+      renderDocuments();
+    });
+
+    actions.append(openButton, downloadButton, restoreButton);
+    row.append(number, content, actions);
+    list.appendChild(row);
+  });
+
+  $("emptyDocumentVersions").style.display = documentVersions.length ? "none" : "block";
+}
+
+async function uploadNewDocumentVersion() {
+  const file = $("documentVersionFile").files?.[0];
+  if (!versionDocumentItem || !file) return;
+  if (file.size > 25 * 1024 * 1024) {
+    setDocumentUploadStatus(`${file.name} is larger than the 25 MB limit.`, "error");
+    return;
+  }
+
+  const button = $("uploadDocumentVersionButton");
+  button.disabled = true;
+  button.textContent = "Uploading…";
+  const result = await window.BoxCloud.createDocumentVersion(
+    versionDocumentItem,
+    file,
+    $("documentVersionNote").value.trim()
+  );
+  button.textContent = "Upload new version";
+
+  if (result.error) {
+    button.disabled = false;
+    setDocumentUploadStatus(result.error.message, "error");
+    return;
+  }
+
+  updateVersionDocumentFromCloud(result.data.document);
+  $("documentVersionFile").value = "";
+  $("documentVersionNote").value = "";
+  $("documentVersionSelection").textContent = "Choose one replacement file, up to 25 MB.";
+  button.disabled = true;
+  $("documentVersionFileName").textContent = versionDocumentItem.name;
+  setDocumentUploadStatus("New document version uploaded.", "success");
+  showToast("New version uploaded");
+  await loadDocumentVersions();
+  renderTasks();
+  renderEvents();
+  renderDocuments();
 }
 
 async function downloadStoredDocument(documentItem, button) {
@@ -1630,6 +2019,8 @@ async function moveStoredDocumentToTrash(documentItem, button) {
 
   documentItem.deleted_at = result.data?.deleted_at || new Date().toISOString();
   documentItem.updated_at = result.data?.updated_at || documentItem.deleted_at;
+  renderTasks();
+  renderEvents();
   renderDocuments();
   showToast("Moved to Recycle Bin");
 }
@@ -1646,6 +2037,8 @@ async function restoreStoredDocument(documentItem, button) {
 
   documentItem.deleted_at = null;
   documentItem.updated_at = result.data?.updated_at || new Date().toISOString();
+  renderTasks();
+  renderEvents();
   renderDocuments();
   showToast("Document restored");
 }
@@ -1667,6 +2060,8 @@ async function permanentlyDeleteStoredDocument(documentItem, button) {
   }
 
   documents = documents.filter((item) => item.id !== documentItem.id);
+  renderTasks();
+  renderEvents();
   renderDocuments();
   showToast("Document permanently deleted");
 }
@@ -1730,6 +2125,28 @@ function buildDocumentCard(documentItem) {
     meta.appendChild(expiryChip);
   }
 
+  const versionChip = document.createElement("span");
+  versionChip.className = "document-chip document-version-chip";
+  versionChip.textContent = `v${Math.max(1, Number(documentItem.current_version || 1))}`;
+  meta.appendChild(versionChip);
+
+  const linkedTaskIdSet = new Set(getDocumentLinkedTaskIds(documentItem));
+  const linkedEventIdSet = new Set(getDocumentLinkedEventIds(documentItem));
+  const taskLinkCount = tasks.filter((task) => linkedTaskIdSet.has(String(task.id))).length;
+  const eventLinkCount = events.filter((eventItem) => linkedEventIdSet.has(String(eventItem.id))).length;
+  if (taskLinkCount) {
+    const chip = document.createElement("span");
+    chip.className = "document-chip document-link-chip";
+    chip.textContent = `${taskLinkCount} task${taskLinkCount === 1 ? "" : "s"}`;
+    meta.appendChild(chip);
+  }
+  if (eventLinkCount) {
+    const chip = document.createElement("span");
+    chip.className = "document-chip document-link-chip";
+    chip.textContent = `${eventLinkCount} event${eventLinkCount === 1 ? "" : "s"}`;
+    meta.appendChild(chip);
+  }
+
   const tags = getDocumentTags(documentItem);
   let tagsBlock = null;
   if (tags.length) {
@@ -1778,6 +2195,11 @@ function buildDocumentCard(documentItem) {
     downloadButton.textContent = "Download";
     downloadButton.addEventListener("click", () => downloadStoredDocument(documentItem, downloadButton));
 
+    const versionButton = document.createElement("button");
+    versionButton.type = "button";
+    versionButton.textContent = `Versions · ${Math.max(1, Number(documentItem.current_version || 1))}`;
+    versionButton.addEventListener("click", () => openDocumentVersionModal(documentItem));
+
     const detailsButton = document.createElement("button");
     detailsButton.type = "button";
     detailsButton.textContent = "Edit info";
@@ -1791,7 +2213,7 @@ function buildDocumentCard(documentItem) {
     trashButton.setAttribute("aria-label", `Move ${documentItem.name} to Recycle Bin`);
     trashButton.addEventListener("click", () => moveStoredDocumentToTrash(documentItem, trashButton));
 
-    actions.append(previewButton, downloadButton, detailsButton, trashButton);
+    actions.append(previewButton, downloadButton, versionButton, detailsButton, trashButton);
   }
 
   card.append(top, meta);
@@ -1808,6 +2230,7 @@ function renderDocuments() {
   renderDocumentFolderControls();
   updateDocumentAccessUI();
   renderDocumentCounts();
+  renderDocumentLinkFilterBanner();
 
   document.querySelectorAll(".document-folder").forEach((button) => {
     button.classList.toggle(
@@ -1884,9 +2307,11 @@ async function loadDocuments({ silent = false } = {}) {
     documents = [];
     documentFolders = [];
     setDocumentUploadStatus(
-      `Document Vault unavailable: ${firstError.message}. Run the Phase 6B.2 Supabase migration SQL before using compliance tracking.`,
+      `Document Vault unavailable: ${firstError.message}. Run the Phase 6B.3 Supabase migration SQL before using document links and version history.`,
       "error"
     );
+    renderTasks();
+    renderEvents();
     renderDocuments();
     return;
   }
@@ -1894,6 +2319,8 @@ async function loadDocuments({ silent = false } = {}) {
   documents = documentResult.data || [];
   documentFolders = folderResult.data || [];
   if (!silent) setDocumentUploadStatus("Vault is up to date.", "success");
+  renderTasks();
+  renderEvents();
   renderDocuments();
 }
 
@@ -2438,7 +2865,9 @@ $("documentDetailsForm").addEventListener("submit", async (event) => {
     details: $("documentDetailsInput").value.trim(),
     expiryDate: $("documentDetailsExpiryDate").value,
     reminderDays: Number($("documentDetailsReminderDays").value || 30),
-    tags: normalizeDocumentTagInput($("documentDetailsTags").value)
+    tags: normalizeDocumentTagInput($("documentDetailsTags").value),
+    linkedTaskIds: getSelectedOptionValues($("documentDetailsTaskLinks")),
+    linkedEventIds: getSelectedOptionValues($("documentDetailsEventLinks"))
   };
   const saveButton = $("saveDocumentDetailsButton");
   saveButton.disabled = true;
@@ -2458,8 +2887,12 @@ $("documentDetailsForm").addEventListener("submit", async (event) => {
   documentItem.expiry_date = result.data?.expiry_date || null;
   documentItem.reminder_days = result.data?.reminder_days ?? 30;
   documentItem.tags = result.data?.tags || [];
+  documentItem.linked_task_ids = result.data?.linked_task_ids || [];
+  documentItem.linked_event_ids = result.data?.linked_event_ids || [];
   documentItem.updated_at = result.data?.updated_at || new Date().toISOString();
   closeDocumentDetailsModal();
+  renderTasks();
+  renderEvents();
   renderDocuments();
   setDocumentUploadStatus("Document information saved.", "success");
   showToast("Document information saved");
@@ -2480,6 +2913,39 @@ $("openDocumentExternallyButton").addEventListener("click", async () => {
 $("downloadPreviewDocumentButton").addEventListener("click", () => {
   if (previewDocumentItem) {
     downloadStoredDocument(previewDocumentItem, $("downloadPreviewDocumentButton"));
+  }
+});
+$("previewDocumentVersionsButton").addEventListener("click", () => {
+  if (previewDocumentItem) {
+    const documentItem = previewDocumentItem;
+    closeDocumentPreview();
+    openDocumentVersionModal(documentItem);
+  }
+});
+$("clearDocumentLinkFilterButton").addEventListener("click", clearDocumentLinkFilter);
+
+$("closeDocumentVersionModalButton").addEventListener("click", closeDocumentVersionModal);
+$("documentVersionModal").addEventListener("pointerdown", (event) => {
+  if (event.target === $("documentVersionModal")) closeDocumentVersionModal();
+});
+$("chooseDocumentVersionButton").addEventListener("click", () => $("documentVersionFile").click());
+$("documentVersionFile").addEventListener("change", () => {
+  const file = $("documentVersionFile").files?.[0];
+  $("documentVersionSelection").textContent = file
+    ? `${file.name} · ${formatBytes(file.size)}`
+    : "Choose one replacement file, up to 25 MB.";
+  $("uploadDocumentVersionButton").disabled = !file;
+});
+$("documentVersionUploadForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await uploadNewDocumentVersion();
+});
+$("refreshDocumentVersionsButton").addEventListener("click", loadDocumentVersions);
+$("previewCurrentVersionButton").addEventListener("click", () => {
+  if (versionDocumentItem) {
+    const documentItem = versionDocumentItem;
+    closeDocumentVersionModal();
+    openDocumentPreview(documentItem);
   }
 });
 $("documentGridViewButton").addEventListener("click", () => {
@@ -2547,7 +3013,9 @@ $("documentUploadForm").addEventListener("submit", async (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
 
-  if ($("documentPreviewModal").classList.contains("open")) {
+  if ($("documentVersionModal").classList.contains("open")) {
+    closeDocumentVersionModal();
+  } else if ($("documentPreviewModal").classList.contains("open")) {
     closeDocumentPreview();
   } else if ($("documentDetailsModal").classList.contains("open")) {
     closeDocumentDetailsModal();
@@ -2679,11 +3147,14 @@ window.addEventListener("boxcloudstatus", (event) => {
     currentDocumentUserId = nextUserId;
     documents = [];
     documentFolders = [];
+    activeDocumentLinkFilter = null;
     setDocumentUploadStatus("");
 
     if (nextUserId) {
       loadDocuments();
     } else {
+      renderTasks();
+      renderEvents();
       renderDocuments();
     }
   } else {

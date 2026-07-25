@@ -3202,3 +3202,342 @@ body.light-theme .dock {
 }
 
 .app-window.window-very-short .document-compliance-summary { display: none; }
+
+
+/* Phase 6B.3 — linked records and document version history */
+.document-link-filter-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 11px 13px;
+  border: 1px solid rgba(143, 156, 255, 0.28);
+  border-radius: 13px;
+  background: var(--accent-soft);
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.document-link-filter-banner button,
+.linked-documents-button {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.vault-related-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.vault-related-grid select[multiple] {
+  width: 100%;
+  min-height: 138px;
+  padding: 7px;
+  overflow: auto;
+}
+
+.vault-related-grid select[multiple] option {
+  padding: 8px;
+  border-radius: 7px;
+  white-space: normal;
+}
+
+.vault-related-grid select[multiple] option:checked {
+  background: var(--accent-soft) linear-gradient(0deg, var(--accent-soft), var(--accent-soft));
+  color: var(--text);
+}
+
+.event-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.document-version-chip {
+  border-color: rgba(143, 156, 255, 0.26) !important;
+  color: var(--accent) !important;
+}
+
+.document-link-chip {
+  border-color: rgba(114, 213, 161, 0.25) !important;
+  color: var(--success) !important;
+}
+
+.document-preview-related-wrap {
+  margin-top: 14px;
+}
+
+.document-preview-related-wrap > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.document-preview-related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.document-preview-related em {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.document-related-chip {
+  max-width: 100%;
+  padding: 6px 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.document-related-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.document-version-overlay {
+  z-index: 480;
+}
+
+.document-version-card {
+  width: min(860px, 100%);
+  max-height: min(90vh, 820px);
+  overflow: auto;
+}
+
+.document-current-version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(114, 213, 161, 0.22);
+  border-radius: 15px;
+  background: rgba(114, 213, 161, 0.08);
+}
+
+.document-current-version > div {
+  min-width: 0;
+}
+
+.document-current-version small,
+.document-current-version strong,
+.document-current-version span {
+  display: block;
+}
+
+.document-current-version small {
+  color: var(--success);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+
+.document-current-version strong {
+  margin: 4px 0;
+}
+
+.document-current-version span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-version-upload-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 10px;
+  margin: 14px 0 20px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface-soft);
+}
+
+.document-version-upload-form > div strong,
+.document-version-upload-form > div span {
+  display: block;
+}
+
+.document-version-upload-form > div span {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.document-version-note {
+  grid-column: 1 / -1;
+}
+
+.document-version-upload-form > .primary-button {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
+.document-version-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.document-version-heading-row small {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+
+.document-version-heading-row h3 {
+  margin: 3px 0 0;
+}
+
+.document-version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.document-version-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface-soft);
+}
+
+.document-version-number {
+  display: grid;
+  place-items: center;
+  min-width: 42px;
+  min-height: 42px;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.document-version-content {
+  min-width: 0;
+}
+
+.document-version-content strong,
+.document-version-content span,
+.document-version-content p {
+  display: block;
+}
+
+.document-version-content strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-version-content span {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.document-version-content p {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.document-version-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.document-version-actions button {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-solid);
+  color: var(--text-soft);
+}
+
+.document-version-actions .document-version-restore {
+  color: var(--success);
+}
+
+.document-version-loading {
+  padding: 18px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .vault-related-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .document-link-filter-banner,
+  .document-current-version,
+  .document-version-heading-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .document-version-upload-form {
+    grid-template-columns: 1fr;
+  }
+
+  .document-version-upload-form > .primary-button {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .document-version-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .document-version-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .document-version-actions button {
+    flex: 1 1 120px;
+  }
+}
+
+.app-window.window-narrow .document-link-filter-banner,
+.app-window.window-compact .document-link-filter-banner {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.app-window.window-compact .linked-documents-button {
+  min-width: 42px;
+}

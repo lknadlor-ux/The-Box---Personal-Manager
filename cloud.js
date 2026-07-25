@@ -168,12 +168,28 @@ window.BoxCloud = (() => {
       .slice(0, 20);
   }
 
+  function normalizeLinkIds(value) {
+    const raw = Array.isArray(value) ? value : [];
+    const seen = new Set();
+    return raw
+      .map((item) => String(item ?? "").trim().slice(0, 100))
+      .filter((item) => {
+        if (!item || seen.has(item)) return false;
+        seen.add(item);
+        return true;
+      })
+      .slice(0, 100);
+  }
+
+  const DOCUMENT_SELECT = "id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,deleted_at,expiry_date,reminder_days,tags,linked_task_ids,linked_event_ids,current_version,current_version_note,created_at,updated_at";
+  const VERSION_SELECT = "id,document_id,storage_path,name,mime_type,size_bytes,version_number,notes,created_at";
+
   async function listDocuments() {
     if (!isReady()) return { data: [], error: new Error("Sign in to access documents.") };
 
     const { data, error } = await client
       .from("documents")
-      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,deleted_at,expiry_date,reminder_days,tags,created_at,updated_at")
+      .select(DOCUMENT_SELECT)
       .eq("user_id", session.user.id)
       .order("created_at", { ascending: false });
 
@@ -221,12 +237,16 @@ window.BoxCloud = (() => {
         expiry_date: normalizeExpiryDate(compliance.expiryDate),
         reminder_days: normalizeReminderDays(compliance.reminderDays),
         tags: normalizeDocumentTags(compliance.tags),
+        linked_task_ids: [],
+        linked_event_ids: [],
+        current_version: 1,
+        current_version_note: null,
         mime_type: file.type || null,
         size_bytes: file.size,
         is_favorite: false,
         updated_at: new Date().toISOString()
       })
-      .select("id,name,storage_path,folder,details,mime_type,size_bytes,is_favorite,deleted_at,expiry_date,reminder_days,tags,created_at,updated_at")
+      .select(DOCUMENT_SELECT)
       .single();
 
     if (metadataError) {
@@ -288,15 +308,135 @@ window.BoxCloud = (() => {
         expiry_date: normalizeExpiryDate(metadata.expiryDate),
         reminder_days: normalizeReminderDays(metadata.reminderDays),
         tags: normalizeDocumentTags(metadata.tags),
+        linked_task_ids: normalizeLinkIds(metadata.linkedTaskIds),
+        linked_event_ids: normalizeLinkIds(metadata.linkedEventIds),
         updated_at: new Date().toISOString()
       })
       .eq("id", documentId)
       .eq("user_id", session.user.id)
-      .select("id,details,expiry_date,reminder_days,tags,updated_at")
+      .select("id,details,expiry_date,reminder_days,tags,linked_task_ids,linked_event_ids,updated_at")
       .single();
 
     emit(error ? "error" : "online", error ? "Sync error" : "Synced");
     return { data, error };
+  }
+
+  async function listDocumentVersions(documentId) {
+    if (!isReady()) return { data: [], error: new Error("Sign in first.") };
+
+    const { data, error } = await client
+      .from("document_versions")
+      .select(VERSION_SELECT)
+      .eq("user_id", session.user.id)
+      .eq("document_id", documentId)
+      .order("version_number", { ascending: false });
+
+    return { data: data || [], error };
+  }
+
+  async function createDocumentVersion(documentItem, file, notes = "") {
+    if (!isReady()) return { data: null, error: new Error("Sign in first.") };
+    if (!documentItem?.id || !documentItem?.storage_path) {
+      return { data: null, error: new Error("The current document could not be identified.") };
+    }
+    if (!(file instanceof File)) return { data: null, error: new Error("Choose a valid replacement file.") };
+    if (file.size > MAX_DOCUMENT_SIZE) {
+      return { data: null, error: new Error(`${file.name} is larger than 25 MB.`) };
+    }
+
+    const currentVersion = Math.max(1, Number(documentItem.current_version || 1));
+    const nextVersion = currentVersion + 1;
+    const versionId = createUuid();
+    const safeName = sanitizeFileName(file.name);
+    const newStoragePath = `${session.user.id}/${documentItem.id}-v${nextVersion}-${versionId}-${safeName}`;
+    const now = new Date().toISOString();
+
+    emit("syncing", "Uploading version");
+
+    const uploadOptions = { cacheControl: "3600", upsert: false };
+    if (file.type) uploadOptions.contentType = file.type;
+
+    const { error: uploadError } = await client.storage
+      .from(DOCUMENT_BUCKET)
+      .upload(newStoragePath, file, uploadOptions);
+
+    if (uploadError) {
+      emit("error", "Version error");
+      return { data: null, error: uploadError };
+    }
+
+    const { data: archivedVersion, error: archiveError } = await client
+      .from("document_versions")
+      .insert({
+        user_id: session.user.id,
+        document_id: documentItem.id,
+        storage_path: documentItem.storage_path,
+        name: documentItem.name,
+        mime_type: documentItem.mime_type || null,
+        size_bytes: Number(documentItem.size_bytes || 0),
+        version_number: currentVersion,
+        notes: String(documentItem.current_version_note || "").trim().slice(0, 500) || null
+      })
+      .select(VERSION_SELECT)
+      .single();
+
+    if (archiveError) {
+      await client.storage.from(DOCUMENT_BUCKET).remove([newStoragePath]);
+      emit("error", "Version error");
+      return { data: null, error: archiveError };
+    }
+
+    const { data: updatedDocument, error: updateError } = await client
+      .from("documents")
+      .update({
+        name: file.name,
+        storage_path: newStoragePath,
+        mime_type: file.type || null,
+        size_bytes: file.size,
+        current_version: nextVersion,
+        current_version_note: String(notes || "").trim().slice(0, 500) || null,
+        updated_at: now
+      })
+      .eq("id", documentItem.id)
+      .eq("user_id", session.user.id)
+      .select(DOCUMENT_SELECT)
+      .single();
+
+    if (updateError) {
+      await client.from("document_versions").delete().eq("id", archivedVersion.id).eq("user_id", session.user.id);
+      await client.storage.from(DOCUMENT_BUCKET).remove([newStoragePath]);
+      emit("error", "Version error");
+      return { data: null, error: updateError };
+    }
+
+    emit("online", "Synced");
+    return { data: { document: updatedDocument, archivedVersion }, error: null };
+  }
+
+  async function restoreDocumentVersion(documentItem, versionItem) {
+    if (!isReady()) return { data: null, error: new Error("Sign in first.") };
+    if (!versionItem?.storage_path) return { data: null, error: new Error("The selected version could not be found.") };
+
+    emit("syncing", "Restoring version");
+    const { data: blob, error: downloadError } = await client.storage
+      .from(DOCUMENT_BUCKET)
+      .download(versionItem.storage_path);
+
+    if (downloadError || !blob) {
+      emit("error", "Restore error");
+      return { data: null, error: downloadError || new Error("The selected version could not be downloaded.") };
+    }
+
+    const restoredFile = new File([blob], versionItem.name || documentItem.name, {
+      type: versionItem.mime_type || blob.type || "application/octet-stream",
+      lastModified: Date.now()
+    });
+
+    return createDocumentVersion(
+      documentItem,
+      restoredFile,
+      `Restored from version ${versionItem.version_number}`
+    );
   }
 
   async function setDocumentFavorite(documentId, isFavorite) {
@@ -369,13 +509,31 @@ window.BoxCloud = (() => {
 
     emit("syncing", "Deleting");
 
-    const { error: storageError } = await client.storage
-      .from(DOCUMENT_BUCKET)
-      .remove([storagePath]);
+    const { data: versionRows, error: versionListError } = await client
+      .from("document_versions")
+      .select("storage_path")
+      .eq("user_id", session.user.id)
+      .eq("document_id", documentId);
 
-    if (storageError) {
+    if (versionListError) {
       emit("error", "Delete error");
-      return { error: storageError };
+      return { error: versionListError };
+    }
+
+    const storagePaths = [...new Set([
+      storagePath,
+      ...(versionRows || []).map((item) => item.storage_path)
+    ].filter(Boolean))];
+
+    if (storagePaths.length) {
+      const { error: storageError } = await client.storage
+        .from(DOCUMENT_BUCKET)
+        .remove(storagePaths);
+
+      if (storageError) {
+        emit("error", "Delete error");
+        return { error: storageError };
+      }
     }
 
     const { error: metadataError } = await client
@@ -514,6 +672,9 @@ window.BoxCloud = (() => {
     createDocumentFolder,
     uploadDocument,
     updateDocumentMetadata,
+    listDocumentVersions,
+    createDocumentVersion,
+    restoreDocumentVersion,
     setDocumentFavorite,
     createDocumentUrl,
     downloadDocument,

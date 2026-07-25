@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6b2-compliance-expiry-tags";
+const CACHE_NAME = "the-box-os-phase-6b3-linked-documents-version-history";
 
 const APP_FILES = [
   "./",
