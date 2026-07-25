@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6c2-1-template-interface-hotfix";
+const CACHE_NAME = "the-box-os-phase-6c2-2-honor-pad-layout-correction";
 
 const APP_FILES = [
   "./",
