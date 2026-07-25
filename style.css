@@ -422,7 +422,7 @@ body.light-theme .desktop-summary div {
   pointer-events: none;
   transform: translateY(18px) scale(0.97);
   transition: opacity 0.2s ease, transform 0.2s ease;
-  contain: layout paint;
+  isolation: isolate;
 }
 
 .app-window.open {
@@ -3954,5 +3954,249 @@ button.document-related-chip:hover {
   .backup-maintenance-actions,
   .backup-maintenance-actions button {
     width: 100%;
+  }
+}
+
+
+/* Phase 6B.5.1 — Honor Pad / Android tablet rendering hotfix */
+html.touch-ui,
+html.touch-ui body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+html.touch-ui .topbar,
+html.touch-ui .desktop-summary div,
+html.touch-ui .launcher,
+html.touch-ui .app-window,
+html.touch-ui .dock,
+html.touch-ui .auth-overlay,
+html.touch-ui .task-modal-overlay,
+html.touch-ui .vault-modal-overlay {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+html.touch-ui .topbar {
+  background: #0d1016 !important;
+}
+
+html.touch-ui body.light-theme .topbar {
+  background: #f7f8fb !important;
+}
+
+html.touch-ui .desktop-summary div,
+html.touch-ui .launcher,
+html.touch-ui .app-window {
+  background: var(--surface-solid) !important;
+}
+
+html.touch-ui .dock {
+  background: #0f1218 !important;
+}
+
+html.touch-ui body.light-theme .dock {
+  background: #ffffff !important;
+}
+
+html.touch-ui .auth-overlay,
+html.touch-ui .task-modal-overlay,
+html.touch-ui .vault-modal-overlay {
+  background: rgba(5, 7, 11, 0.9) !important;
+}
+
+html.touch-ui .app-window,
+html.touch-ui .app-window.open,
+html.touch-ui .app-window.minimized,
+html.touch-ui .launcher,
+html.touch-ui .launcher.open,
+html.touch-ui .task-modal-card,
+html.touch-ui .task-modal-overlay.open .task-modal-card,
+html.touch-ui .vault-modal-card,
+html.touch-ui .vault-modal-overlay.open .vault-modal-card {
+  transform: none !important;
+}
+
+html.touch-ui .app-window {
+  contain: none !important;
+  backface-visibility: visible !important;
+  transition: opacity 0.12s ease !important;
+}
+
+html.touch-ui .launcher,
+html.touch-ui .task-modal-card,
+html.touch-ui .vault-modal-card {
+  transition: opacity 0.12s ease !important;
+}
+
+html.touch-ui .cloud-status span {
+  animation: none !important;
+}
+
+html.touch-ui button,
+html.touch-ui [role="button"],
+html.touch-ui .app-tile,
+html.touch-ui .desktop-icon,
+html.touch-ui .workspace-card,
+html.touch-ui .document-card,
+html.touch-ui .document-folder,
+html.touch-ui .dock-item,
+html.touch-ui .dock-icon {
+  filter: none !important;
+  backface-visibility: visible !important;
+}
+
+html.touch-ui button:hover,
+html.touch-ui [role="button"]:hover,
+html.touch-ui .app-tile:hover,
+html.touch-ui .desktop-icon:hover,
+html.touch-ui .workspace-card:hover,
+html.touch-ui .document-card:hover,
+html.touch-ui .document-folder:hover,
+html.touch-ui .dock-item:hover,
+html.touch-ui .dock-item:focus-visible,
+html.touch-ui .dock-item.active,
+html.touch-ui .dock-item:hover .dock-icon,
+html.touch-ui .dock-item:focus-visible .dock-icon,
+html.touch-ui .dock-item.active .dock-icon {
+  transform: none !important;
+  filter: none !important;
+}
+
+html.touch-ui .dock-item:active,
+html.touch-ui button:active {
+  opacity: 0.82;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .app-tile,
+  .desktop-icon,
+  .workspace-card,
+  .document-card,
+  .document-folder,
+  .dock-item,
+  button {
+    transition-duration: 0.08s !important;
+  }
+}
+
+@media (min-width: 681px) {
+  html.tablet-ui .topbar {
+    grid-template-columns: auto minmax(260px, 1fr) auto;
+    gap: 12px;
+    height: 64px;
+    padding: 0 14px;
+  }
+
+  html.tablet-ui .topbar-left,
+  html.tablet-ui .topbar-right {
+    min-width: 0;
+  }
+
+  html.tablet-ui .global-search {
+    min-width: 220px;
+    max-width: 560px;
+    justify-self: center;
+  }
+
+  html.tablet-ui .desktop {
+    inset: 64px 0 76px;
+  }
+
+  html.tablet-ui .desktop-icons {
+    display: none;
+  }
+
+  html.tablet-ui .desktop-welcome {
+    top: 22px;
+    right: 24px;
+    left: 24px;
+    width: auto;
+    max-width: none;
+  }
+
+  html.tablet-ui .desktop-welcome h1 {
+    max-width: 100%;
+    margin: 6px 0;
+    font-size: clamp(30px, 4vw, 50px);
+    line-height: 1.08;
+    letter-spacing: -1.4px;
+  }
+
+  html.tablet-ui .desktop-summary {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
+  html.tablet-ui .app-window {
+    min-width: 360px;
+    min-height: 280px;
+    border-radius: 18px;
+  }
+
+  html.tablet-ui .window-titlebar {
+    height: 52px;
+    padding: 0 10px 0 14px;
+  }
+
+  html.tablet-ui .window-title {
+    min-width: 0;
+  }
+
+  html.tablet-ui .window-title strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  html.tablet-ui .window-controls {
+    flex: 0 0 auto;
+  }
+
+  html.tablet-ui .window-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  html.tablet-ui .window-content {
+    height: calc(100% - 52px);
+    padding: 16px;
+  }
+
+  html.tablet-ui .dock {
+    bottom: 8px;
+    gap: 3px;
+    max-width: calc(100vw - 20px);
+    padding: 6px 8px 5px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  html.tablet-ui .dock::-webkit-scrollbar {
+    display: none;
+  }
+
+  html.tablet-ui .dock-item {
+    flex: 0 0 58px;
+    width: 58px;
+    height: 56px;
+    gap: 4px;
+    padding: 5px 4px 4px;
+  }
+
+  html.tablet-ui .dock-icon {
+    min-height: 22px;
+    font-size: 19px;
+  }
+
+  html.tablet-ui .dock-label {
+    font-size: 9px;
+    line-height: 1.05;
+  }
+
+  html.tablet-ui .dock-item.active::after {
+    right: 18px;
+    left: 18px;
   }
 }

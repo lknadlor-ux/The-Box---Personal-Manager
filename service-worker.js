@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6b5-polished-dock-labels";
+const CACHE_NAME = "the-box-os-phase-6b5-1-honorpad-ui-hotfix";
 
 const APP_FILES = [
   "./",

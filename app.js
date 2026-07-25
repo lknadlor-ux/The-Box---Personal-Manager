@@ -1,5 +1,19 @@
 "use strict";
 
+function updateDeviceUiClasses() {
+  const touchCapable =
+    navigator.maxTouchPoints > 0 ||
+    "ontouchstart" in window ||
+    window.matchMedia("(pointer: coarse)").matches;
+
+  const tabletMode = touchCapable && window.innerWidth > 680;
+
+  document.documentElement.classList.toggle("touch-ui", touchCapable);
+  document.documentElement.classList.toggle("tablet-ui", tabletMode);
+}
+
+updateDeviceUiClasses();
+
 const STORAGE = {
   tasks: "theBoxOS4Tasks",
   events: "theBoxOS4Events",
@@ -11,7 +25,8 @@ const STORAGE = {
   windowLayouts: "theBoxOSWindowLayouts",
   documentView: "theBoxOSDocumentView",
   lastBackupAt: "theBoxOSLastBackupAt",
-  safetyBackup: "theBoxOSSafetyBackup"
+  safetyBackup: "theBoxOSSafetyBackup",
+  honorPadUiFix: "theBoxOSHonorPadUiFixV1"
 };
 
 const DAVAO = {
@@ -285,6 +300,41 @@ function isCompactWindowMode() {
   return window.matchMedia("(max-width: 680px)").matches;
 }
 
+function isTabletUiMode() {
+  return document.documentElement.classList.contains("tablet-ui");
+}
+
+function prepareTabletUiLayoutMigration() {
+  if (!isTabletUiMode()) return;
+  if (localStorage.getItem(STORAGE.honorPadUiFix) === "1") return;
+
+  // Older desktop-sized defaults look too small on Android tablets.
+  // Reset only the saved window geometry once; no user data is removed.
+  localStorage.removeItem(STORAGE.windowLayouts);
+  localStorage.setItem(STORAGE.honorPadUiFix, "1");
+}
+
+function applyTabletDefaultWindowLayout(windowElement) {
+  if (!isTabletUiMode() || isCompactWindowMode()) return;
+  if (windowElement.classList.contains("maximized")) return;
+
+  const appName = windowElement.dataset.appWindow;
+  if (!appName || readWindowLayouts()[appName]) return;
+
+  const desktopRect = $("desktop").getBoundingClientRect();
+  if (!desktopRect.width || !desktopRect.height) return;
+
+  const width = Math.min(desktopRect.width - 24, desktopRect.width * 0.92);
+  const height = Math.min(desktopRect.height - 20, desktopRect.height * 0.91);
+  const left = Math.max(0, (desktopRect.width - width) / 2);
+  const top = Math.max(0, (desktopRect.height - height) / 2);
+
+  windowElement.style.left = `${left}px`;
+  windowElement.style.top = `${top}px`;
+  windowElement.style.width = `${width}px`;
+  windowElement.style.height = `${height}px`;
+}
+
 const WINDOW_LAYOUT_BREAKPOINTS = {
   medium: 900,
   narrow: 700,
@@ -448,6 +498,8 @@ function closeLauncher() {
 }
 
 function initializeWindowControls() {
+  prepareTabletUiLayoutMigration();
+
   document.querySelectorAll(".app-window").forEach((windowElement) => {
     windowElement.addEventListener("pointerdown", () => focusWindow(windowElement));
 
@@ -470,6 +522,7 @@ function initializeWindowControls() {
     resizeHandle.title = "Drag to resize";
     windowElement.appendChild(resizeHandle);
 
+    applyTabletDefaultWindowLayout(windowElement);
     applyStoredWindowLayout(windowElement);
     updateMaximizeButton(windowElement);
     observeWindowResponsiveState(windowElement);
@@ -621,8 +674,11 @@ function enableResizing(windowElement, resizeHandle) {
 }
 
 window.addEventListener("resize", () => {
+  updateDeviceUiClasses();
+
   document.querySelectorAll(".app-window").forEach((windowElement) => {
     if (!isCompactWindowMode()) {
+      applyTabletDefaultWindowLayout(windowElement);
       applyStoredWindowLayout(windowElement);
       clampWindowToDesktop(windowElement);
     }
