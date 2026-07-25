@@ -546,6 +546,53 @@ window.BoxCloud = (() => {
     return { error: metadataError };
   }
 
+  async function createBackupSnapshot() {
+    if (!isReady()) {
+      return {
+        data: null,
+        error: new Error("Sign in to include the cloud document inventory.")
+      };
+    }
+
+    emit("syncing", "Preparing backup");
+
+    const [documentsResult, foldersResult, versionsResult] = await Promise.all([
+      client
+        .from("documents")
+        .select(DOCUMENT_SELECT)
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false }),
+      client
+        .from("document_folders")
+        .select("id,name,created_at,updated_at")
+        .eq("user_id", session.user.id)
+        .order("name", { ascending: true }),
+      client
+        .from("document_versions")
+        .select(VERSION_SELECT)
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+    ]);
+
+    const error = documentsResult.error || foldersResult.error || versionsResult.error;
+    if (error) {
+      emit("error", "Backup error");
+      return { data: null, error };
+    }
+
+    emit("online", "Synced");
+    return {
+      data: {
+        accountEmail: session.user.email || null,
+        documents: documentsResult.data || [],
+        documentFolders: foldersResult.data || [],
+        documentVersions: versionsResult.data || [],
+        includesFileContents: false
+      },
+      error: null
+    };
+  }
+
   async function fetchCollection(table) {
     const { data, error } = await client
       .from(table)
@@ -680,6 +727,7 @@ window.BoxCloud = (() => {
     downloadDocument,
     moveDocumentToTrash,
     restoreDocument,
-    permanentlyDeleteDocument
+    permanentlyDeleteDocument,
+    createBackupSnapshot
   };
 })();

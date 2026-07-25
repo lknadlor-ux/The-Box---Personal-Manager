@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6b3-linked-documents-version-history";
+const CACHE_NAME = "the-box-os-phase-6b4-stability-backup-center";
 
 const APP_FILES = [
   "./",

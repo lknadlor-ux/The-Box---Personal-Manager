@@ -117,6 +117,12 @@
           <strong>Box Assistant</strong>
           <small>Local productivity help</small>
         </button>
+
+        <button class="app-tile" data-open-app="backup">
+          <span class="app-icon">⇩</span>
+          <strong>Backup</strong>
+          <small>Export, restore, and repair</small>
+        </button>
       </div>
     </aside>
 
@@ -724,6 +730,114 @@
             </div>
           </div>
         </article>
+
+
+        <article class="app-window" data-app-window="backup" style="--x: 18%; --y: 10%; --w: 64%; --h: 74%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>⇩</span><strong>Backup &amp; Restore</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content backup-window">
+            <section class="backup-hero">
+              <div>
+                <small>STABILITY &amp; RECOVERY</small>
+                <h2>Backup Center</h2>
+                <p>Download a portable copy of your workspace, restore selected data, and repair saved window layouts.</p>
+              </div>
+              <div id="backupCloudBadge" class="backup-cloud-badge local">Local backup</div>
+            </section>
+
+            <section class="backup-stats" aria-label="Backup data summary">
+              <div><span>Tasks</span><strong id="backupTaskCount">0</strong></div>
+              <div><span>Events</span><strong id="backupEventCount">0</strong></div>
+              <div><span>Documents</span><strong id="backupDocumentCount">0</strong></div>
+              <div><span>Last backup</span><strong id="backupLastExport">Never</strong></div>
+            </section>
+
+            <div id="backupStatusNotice" class="backup-status-notice" role="status">Ready to create a backup.</div>
+
+            <div class="backup-grid">
+              <section class="backup-panel">
+                <div class="backup-panel-heading">
+                  <div>
+                    <small>EXPORT</small>
+                    <h3>Download workspace backup</h3>
+                  </div>
+                  <span class="backup-panel-icon">⇩</span>
+                </div>
+                <p>Creates one JSON file containing tasks, events, finance entries, notes, preferences, and—when connected—your Document Vault inventory.</p>
+
+                <label class="backup-check">
+                  <input id="backupIncludeCloudInventory" type="checkbox" checked>
+                  <span>
+                    <strong>Include cloud document inventory</strong>
+                    <small id="backupCloudInventoryHint">Sign in to include folders, metadata, and version records.</small>
+                  </span>
+                </label>
+
+                <button id="downloadBackupButton" class="primary-button backup-main-button" type="button">Download backup</button>
+                <small class="backup-footnote">Document file contents are not embedded in this JSON backup.</small>
+              </section>
+
+              <section class="backup-panel">
+                <div class="backup-panel-heading">
+                  <div>
+                    <small>RESTORE</small>
+                    <h3>Restore from a backup</h3>
+                  </div>
+                  <span class="backup-panel-icon">↥</span>
+                </div>
+                <p>Choose a The Box backup file, review its contents, then select which local data to restore.</p>
+
+                <input id="backupFileInput" type="file" accept="application/json,.json" hidden>
+                <button id="chooseBackupFileButton" class="secondary-button backup-main-button" type="button">Choose backup file</button>
+
+                <div id="backupImportPreview" class="backup-import-preview empty">
+                  <strong>No backup selected</strong>
+                  <span>Supported format: The Box OS JSON backup.</span>
+                </div>
+
+                <div class="backup-restore-options" aria-label="Restore options">
+                  <label class="backup-check compact"><input id="restoreBackupTasks" type="checkbox" checked><span><strong>Tasks</strong></span></label>
+                  <label class="backup-check compact"><input id="restoreBackupEvents" type="checkbox" checked><span><strong>Events</strong></span></label>
+                  <label class="backup-check compact"><input id="restoreBackupFinance" type="checkbox" checked><span><strong>Finance</strong></span></label>
+                  <label class="backup-check compact"><input id="restoreBackupNotes" type="checkbox" checked><span><strong>Notes</strong></span></label>
+                  <label class="backup-check compact"><input id="restoreBackupPreferences" type="checkbox" checked><span><strong>Preferences &amp; layouts</strong></span></label>
+                </div>
+
+                <label class="backup-check">
+                  <input id="restoreBackupCloudSync" type="checkbox" checked>
+                  <span>
+                    <strong>Sync restored workspace data to cloud</strong>
+                    <small id="restoreCloudSyncHint">Available when signed in.</small>
+                  </span>
+                </label>
+
+                <button id="restoreBackupButton" class="primary-button backup-main-button" type="button" disabled>Restore selected data</button>
+              </section>
+            </div>
+
+            <section class="backup-maintenance">
+              <div>
+                <small>RECOVERY TOOLS</small>
+                <h3>Maintenance</h3>
+                <p>These actions do not delete your tasks, documents, or cloud records.</p>
+              </div>
+              <div class="backup-maintenance-actions">
+                <button id="downloadSafetyBackupButton" class="secondary-button" type="button" disabled>Download safety backup</button>
+                <button id="resetWindowLayoutsButton" class="secondary-button" type="button">Reset window layouts</button>
+                <button id="refreshAppFilesButton" class="secondary-button" type="button">Check for app update</button>
+              </div>
+            </section>
+
+            <p class="backup-warning"><strong>Important:</strong> Document inventory includes filenames, folders, tags, expiry data, links, and version records. The actual PDF, image, or office-document files remain safely stored in Supabase and are not copied into the JSON file.</p>
+          </div>
+        </article>
       </section>
     </main>
 
@@ -739,6 +853,7 @@
       <button class="dock-item" data-open-app="finance" title="Finance">₱</button>
       <button class="dock-item" data-open-app="focus" title="Focus">◉</button>
       <button class="dock-item" data-open-app="assistant" title="Assistant">✦</button>
+      <button class="dock-item" data-open-app="backup" title="Backup &amp; Restore">⇩</button>
     </footer>
   </div>
 

@@ -3541,3 +3541,346 @@ button.document-related-chip:hover {
 .app-window.window-compact .linked-documents-button {
   min-width: 42px;
 }
+
+
+/* Phase 6B.4 — Backup Center */
+.backup-window {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.backup-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 19px;
+  background: linear-gradient(130deg, var(--accent-soft), transparent);
+}
+
+.backup-hero small,
+.backup-panel-heading small,
+.backup-maintenance small {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.backup-hero h2,
+.backup-panel h3,
+.backup-maintenance h3 {
+  margin: 5px 0;
+}
+
+.backup-hero p,
+.backup-panel p,
+.backup-maintenance p {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.55;
+}
+
+.backup-cloud-badge {
+  flex: 0 0 auto;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.backup-cloud-badge.connected {
+  border-color: rgba(114, 213, 161, 0.35);
+  background: rgba(114, 213, 161, 0.1);
+  color: var(--success);
+}
+
+.backup-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 9px;
+}
+
+.backup-stats div {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.backup-stats span,
+.backup-stats strong {
+  display: block;
+}
+
+.backup-stats span {
+  color: var(--text-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.backup-stats strong {
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backup-status-notice {
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.backup-status-notice.working {
+  border-color: rgba(143, 156, 255, 0.35);
+  color: var(--accent);
+}
+
+.backup-status-notice.success {
+  border-color: rgba(114, 213, 161, 0.35);
+  background: rgba(114, 213, 161, 0.08);
+  color: var(--success);
+}
+
+.backup-status-notice.error {
+  border-color: rgba(255, 133, 133, 0.35);
+  background: rgba(255, 133, 133, 0.08);
+  color: var(--danger);
+}
+
+.backup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.backup-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: var(--surface-soft);
+}
+
+.backup-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.backup-panel-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 19px;
+}
+
+.backup-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-solid);
+  color: var(--text);
+}
+
+.backup-check input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+
+.backup-check span,
+.backup-check strong,
+.backup-check small {
+  display: block;
+}
+
+.backup-check small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.backup-check.compact {
+  align-items: center;
+  padding: 9px 10px;
+}
+
+.backup-check input:disabled + span {
+  opacity: 0.55;
+}
+
+.backup-main-button {
+  width: 100%;
+  min-height: 44px;
+}
+
+.backup-footnote {
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.backup-import-preview {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  color: var(--text-soft);
+}
+
+.backup-import-preview strong,
+.backup-import-preview span,
+.backup-import-preview em {
+  display: block;
+}
+
+.backup-import-preview span,
+.backup-import-preview em {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.backup-import-preview.ready {
+  border-style: solid;
+  border-color: rgba(114, 213, 161, 0.35);
+  background: rgba(114, 213, 161, 0.06);
+}
+
+.backup-import-preview.error {
+  border-style: solid;
+  border-color: rgba(255, 133, 133, 0.35);
+  background: rgba(255, 133, 133, 0.06);
+}
+
+.backup-preview-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 3px 0;
+}
+
+.backup-preview-counts small {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+}
+
+.backup-restore-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.backup-maintenance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.backup-maintenance-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.backup-warning {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 199, 106, 0.25);
+  border-radius: 13px;
+  background: rgba(255, 199, 106, 0.07);
+  color: var(--text-soft);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.app-window.window-medium .backup-grid,
+.app-window.window-narrow .backup-grid {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-narrow .backup-stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.app-window.window-narrow .backup-maintenance {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.app-window.window-narrow .backup-maintenance-actions {
+  width: 100%;
+  justify-content: stretch;
+}
+
+.app-window.window-narrow .backup-maintenance-actions button {
+  flex: 1 1 170px;
+}
+
+.app-window.window-compact .backup-hero {
+  flex-direction: column;
+}
+
+.app-window.window-compact .backup-cloud-badge {
+  align-self: flex-start;
+}
+
+.app-window.window-compact .backup-stats,
+.app-window.window-compact .backup-restore-options {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 680px) {
+  .backup-grid,
+  .backup-stats,
+  .backup-restore-options {
+    grid-template-columns: 1fr;
+  }
+
+  .backup-hero,
+  .backup-maintenance {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .backup-maintenance-actions,
+  .backup-maintenance-actions button {
+    width: 100%;
+  }
+}

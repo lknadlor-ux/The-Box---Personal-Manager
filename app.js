@@ -9,7 +9,9 @@ const STORAGE = {
   timerMinutes: "theBoxOS4TimerMinutes",
   focusTotal: "theBoxOS4FocusTotal",
   windowLayouts: "theBoxOSWindowLayouts",
-  documentView: "theBoxOSDocumentView"
+  documentView: "theBoxOSDocumentView",
+  lastBackupAt: "theBoxOSLastBackupAt",
+  safetyBackup: "theBoxOSSafetyBackup"
 };
 
 const DAVAO = {
@@ -124,6 +126,8 @@ let activeDocumentLinkFilter = null;
 let versionDocumentItem = null;
 let documentVersions = [];
 let documentVersionsLoading = false;
+let pendingBackupImport = null;
+let backupBusy = false;
 
 function loadJSON(key, fallback) {
   try {
@@ -256,6 +260,10 @@ function openApp(appName) {
 
   if (appName === "documents" && window.BoxCloud?.isReady()) {
     loadDocuments({ silent: documents.length > 0 });
+  }
+
+  if (appName === "backup") {
+    renderBackupCenter();
   }
 }
 
@@ -2400,6 +2408,467 @@ async function uploadSelectedDocuments() {
   }
 }
 
+
+const BACKUP_FORMAT = "the-box-os-backup";
+const BACKUP_FORMAT_VERSION = 1;
+const BACKUP_APP_VERSION = "6B.4";
+const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function cleanFileNameSegment(value) {
+  return String(value || "backup")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "backup";
+}
+
+function downloadTextFile(fileName, text, type = "application/json") {
+  const blob = new Blob([text], { type: `${type};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function sha256Text(text) {
+  if (!window.crypto?.subtle || typeof TextEncoder === "undefined") return null;
+  const bytes = new TextEncoder().encode(text);
+  const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function buildLocalBackupData() {
+  return {
+    tasks: tasks.map((task) => ({ ...task })),
+    events: events.map((event) => ({ ...event })),
+    financeEntries: financeEntries.map((entry) => ({ ...entry })),
+    notes: $("quickNotes")?.value ?? localStorage.getItem(STORAGE.notes) ?? "",
+    preferences: {
+      theme: localStorage.getItem(STORAGE.theme) || "dark",
+      timerMinutes: Number(localStorage.getItem(STORAGE.timerMinutes) || 25),
+      focusTotal: Number(localStorage.getItem(STORAGE.focusTotal) || 0),
+      windowLayouts: readWindowLayouts(),
+      documentView: localStorage.getItem(STORAGE.documentView) || "grid"
+    }
+  };
+}
+
+async function createBackupPackage({ includeCloudInventory = true } = {}) {
+  let cloudInventory = null;
+  let cloudInventoryError = null;
+
+  if (includeCloudInventory && window.BoxCloud?.isReady()) {
+    const result = await window.BoxCloud.createBackupSnapshot();
+    if (result.error) {
+      cloudInventoryError = result.error.message || "Cloud inventory could not be loaded.";
+    } else {
+      cloudInventory = result.data;
+    }
+  }
+
+  const packageWithoutIntegrity = {
+    format: BACKUP_FORMAT,
+    formatVersion: BACKUP_FORMAT_VERSION,
+    appVersion: BACKUP_APP_VERSION,
+    createdAt: new Date().toISOString(),
+    source: {
+      host: window.location.host || "local",
+      cloudConnected: Boolean(window.BoxCloud?.isReady()),
+      cloudInventoryRequested: Boolean(includeCloudInventory),
+      cloudInventoryIncluded: Boolean(cloudInventory),
+      cloudInventoryError
+    },
+    data: {
+      ...buildLocalBackupData(),
+      documentInventory: cloudInventory
+    }
+  };
+
+  const payloadText = JSON.stringify(packageWithoutIntegrity);
+  const checksum = await sha256Text(payloadText);
+
+  return {
+    ...packageWithoutIntegrity,
+    integrity: checksum
+      ? { algorithm: "SHA-256", value: checksum }
+      : null
+  };
+}
+
+function formatBackupTime(value) {
+  if (!value) return "Never";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function setBackupStatus(message, state = "neutral") {
+  const notice = $("backupStatusNotice");
+  if (!notice) return;
+  notice.textContent = message;
+  notice.className = `backup-status-notice ${state}`;
+}
+
+function updateBackupCloudControls() {
+  const connected = Boolean(window.BoxCloud?.isReady());
+  const includeCloud = $("backupIncludeCloudInventory");
+  const restoreCloud = $("restoreBackupCloudSync");
+  const badge = $("backupCloudBadge");
+
+  if (includeCloud) {
+    includeCloud.disabled = !connected;
+    if (!connected) includeCloud.checked = false;
+  }
+  if (restoreCloud) {
+    restoreCloud.disabled = !connected;
+    if (!connected) restoreCloud.checked = false;
+  }
+
+  if ($("backupCloudInventoryHint")) {
+    $("backupCloudInventoryHint").textContent = connected
+      ? "Includes folders, metadata, links, expiry data, and version records."
+      : "Sign in to include folders, metadata, and version records.";
+  }
+  if ($("restoreCloudSyncHint")) {
+    $("restoreCloudSyncHint").textContent = connected
+      ? "Restored tasks, events, finance entries, and notes will be synced."
+      : "Sign in to enable cloud sync after restore.";
+  }
+  if (badge) {
+    badge.textContent = connected ? "Cloud connected" : "Local backup";
+    badge.className = `backup-cloud-badge ${connected ? "connected" : "local"}`;
+  }
+}
+
+function renderBackupCenter() {
+  if (!$("backupTaskCount")) return;
+
+  $("backupTaskCount").textContent = String(tasks.length);
+  $("backupEventCount").textContent = String(events.length);
+  $("backupDocumentCount").textContent = String(documents.filter((item) => !item.deleted_at).length);
+  $("backupLastExport").textContent = formatBackupTime(localStorage.getItem(STORAGE.lastBackupAt));
+
+  const safetyText = localStorage.getItem(STORAGE.safetyBackup);
+  $("downloadSafetyBackupButton").disabled = !safetyText;
+  updateBackupCloudControls();
+}
+
+async function downloadWorkspaceBackup() {
+  if (backupBusy) return;
+  backupBusy = true;
+  const button = $("downloadBackupButton");
+  button.disabled = true;
+  button.textContent = "Preparing…";
+  setBackupStatus("Preparing your workspace backup…", "working");
+
+  try {
+    const backup = await createBackupPackage({
+      includeCloudInventory: $("backupIncludeCloudInventory").checked
+    });
+    const formatted = JSON.stringify(backup, null, 2);
+    const date = new Date();
+    const stamp = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+      String(date.getHours()).padStart(2, "0") + String(date.getMinutes()).padStart(2, "0")
+    ].join("-");
+
+    downloadTextFile(`the-box-backup-${cleanFileNameSegment(stamp)}.json`, formatted);
+    localStorage.setItem(STORAGE.lastBackupAt, backup.createdAt);
+    renderBackupCenter();
+
+    const cloudNote = backup.data.documentInventory
+      ? ` Cloud inventory: ${backup.data.documentInventory.documents.length} document records.`
+      : backup.source.cloudInventoryError
+        ? ` Local data exported; cloud inventory was unavailable: ${backup.source.cloudInventoryError}`
+        : " Local workspace data exported.";
+
+    setBackupStatus(`Backup downloaded successfully.${cloudNote}`, "success");
+    showToast("Backup downloaded");
+  } catch (error) {
+    console.error(error);
+    setBackupStatus(error.message || "Backup could not be created.", "error");
+  } finally {
+    backupBusy = false;
+    button.disabled = false;
+    button.textContent = "Download backup";
+  }
+}
+
+function validateBackupShape(backup) {
+  if (!backup || typeof backup !== "object") {
+    throw new Error("This file does not contain a valid backup object.");
+  }
+  if (backup.format !== BACKUP_FORMAT) {
+    throw new Error("This is not a The Box OS backup file.");
+  }
+  if (Number(backup.formatVersion) !== BACKUP_FORMAT_VERSION) {
+    throw new Error(`Backup format ${backup.formatVersion} is not supported by this app version.`);
+  }
+  if (!backup.data || typeof backup.data !== "object") {
+    throw new Error("The backup data section is missing.");
+  }
+
+  const arrayFields = ["tasks", "events", "financeEntries"];
+  arrayFields.forEach((field) => {
+    if (!Array.isArray(backup.data[field])) {
+      throw new Error(`The backup is missing a valid ${field} list.`);
+    }
+  });
+  if (typeof backup.data.notes !== "string") {
+    throw new Error("The backup notes field is invalid.");
+  }
+  return backup;
+}
+
+async function verifyBackupIntegrity(backup) {
+  if (!backup.integrity?.value) return { verified: false, reason: "No checksum" };
+  if (backup.integrity.algorithm !== "SHA-256") {
+    return { verified: false, reason: "Unsupported checksum" };
+  }
+
+  const { integrity, ...payload } = backup;
+  const calculated = await sha256Text(JSON.stringify(payload));
+  if (!calculated) return { verified: false, reason: "Checksum unavailable" };
+  if (calculated !== integrity.value) {
+    throw new Error("Backup integrity check failed. The file may be incomplete or modified.");
+  }
+  return { verified: true, reason: "Checksum verified" };
+}
+
+function renderBackupImportPreview(backup, integrityResult) {
+  const preview = $("backupImportPreview");
+  const inventory = backup.data.documentInventory;
+  const created = formatBackupTime(backup.createdAt);
+  const integrityLabel = integrityResult.verified ? "Verified" : integrityResult.reason;
+
+  preview.className = "backup-import-preview ready";
+  preview.innerHTML = `
+    <strong>Backup ready</strong>
+    <span>${created} · App ${escapeHtml(backup.appVersion || "Unknown")}</span>
+    <div class="backup-preview-counts">
+      <small>${backup.data.tasks.length} tasks</small>
+      <small>${backup.data.events.length} events</small>
+      <small>${backup.data.financeEntries.length} finance entries</small>
+      <small>${inventory?.documents?.length || 0} document records</small>
+    </div>
+    <em>${escapeHtml(integrityLabel)}</em>
+  `;
+}
+
+async function loadBackupImportFile(file) {
+  pendingBackupImport = null;
+  $("restoreBackupButton").disabled = true;
+
+  if (!(file instanceof File)) return;
+  if (file.size > MAX_BACKUP_IMPORT_SIZE) {
+    setBackupStatus("The selected backup is larger than 12 MB.", "error");
+    return;
+  }
+
+  setBackupStatus("Reading and validating the backup…", "working");
+  try {
+    const parsed = validateBackupShape(JSON.parse(await file.text()));
+    const integrityResult = await verifyBackupIntegrity(parsed);
+    pendingBackupImport = parsed;
+    renderBackupImportPreview(parsed, integrityResult);
+    $("restoreBackupButton").disabled = false;
+    setBackupStatus("Backup validated. Choose what to restore.", "success");
+  } catch (error) {
+    console.error(error);
+    $("backupImportPreview").className = "backup-import-preview error";
+    $("backupImportPreview").innerHTML = `<strong>Backup not accepted</strong><span>${escapeHtml(error.message)}</span>`;
+    setBackupStatus(error.message || "The backup could not be read.", "error");
+  }
+}
+
+function normalizeBackupEvents(value) {
+  return value.map((event, index) => ({
+    id: event.id || Date.now() + index + Math.random(),
+    title: String(event.title || "Untitled event").slice(0, 300),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(event.date || "")
+      ? event.date
+      : new Date().toISOString().slice(0, 10),
+    workspace: event.workspace || "personal"
+  }));
+}
+
+function normalizeBackupFinance(value) {
+  return value.map((entry, index) => ({
+    id: entry.id || Date.now() + index + Math.random(),
+    description: String(entry.description || "Untitled entry").slice(0, 300),
+    amount: Number(entry.amount) || 0,
+    type: entry.type === "income" ? "income" : "expense",
+    workspace: entry.workspace || "personal",
+    createdAt: entry.createdAt || new Date().toISOString()
+  }));
+}
+
+function restoreBackupPreferences(preferences = {}) {
+  const theme = preferences.theme === "light" ? "light" : "dark";
+  localStorage.setItem(STORAGE.theme, theme);
+
+  const minutes = Math.min(180, Math.max(1, Number(preferences.timerMinutes) || 25));
+  localStorage.setItem(STORAGE.timerMinutes, String(minutes));
+  selectedTimerMinutes = minutes;
+  timerSeconds = minutes * 60;
+
+  const focusTotal = Math.max(0, Number(preferences.focusTotal) || 0);
+  localStorage.setItem(STORAGE.focusTotal, String(focusTotal));
+
+  if (preferences.windowLayouts && typeof preferences.windowLayouts === "object" && !Array.isArray(preferences.windowLayouts)) {
+    localStorage.setItem(STORAGE.windowLayouts, JSON.stringify(preferences.windowLayouts));
+  }
+
+  const view = preferences.documentView === "list" ? "list" : "grid";
+  localStorage.setItem(STORAGE.documentView, view);
+  documentViewMode = view;
+
+  document.body.classList.toggle("light-theme", theme === "light");
+  $("themeButton").textContent = theme === "light" ? "☀" : "☾";
+  updateTimerDisplay();
+}
+
+async function restoreSelectedBackup() {
+  if (!pendingBackupImport || backupBusy) return;
+
+  const selected = {
+    tasks: $("restoreBackupTasks").checked,
+    events: $("restoreBackupEvents").checked,
+    finance: $("restoreBackupFinance").checked,
+    notes: $("restoreBackupNotes").checked,
+    preferences: $("restoreBackupPreferences").checked
+  };
+
+  if (!Object.values(selected).some(Boolean)) {
+    setBackupStatus("Select at least one data category to restore.", "error");
+    return;
+  }
+
+  const shouldSync = $("restoreBackupCloudSync").checked && window.BoxCloud?.isReady();
+  const warning = shouldSync
+    ? "This will replace the selected local data and then sync the restored workspace to Supabase. Continue?"
+    : "This will replace the selected local data on this device. Continue?";
+  if (!window.confirm(warning)) return;
+
+  backupBusy = true;
+  const button = $("restoreBackupButton");
+  button.disabled = true;
+  button.textContent = "Restoring…";
+  setBackupStatus("Creating a safety copy of the current workspace…", "working");
+
+  try {
+    const safetyBackup = await createBackupPackage({ includeCloudInventory: false });
+    localStorage.setItem(STORAGE.safetyBackup, JSON.stringify(safetyBackup, null, 2));
+
+    const data = pendingBackupImport.data;
+    if (selected.tasks) {
+      tasks = data.tasks.map(normalizeTask);
+      localStorage.setItem(STORAGE.tasks, JSON.stringify(tasks));
+    }
+    if (selected.events) {
+      events = normalizeBackupEvents(data.events);
+      localStorage.setItem(STORAGE.events, JSON.stringify(events));
+    }
+    if (selected.finance) {
+      financeEntries = normalizeBackupFinance(data.financeEntries);
+      localStorage.setItem(STORAGE.finance, JSON.stringify(financeEntries));
+    }
+    if (selected.notes) {
+      const notes = String(data.notes || "").slice(0, 1000000);
+      localStorage.setItem(STORAGE.notes, notes);
+      $("quickNotes").value = notes;
+      $("noteStatus").textContent = "Saved";
+    }
+    if (selected.preferences) {
+      restoreBackupPreferences(data.preferences || {});
+    }
+
+    renderAll();
+
+    if (shouldSync) {
+      setBackupStatus("Local restore complete. Syncing restored data to cloud…", "working");
+      const syncResult = await window.BoxCloud.syncNow();
+      if (syncResult.error) throw syncResult.error;
+    }
+
+    renderBackupCenter();
+    setBackupStatus(
+      shouldSync
+        ? "Restore complete and synced. A safety backup of the previous local data is available."
+        : "Restore complete. A safety backup of the previous local data is available.",
+      "success"
+    );
+    showToast("Backup restored");
+  } catch (error) {
+    console.error(error);
+    setBackupStatus(error.message || "Restore failed.", "error");
+  } finally {
+    backupBusy = false;
+    button.disabled = !pendingBackupImport;
+    button.textContent = "Restore selected data";
+  }
+}
+
+function downloadSafetyBackup() {
+  const safetyText = localStorage.getItem(STORAGE.safetyBackup);
+  if (!safetyText) {
+    setBackupStatus("No safety backup is available yet.", "error");
+    return;
+  }
+  downloadTextFile(`the-box-safety-backup-${Date.now()}.json`, safetyText);
+  setBackupStatus("Safety backup downloaded.", "success");
+}
+
+function resetSavedWindowLayouts() {
+  if (!window.confirm("Reset all saved window sizes and positions? Your data will not be deleted.")) return;
+  localStorage.removeItem(STORAGE.windowLayouts);
+  setBackupStatus("Window layouts reset. Reloading the app…", "success");
+  setTimeout(() => window.location.reload(), 500);
+}
+
+async function refreshAppFiles() {
+  const button = $("refreshAppFilesButton");
+  button.disabled = true;
+  button.textContent = "Checking…";
+  setBackupStatus("Checking the service worker for updated app files…", "working");
+
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.update()));
+    }
+    setBackupStatus("Update check complete. Reloading the app…", "success");
+    setTimeout(() => window.location.reload(), 700);
+  } catch (error) {
+    console.error(error);
+    setBackupStatus(error.message || "The app update check failed.", "error");
+    button.disabled = false;
+    button.textContent = "Check for app update";
+  }
+}
+
 function renderAll() {
   renderTasks();
   renderDashboard();
@@ -2407,6 +2876,7 @@ function renderAll() {
   renderEvents();
   renderFinance();
   renderDocuments();
+  renderBackupCenter();
 }
 
 async function loadWeather() {
@@ -3025,6 +3495,18 @@ document.addEventListener("keydown", (event) => {
 });
 
 
+$("downloadBackupButton").addEventListener("click", downloadWorkspaceBackup);
+$("chooseBackupFileButton").addEventListener("click", () => $("backupFileInput").click());
+$("backupFileInput").addEventListener("change", async () => {
+  const file = $("backupFileInput").files?.[0];
+  await loadBackupImportFile(file);
+});
+$("restoreBackupButton").addEventListener("click", restoreSelectedBackup);
+$("downloadSafetyBackupButton").addEventListener("click", downloadSafetyBackup);
+$("resetWindowLayoutsButton").addEventListener("click", resetSavedWindowLayouts);
+$("refreshAppFilesButton").addEventListener("click", refreshAppFiles);
+
+
 function setCloudStatus(state, label) {
   const element = $("cloudStatus");
   element.className = `cloud-status ${state}`;
@@ -3160,6 +3642,8 @@ window.addEventListener("boxcloudstatus", (event) => {
   } else {
     updateDocumentAccessUI();
   }
+
+  renderBackupCenter();
 });
 
 
