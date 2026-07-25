@@ -1,15 +1,26 @@
 "use strict";
 
 function updateDeviceUiClasses() {
+  const root = document.documentElement;
+  const userAgent = navigator.userAgent || "";
+  const androidDevice = /Android/i.test(userAgent);
+
   const touchCapable =
+    androidDevice ||
     navigator.maxTouchPoints > 0 ||
     "ontouchstart" in window ||
     window.matchMedia("(pointer: coarse)").matches;
 
-  const tabletMode = touchCapable && window.innerWidth > 680;
+  // Honor Pad desktop-site mode may report a desktop-style user agent while
+  // still exposing touch input. Use safe rendering on any large touch screen.
+  const safeRendererMode =
+    androidDevice || (touchCapable && window.innerWidth > 680);
 
-  document.documentElement.classList.toggle("touch-ui", touchCapable);
-  document.documentElement.classList.toggle("tablet-ui", tabletMode);
+  const tabletMode = safeRendererMode && window.innerWidth > 680;
+
+  root.classList.toggle("touch-ui", touchCapable);
+  root.classList.toggle("safe-render-ui", safeRendererMode);
+  root.classList.toggle("tablet-ui", tabletMode);
 }
 
 updateDeviceUiClasses();
@@ -26,7 +37,7 @@ const STORAGE = {
   documentView: "theBoxOSDocumentView",
   lastBackupAt: "theBoxOSLastBackupAt",
   safetyBackup: "theBoxOSSafetyBackup",
-  honorPadUiFix: "theBoxOSHonorPadUiFixV1"
+  honorPadUiFix: "theBoxOSHonorPadUiFixV2"
 };
 
 const DAVAO = {

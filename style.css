@@ -4200,3 +4200,212 @@ html.touch-ui button:active {
     left: 18px;
   }
 }
+
+
+/* Phase 6B.5.2 — Safe renderer mode for Honor Pad / Android tablet browsers
+   This deliberately avoids GPU-heavy transparency and opacity layers. */
+html.safe-render-ui,
+html.safe-render-ui body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+html.safe-render-ui body {
+  background-color: var(--bg) !important;
+  background-image: none !important;
+}
+
+html.safe-render-ui .desktop {
+  background-color: var(--bg) !important;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px) !important;
+}
+
+html.safe-render-ui *,
+html.safe-render-ui *::before,
+html.safe-render-ui *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+html.safe-render-ui .topbar,
+html.safe-render-ui .desktop-summary div,
+html.safe-render-ui .launcher,
+html.safe-render-ui .app-window,
+html.safe-render-ui .dock,
+html.safe-render-ui .auth-overlay,
+html.safe-render-ui .task-modal-overlay,
+html.safe-render-ui .vault-modal-overlay {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+html.safe-render-ui .topbar {
+  background: #0d1016 !important;
+  box-shadow: none !important;
+}
+
+html.safe-render-ui body.light-theme .topbar {
+  background: #f7f8fb !important;
+}
+
+html.safe-render-ui .desktop-summary div,
+html.safe-render-ui .launcher,
+html.safe-render-ui .app-window,
+html.safe-render-ui .dock,
+html.safe-render-ui .task-modal-card,
+html.safe-render-ui .vault-modal-card,
+html.safe-render-ui .auth-card {
+  background-color: var(--surface-solid) !important;
+  background-image: none !important;
+}
+
+html.safe-render-ui .app-window {
+  opacity: 1 !important;
+  visibility: hidden;
+  transform: none !important;
+  -webkit-transform: none !important;
+  isolation: auto !important;
+  backface-visibility: visible !important;
+  -webkit-backface-visibility: visible !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28) !important;
+}
+
+html.safe-render-ui .app-window.open {
+  opacity: 1 !important;
+  visibility: visible;
+  transform: none !important;
+  -webkit-transform: none !important;
+}
+
+html.safe-render-ui .app-window.minimized {
+  opacity: 1 !important;
+  visibility: hidden !important;
+  transform: none !important;
+  -webkit-transform: none !important;
+}
+
+html.safe-render-ui .launcher {
+  opacity: 1 !important;
+  visibility: hidden;
+  transform: none !important;
+  -webkit-transform: none !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28) !important;
+}
+
+html.safe-render-ui .launcher.open {
+  opacity: 1 !important;
+  visibility: visible;
+  transform: none !important;
+  -webkit-transform: none !important;
+}
+
+html.safe-render-ui .auth-overlay,
+html.safe-render-ui .task-modal-overlay,
+html.safe-render-ui .vault-modal-overlay {
+  opacity: 1 !important;
+  visibility: hidden;
+  background: rgba(5, 7, 11, 0.94) !important;
+}
+
+html.safe-render-ui .auth-overlay.open,
+html.safe-render-ui .task-modal-overlay.open,
+html.safe-render-ui .vault-modal-overlay.open {
+  opacity: 1 !important;
+  visibility: visible;
+}
+
+html.safe-render-ui .task-modal-card,
+html.safe-render-ui .task-modal-overlay.open .task-modal-card,
+html.safe-render-ui .vault-modal-card,
+html.safe-render-ui .vault-modal-overlay.open .vault-modal-card {
+  transform: none !important;
+  -webkit-transform: none !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28) !important;
+}
+
+html.safe-render-ui .dock {
+  background: #0f1218 !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28) !important;
+  transform: translateX(-50%) !important;
+  -webkit-transform: translateX(-50%) !important;
+}
+
+html.safe-render-ui body.light-theme .dock {
+  background: #ffffff !important;
+}
+
+html.safe-render-ui button,
+html.safe-render-ui [role="button"],
+html.safe-render-ui .app-tile,
+html.safe-render-ui .desktop-icon,
+html.safe-render-ui .workspace-card,
+html.safe-render-ui .document-card,
+html.safe-render-ui .document-folder,
+html.safe-render-ui .dock-item,
+html.safe-render-ui .dock-icon {
+  filter: none !important;
+  -webkit-filter: none !important;
+  backface-visibility: visible !important;
+  -webkit-backface-visibility: visible !important;
+}
+
+html.safe-render-ui button:hover,
+html.safe-render-ui button:focus,
+html.safe-render-ui button:active,
+html.safe-render-ui [role="button"]:hover,
+html.safe-render-ui [role="button"]:focus,
+html.safe-render-ui [role="button"]:active,
+html.safe-render-ui .app-tile:hover,
+html.safe-render-ui .desktop-icon:hover,
+html.safe-render-ui .workspace-card:hover,
+html.safe-render-ui .document-card:hover,
+html.safe-render-ui .document-folder:hover,
+html.safe-render-ui .dock-item:hover,
+html.safe-render-ui .dock-item:focus-visible,
+html.safe-render-ui .dock-item.active,
+html.safe-render-ui .dock-item:hover .dock-icon,
+html.safe-render-ui .dock-item:focus-visible .dock-icon,
+html.safe-render-ui .dock-item.active .dock-icon {
+  transform: none !important;
+  -webkit-transform: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+
+html.safe-render-ui .dock-item:hover,
+html.safe-render-ui .dock-item:focus-visible,
+html.safe-render-ui .dock-item.active {
+  background: var(--accent-soft) !important;
+}
+
+html.safe-render-ui .window-titlebar,
+html.safe-render-ui .window-content {
+  transform: none !important;
+  -webkit-transform: none !important;
+}
+
+html.safe-render-ui .progress-ring {
+  box-shadow: none !important;
+}
+
+html.safe-render-ui .cloud-status span {
+  animation: none !important;
+}
+
+@media (min-width: 681px) {
+  html.safe-render-ui.tablet-ui .app-window:not(.maximized) {
+    max-width: calc(100% - 24px);
+    max-height: calc(100% - 20px);
+  }
+
+  html.safe-render-ui.tablet-ui .desktop-welcome {
+    right: 24px;
+    left: 24px;
+  }
+
+  html.safe-render-ui.tablet-ui .dock {
+    max-width: calc(100vw - 16px);
+  }
+}

@@ -7,6 +7,26 @@
   <meta name="description" content="The Box OS — personal productivity and private document management">
   <title>The Box OS</title>
 
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var ua = navigator.userAgent || "";
+      var android = /Android/i.test(ua);
+      var touch =
+        android ||
+        navigator.maxTouchPoints > 0 ||
+        "ontouchstart" in window ||
+        (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+      var safeRenderer = android || (touch && window.innerWidth > 680);
+      var tablet = safeRenderer && window.innerWidth > 680;
+
+      root.classList.toggle("touch-ui", touch);
+      root.classList.toggle("safe-render-ui", safeRenderer);
+      root.classList.toggle("tablet-ui", tablet);
+    })();
+  </script>
+
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
 </head>
