@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6c2-3-cross-device-layout-repair";
+const CACHE_NAME = "the-box-os-phase-6c3-free-reminders";
 
 const APP_FILES = [
   "./",

@@ -28,7 +28,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=6c2-3">
+  <link rel="stylesheet" href="style.css?v=6c3">
 </head>
 <body>
   <div class="desktop-shell">
@@ -53,6 +53,11 @@
           <span></span><strong>Local</strong>
         </div>
         <button id="themeButton" class="topbar-button" aria-label="Toggle theme">☾</button>
+        <button id="notificationButton" class="topbar-button notification-topbar-button"
+          type="button" aria-label="Open reminders" title="Reminders">
+          <span aria-hidden="true">♢</span>
+          <strong id="notificationBadge" class="notification-badge hidden">0</strong>
+        </button>
         <button id="accountButton" class="topbar-button" aria-label="Account">♙</button>
         <div class="system-time">
           <strong id="systemTime">--:--</strong>
@@ -142,6 +147,12 @@
           <span class="app-icon">✦</span>
           <strong>Box Assistant</strong>
           <small>Local productivity help</small>
+        </button>
+
+        <button class="app-tile" data-open-app="reminders">
+          <span class="app-icon">♢</span>
+          <strong>Reminders</strong>
+          <small>Tasks, events, and compliance alerts</small>
         </button>
 
         <button class="app-tile" data-open-app="backup">
@@ -916,6 +927,114 @@
           </div>
         </article>
 
+
+        <article class="app-window" data-app-window="reminders" style="--x: 17%; --y: 8%; --w: 66%; --h: 76%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>♢</span><strong>Reminders</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content reminders-window">
+            <section class="reminders-hero">
+              <div>
+                <small>FREE LOCAL ALERTS</small>
+                <h2>Reminder Center</h2>
+                <p>Review task deadlines, calendar events, and expiring documents in one place.</p>
+              </div>
+              <button id="checkRemindersButton" class="primary-button" type="button">Check now</button>
+            </section>
+
+            <div class="reminder-limit-notice">
+              Browser alerts are optional and free. Scheduled checks run while The Box OS is open.
+              Notifications while the app is fully closed are not guaranteed.
+            </div>
+
+            <section class="reminder-summary-grid">
+              <div>
+                <span>Needs attention</span>
+                <strong id="reminderAttentionCount">0</strong>
+              </div>
+              <div>
+                <span>Due today</span>
+                <strong id="reminderTodayCount">0</strong>
+              </div>
+              <div>
+                <span>Upcoming</span>
+                <strong id="reminderUpcomingCount">0</strong>
+              </div>
+              <div>
+                <span>Total alerts</span>
+                <strong id="reminderTotalCount">0</strong>
+              </div>
+            </section>
+
+            <section class="reminder-settings-panel">
+              <div class="reminder-settings-heading">
+                <div>
+                  <small>SETTINGS</small>
+                  <h3>How reminders should work</h3>
+                </div>
+                <span id="browserNotificationStatus" class="reminder-permission-badge">Not enabled</span>
+              </div>
+
+              <div class="reminder-settings-grid">
+                <label class="reminder-setting-check">
+                  <input id="dailySummaryToggle" type="checkbox">
+                  <span>
+                    <strong>Daily in-app summary</strong>
+                    <small>Show a summary once per day when The Box OS opens.</small>
+                  </span>
+                </label>
+
+                <label class="reminder-setting-check">
+                  <input id="browserReminderToggle" type="checkbox">
+                  <span>
+                    <strong>Browser notifications</strong>
+                    <small>Show an alert when new urgent items are found while the app is open.</small>
+                  </span>
+                </label>
+
+                <label>
+                  Task reminder window
+                  <select id="taskReminderLeadDays">
+                    <option value="1">1 day before</option>
+                    <option value="3">3 days before</option>
+                    <option value="7">7 days before</option>
+                    <option value="14">14 days before</option>
+                  </select>
+                </label>
+
+                <label>
+                  Event reminder window
+                  <select id="eventReminderLeadDays">
+                    <option value="1">1 day before</option>
+                    <option value="3">3 days before</option>
+                    <option value="7">7 days before</option>
+                    <option value="14">14 days before</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section class="reminder-list-panel">
+              <div class="reminder-list-heading">
+                <div>
+                  <small>ATTENTION LIST</small>
+                  <h3>Current reminders</h3>
+                </div>
+                <button id="dismissAllRemindersButton" class="secondary-button" type="button">Dismiss all for today</button>
+              </div>
+
+              <div id="reminderList" class="reminder-list"></div>
+              <p id="emptyReminders" class="empty-state">Nothing needs your attention right now.</p>
+            </section>
+          </div>
+        </article>
+
         <article class="app-window" data-app-window="backup" style="--x: 18%; --y: 10%; --w: 64%; --h: 74%;">
           <div class="window-titlebar">
             <div class="window-title"><span>⇩</span><strong>Backup &amp; Restore</strong></div>
@@ -1074,6 +1193,11 @@
       <button class="dock-item" data-open-app="templates" title="Templates and Reports" aria-label="Templates and Reports">
         <span class="dock-icon" aria-hidden="true">▤</span>
         <span class="dock-label">Templates</span>
+      </button>
+      <button class="dock-item" data-open-app="reminders" title="Reminders" aria-label="Reminders">
+        <span class="dock-icon dock-reminder-icon" aria-hidden="true">♢</span>
+        <span class="dock-label">Alerts</span>
+        <strong id="dockReminderBadge" class="dock-reminder-badge hidden">0</strong>
       </button>
       <button class="dock-item" data-open-app="backup" title="Backup &amp; Restore" aria-label="Backup and Restore">
         <span class="dock-icon" aria-hidden="true">⇩</span>

@@ -53,7 +53,11 @@ const STORAGE = {
   lastBackupAt: "theBoxOSLastBackupAt",
   safetyBackup: "theBoxOSSafetyBackup",
   honorPadUiFix: "theBoxOSHonorPadUiFixV3",
-  customTemplates: "theBoxOSCustomTemplates"
+  customTemplates: "theBoxOSCustomTemplates",
+  reminderSettings: "theBoxOSReminderSettings",
+  dismissedReminders: "theBoxOSDismissedReminders",
+  lastDailyReminderSummary: "theBoxOSLastDailyReminderSummary",
+  lastBrowserReminderSignature: "theBoxOSLastBrowserReminderSignature"
 };
 
 const DAVAO = {
@@ -490,6 +494,22 @@ let generatedComplianceReport = null;
 let templatesCloudLoading = false;
 
 
+const DEFAULT_REMINDER_SETTINGS = {
+  dailySummary: true,
+  browserNotifications: false,
+  taskLeadDays: 3,
+  eventLeadDays: 3
+};
+
+let reminderSettings = {
+  ...DEFAULT_REMINDER_SETTINGS,
+  ...loadJSON(STORAGE.reminderSettings, {})
+};
+let currentReminderItems = [];
+let reminderCheckTimer = null;
+
+
+
 function loadJSON(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -658,6 +678,10 @@ function openApp(appName) {
 
   if (appName === "backup") {
     renderBackupCenter();
+  }
+
+  if (appName === "reminders") {
+    renderReminderCenter();
   }
 
   if (appName === "templates") {
@@ -4355,9 +4379,431 @@ function printComplianceReport() {
 }
 
 
+
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function daysFromToday(dateKey) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ""))) return null;
+  const today = new Date(`${getLocalDateKey()}T00:00:00`);
+  const target = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return null;
+  return Math.round((target - today) / 86400000);
+}
+
+function formatReminderDate(dateKey) {
+  if (!dateKey) return "No date";
+  const date = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateKey;
+  return date.toLocaleDateString("en-PH", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+}
+
+function loadDismissedReminderMap() {
+  const value = loadJSON(STORAGE.dismissedReminders, {});
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function saveReminderSettings() {
+  reminderSettings = {
+    dailySummary: Boolean(reminderSettings.dailySummary),
+    browserNotifications: Boolean(reminderSettings.browserNotifications),
+    taskLeadDays: Math.min(30, Math.max(0, Number(reminderSettings.taskLeadDays) || 3)),
+    eventLeadDays: Math.min(30, Math.max(0, Number(reminderSettings.eventLeadDays) || 3))
+  };
+  localStorage.setItem(STORAGE.reminderSettings, JSON.stringify(reminderSettings));
+}
+
+function dismissReminderForToday(reminderId) {
+  const today = getLocalDateKey();
+  const dismissed = loadDismissedReminderMap();
+  dismissed[reminderId] = today;
+
+  Object.keys(dismissed).forEach((key) => {
+    if (dismissed[key] !== today) delete dismissed[key];
+  });
+
+  localStorage.setItem(STORAGE.dismissedReminders, JSON.stringify(dismissed));
+  renderReminderCenter();
+}
+
+function dismissAllRemindersForToday() {
+  const today = getLocalDateKey();
+  const dismissed = loadDismissedReminderMap();
+  getRawReminderItems().forEach((item) => {
+    dismissed[item.id] = today;
+  });
+  localStorage.setItem(STORAGE.dismissedReminders, JSON.stringify(dismissed));
+  renderReminderCenter();
+  showToast("Reminders dismissed for today");
+}
+
+function getTaskReminderItems() {
+  const leadDays = Number(reminderSettings.taskLeadDays) || 3;
+
+  return tasks
+    .filter((task) => !task.completed && task.dueDate)
+    .map((task) => {
+      const days = daysFromToday(task.dueDate);
+      if (days === null || days > leadDays) return null;
+
+      let severity = "upcoming";
+      let label = `${days} days remaining`;
+
+      if (days < 0) {
+        severity = "critical";
+        label = `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue`;
+      } else if (days === 0) {
+        severity = "today";
+        label = "Due today";
+      } else if (days === 1) {
+        severity = "upcoming";
+        label = "Due tomorrow";
+      }
+
+      return {
+        id: `task-${task.id}-${task.dueDate}`,
+        type: "task",
+        severity,
+        title: task.text || "Untitled task",
+        meta: `${label} · ${formatReminderDate(task.dueDate)}`,
+        dateKey: task.dueDate,
+        workspace: task.workspace || "personal",
+        entityId: task.id
+      };
+    })
+    .filter(Boolean);
+}
+
+function getEventReminderItems() {
+  const leadDays = Number(reminderSettings.eventLeadDays) || 3;
+
+  return events
+    .map((eventItem) => {
+      const days = daysFromToday(eventItem.date);
+      if (days === null || days < 0 || days > leadDays) return null;
+
+      let severity = "upcoming";
+      let label = `In ${days} days`;
+
+      if (days === 0) {
+        severity = "today";
+        label = "Today";
+      } else if (days === 1) {
+        label = "Tomorrow";
+      }
+
+      return {
+        id: `event-${eventItem.id}-${eventItem.date}`,
+        type: "event",
+        severity,
+        title: eventItem.title || "Untitled event",
+        meta: `${label} · ${formatReminderDate(eventItem.date)}`,
+        dateKey: eventItem.date,
+        workspace: eventItem.workspace || "personal",
+        entityId: eventItem.id
+      };
+    })
+    .filter(Boolean);
+}
+
+function getDocumentReminderItems() {
+  return documents
+    .filter((documentItem) => !documentItem.deleted_at && documentItem.expiry_date)
+    .map((documentItem) => {
+      const days = daysFromToday(documentItem.expiry_date);
+      if (days === null) return null;
+
+      const reminderDays = Math.max(0, Number(documentItem.reminder_days) || 30);
+      if (days > reminderDays) return null;
+
+      let severity = "upcoming";
+      let label = `${days} days remaining`;
+
+      if (days < 0) {
+        severity = "critical";
+        label = `Expired ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago`;
+      } else if (days === 0) {
+        severity = "today";
+        label = "Expires today";
+      } else if (days === 1) {
+        label = "Expires tomorrow";
+      }
+
+      return {
+        id: `document-${documentItem.id}-${documentItem.expiry_date}`,
+        type: "document",
+        severity,
+        title: documentItem.name || "Untitled document",
+        meta: `${label} · ${formatReminderDate(documentItem.expiry_date)}`,
+        dateKey: documentItem.expiry_date,
+        workspace: documentItem.folder || "Documents",
+        entityId: documentItem.id
+      };
+    })
+    .filter(Boolean);
+}
+
+function getRawReminderItems() {
+  const severityOrder = { critical: 0, today: 1, upcoming: 2 };
+
+  return [
+    ...getTaskReminderItems(),
+    ...getEventReminderItems(),
+    ...getDocumentReminderItems()
+  ].sort((a, b) => {
+    return (severityOrder[a.severity] - severityOrder[b.severity])
+      || String(a.dateKey).localeCompare(String(b.dateKey))
+      || a.title.localeCompare(b.title);
+  });
+}
+
+function getVisibleReminderItems() {
+  const today = getLocalDateKey();
+  const dismissed = loadDismissedReminderMap();
+  return getRawReminderItems().filter((item) => dismissed[item.id] !== today);
+}
+
+function getReminderSummary(items = currentReminderItems) {
+  return {
+    attention: items.filter((item) => item.severity === "critical").length,
+    today: items.filter((item) => item.severity === "today").length,
+    upcoming: items.filter((item) => item.severity === "upcoming").length,
+    total: items.length
+  };
+}
+
+function getReminderTypeLabel(type) {
+  if (type === "task") return "Task";
+  if (type === "event") return "Event";
+  return "Document";
+}
+
+function openReminderSource(item) {
+  if (item.type === "task") openApp("tasks");
+  else if (item.type === "event") openApp("calendar");
+  else openApp("documents");
+}
+
+function updateReminderBadges(summary) {
+  const count = summary.attention + summary.today;
+  const topBadge = $("notificationBadge");
+  const dockBadge = $("dockReminderBadge");
+
+  [topBadge, dockBadge].forEach((badge) => {
+    if (!badge) return;
+    badge.textContent = count > 99 ? "99+" : String(count);
+    badge.classList.toggle("hidden", count === 0);
+  });
+}
+
+function updateBrowserNotificationStatus() {
+  const badge = $("browserNotificationStatus");
+  const toggle = $("browserReminderToggle");
+  if (!badge || !toggle) return;
+
+  if (!("Notification" in window)) {
+    badge.textContent = "Not supported";
+    badge.className = "reminder-permission-badge unavailable";
+    toggle.disabled = true;
+    toggle.checked = false;
+    return;
+  }
+
+  const permission = Notification.permission;
+  const labelMap = {
+    granted: "Permission granted",
+    denied: "Permission blocked",
+    default: "Permission not requested"
+  };
+
+  badge.textContent = labelMap[permission] || permission;
+  badge.className = `reminder-permission-badge ${permission}`;
+  toggle.disabled = permission === "denied";
+  toggle.checked = Boolean(reminderSettings.browserNotifications && permission === "granted");
+}
+
+function renderReminderCenter() {
+  currentReminderItems = getVisibleReminderItems();
+  const summary = getReminderSummary(currentReminderItems);
+  updateReminderBadges(summary);
+
+  if (!$("reminderList")) return;
+
+  $("reminderAttentionCount").textContent = String(summary.attention);
+  $("reminderTodayCount").textContent = String(summary.today);
+  $("reminderUpcomingCount").textContent = String(summary.upcoming);
+  $("reminderTotalCount").textContent = String(summary.total);
+
+  $("dailySummaryToggle").checked = Boolean(reminderSettings.dailySummary);
+  $("taskReminderLeadDays").value = String(reminderSettings.taskLeadDays);
+  $("eventReminderLeadDays").value = String(reminderSettings.eventLeadDays);
+  updateBrowserNotificationStatus();
+
+  $("emptyReminders").hidden = currentReminderItems.length > 0;
+  $("dismissAllRemindersButton").disabled = currentReminderItems.length === 0;
+
+  $("reminderList").innerHTML = currentReminderItems.map((item) => `
+    <article class="reminder-item ${escapeHtml(item.severity)}">
+      <span class="reminder-item-icon" aria-hidden="true">${
+        item.type === "task" ? "✓" : item.type === "event" ? "◫" : "▣"
+      }</span>
+      <div class="reminder-item-body">
+        <div class="reminder-item-heading">
+          <span>${escapeHtml(getReminderTypeLabel(item.type))}</span>
+          <small>${escapeHtml(item.workspace)}</small>
+        </div>
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.meta)}</p>
+      </div>
+      <div class="reminder-item-actions">
+        <button class="secondary-button" type="button" data-reminder-open="${escapeHtml(item.id)}">Open</button>
+        <button class="reminder-dismiss-button" type="button" data-reminder-dismiss="${escapeHtml(item.id)}">Dismiss today</button>
+      </div>
+    </article>
+  `).join("");
+
+  $("reminderList").querySelectorAll("[data-reminder-open]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = currentReminderItems.find((entry) => entry.id === button.dataset.reminderOpen);
+      if (item) openReminderSource(item);
+    });
+  });
+
+  $("reminderList").querySelectorAll("[data-reminder-dismiss]").forEach((button) => {
+    button.addEventListener("click", () => {
+      dismissReminderForToday(button.dataset.reminderDismiss);
+    });
+  });
+}
+
+async function requestBrowserNotificationAccess() {
+  if (!("Notification" in window)) {
+    showToast("Browser notifications are not supported");
+    return false;
+  }
+
+  if (Notification.permission === "denied") {
+    showToast("Enable notifications in your browser site settings");
+    return false;
+  }
+
+  const permission = Notification.permission === "granted"
+    ? "granted"
+    : await Notification.requestPermission();
+
+  reminderSettings.browserNotifications = permission === "granted";
+  saveReminderSettings();
+  updateBrowserNotificationStatus();
+
+  if (permission === "granted") {
+    showToast("Browser reminders enabled");
+    return true
+  }
+
+  showToast("Notification permission was not granted");
+  return false;
+}
+
+async function showBrowserReminderNotification(items) {
+  if (!reminderSettings.browserNotifications || !items.length) return;
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+  const urgent = items.filter((item) => ["critical", "today"].includes(item.severity));
+  if (!urgent.length) return;
+
+  const signature = `${getLocalDateKey()}|${urgent.map((item) => item.id).join(",")}`;
+  if (localStorage.getItem(STORAGE.lastBrowserReminderSignature) === signature) return;
+
+  const summary = getReminderSummary(items);
+  const bodyParts = [];
+  if (summary.attention) bodyParts.push(`${summary.attention} overdue or expired`);
+  if (summary.today) bodyParts.push(`${summary.today} due today`);
+
+  const options = {
+    body: bodyParts.join(" · "),
+    icon: "./icons/icon-192.png",
+    badge: "./icons/icon-192.png",
+    tag: "the-box-reminder-summary",
+    renotify: false
+  };
+
+  try {
+    if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification("The Box OS reminders", options);
+    } else {
+      new Notification("The Box OS reminders", options);
+    }
+    localStorage.setItem(STORAGE.lastBrowserReminderSignature, signature);
+  } catch (error) {
+    console.error("Browser notification failed:", error);
+  }
+}
+
+function showDailyReminderSummary() {
+  if (!reminderSettings.dailySummary) return;
+
+  const today = getLocalDateKey();
+  if (localStorage.getItem(STORAGE.lastDailyReminderSummary) === today) return;
+
+  const items = getVisibleReminderItems();
+  localStorage.setItem(STORAGE.lastDailyReminderSummary, today);
+
+  if (!items.length) {
+    showToast("Reminder check complete — nothing urgent today");
+    return;
+  }
+
+  const summary = getReminderSummary(items);
+  const parts = [];
+  if (summary.attention) parts.push(`${summary.attention} overdue or expired`);
+  if (summary.today) parts.push(`${summary.today} due today`);
+  if (summary.upcoming) parts.push(`${summary.upcoming} upcoming`);
+
+  showToast(`Reminder summary: ${parts.join(" · ")}`);
+  showBrowserReminderNotification(items);
+}
+
+function checkReminders({ manual = false } = {}) {
+  renderReminderCenter();
+  const summary = getReminderSummary(currentReminderItems);
+
+  if (manual) {
+    const message = summary.total
+      ? `${summary.total} reminder${summary.total === 1 ? "" : "s"} found`
+      : "Nothing needs your attention";
+    showToast(message);
+  }
+
+  showBrowserReminderNotification(currentReminderItems);
+}
+
+function scheduleReminderChecks() {
+  clearInterval(reminderCheckTimer);
+  reminderCheckTimer = setInterval(() => checkReminders(), 15 * 60 * 1000);
+}
+
+function updateReminderSettingFromControls() {
+  reminderSettings.dailySummary = $("dailySummaryToggle").checked;
+  reminderSettings.taskLeadDays = Number($("taskReminderLeadDays").value) || 3;
+  reminderSettings.eventLeadDays = Number($("eventReminderLeadDays").value) || 3;
+  saveReminderSettings();
+  renderReminderCenter();
+}
+
+
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "6C.2-Free";
+const BACKUP_APP_VERSION = "6C.3-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -4409,7 +4855,8 @@ function buildLocalBackupData() {
       timerMinutes: Number(localStorage.getItem(STORAGE.timerMinutes) || 25),
       focusTotal: Number(localStorage.getItem(STORAGE.focusTotal) || 0),
       windowLayouts: readWindowLayouts(),
-      documentView: localStorage.getItem(STORAGE.documentView) || "grid"
+      documentView: localStorage.getItem(STORAGE.documentView) || "grid",
+      reminderSettings: { ...reminderSettings }
     }
   };
 }
@@ -4693,6 +5140,12 @@ function restoreBackupPreferences(preferences = {}) {
   localStorage.setItem(STORAGE.documentView, view);
   documentViewMode = view;
 
+  reminderSettings = {
+    ...DEFAULT_REMINDER_SETTINGS,
+    ...(preferences.reminderSettings || {})
+  };
+  saveReminderSettings();
+
   document.body.classList.toggle("light-theme", theme === "light");
   $("themeButton").textContent = theme === "light" ? "☀" : "☾";
   updateTimerDisplay();
@@ -4836,6 +5289,7 @@ function renderAll() {
   renderDocuments();
   renderBackupCenter();
   renderTemplateCenter();
+  renderReminderCenter();
 }
 
 async function loadWeather() {
@@ -5514,6 +5968,25 @@ $("printComplianceReportButton").addEventListener("click", printComplianceReport
     });
   });
 
+
+$("notificationButton").addEventListener("click", () => openApp("reminders"));
+$("checkRemindersButton").addEventListener("click", () => checkReminders({ manual: true }));
+$("dismissAllRemindersButton").addEventListener("click", dismissAllRemindersForToday);
+$("dailySummaryToggle").addEventListener("change", updateReminderSettingFromControls);
+$("taskReminderLeadDays").addEventListener("change", updateReminderSettingFromControls);
+$("eventReminderLeadDays").addEventListener("change", updateReminderSettingFromControls);
+$("browserReminderToggle").addEventListener("change", async (event) => {
+  if (event.target.checked) {
+    const allowed = await requestBrowserNotificationAccess();
+    if (!allowed) event.target.checked = false;
+  } else {
+    reminderSettings.browserNotifications = false;
+    saveReminderSettings();
+    updateBrowserNotificationStatus();
+    showToast("Browser reminders disabled");
+  }
+});
+
 $("downloadBackupButton").addEventListener("click", downloadWorkspaceBackup);
 $("chooseBackupFileButton").addEventListener("click", () => $("backupFileInput").click());
 $("backupFileInput").addEventListener("change", async () => {
@@ -5671,6 +6144,7 @@ window.addEventListener("boxcloudstatus", (event) => {
   }
 
   renderBackupCenter();
+  renderReminderCenter();
 });
 
 
@@ -5691,6 +6165,8 @@ renderAll();
 loadWeather();
 updateTimerDisplay();
 openApp("dashboard");
+scheduleReminderChecks();
+setTimeout(showDailyReminderSummary, 2200);
 
 
 if (window.BoxCloud) {
