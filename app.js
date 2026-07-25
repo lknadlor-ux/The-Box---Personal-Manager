@@ -170,6 +170,24 @@ let documentVersionsLoading = false;
 let pendingBackupImport = null;
 let backupBusy = false;
 
+const SMART_TEXT_DB_NAME = "the-box-smart-document-tools";
+const SMART_TEXT_DB_VERSION = 1;
+const SMART_TEXT_STORE = "extracted_text";
+const SMART_TEXT_MAX_CHARACTERS = 1500000;
+const SMART_PDF_MAX_PAGES = 500;
+const PDFJS_MODULE_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/legacy/build/pdf.min.mjs";
+const PDFJS_WORKER_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/legacy/build/pdf.worker.min.mjs";
+const PDFJS_CMAP_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/cmaps/";
+const PDFJS_STANDARD_FONT_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.1.200/standard_fonts/";
+
+let smartDocumentItem = null;
+let smartDocumentRecord = null;
+let smartDocumentSearchMatches = [];
+let smartDocumentSearchIndex = -1;
+let smartDocumentExtractionBusy = false;
+let smartPdfModulePromise = null;
+let smartTextDatabasePromise = null;
+
 function loadJSON(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -1881,6 +1899,858 @@ function closeDocumentDetailsModal() {
   $("documentDetailsModal").setAttribute("aria-hidden", "true");
 }
 
+
+
+function getSmartDocumentExtension(documentItem) {
+  const name = String(documentItem?.name || "").toLocaleLowerCase();
+  const lastDot = name.lastIndexOf(".");
+  return lastDot >= 0 ? name.slice(lastDot + 1) : "";
+}
+
+function getSmartDocumentSupport(documentItem) {
+  const extension = getSmartDocumentExtension(documentItem);
+  const mime = String(documentItem?.mime_type || "").toLocaleLowerCase();
+
+  if (extension === "pdf" || mime === "application/pdf") {
+    return { key: "pdf", label: "PDF text extraction", supported: true };
+  }
+  if (extension === "docx") return { key: "docx", label: "Word DOCX text extraction", supported: true };
+  if (extension === "pptx") return { key: "pptx", label: "PowerPoint PPTX text extraction", supported: true };
+  if (extension === "xlsx") return { key: "xlsx", label: "Excel XLSX text extraction", supported: true };
+  if (extension === "odt") return { key: "odt", label: "OpenDocument text extraction", supported: true };
+  if (extension === "rtf") return { key: "rtf", label: "RTF text extraction", supported: true };
+
+  const textExtensions = new Set([
+    "txt", "md", "markdown", "csv", "tsv", "json", "html", "htm", "xml",
+    "log", "eml", "ini", "yaml", "yml", "css", "js", "mjs", "sql"
+  ]);
+
+  if (mime.startsWith("text/") || textExtensions.has(extension)) {
+    return { key: "text", label: "Plain-text extraction", supported: true };
+  }
+
+  return {
+    key: "unsupported",
+    label: "Text extraction unavailable for this file type",
+    supported: false
+  };
+}
+
+function getSmartDocumentCacheKey(documentItem) {
+  const version = Math.max(1, Number(documentItem?.current_version || 1));
+  return `${String(documentItem?.id || "unknown")}:v${version}`;
+}
+
+function openSmartTextDatabase() {
+  if (!window.indexedDB) return Promise.resolve(null);
+  if (smartTextDatabasePromise) return smartTextDatabasePromise;
+
+  smartTextDatabasePromise = new Promise((resolve) => {
+    const request = indexedDB.open(SMART_TEXT_DB_NAME, SMART_TEXT_DB_VERSION);
+
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(SMART_TEXT_STORE)) {
+        const store = database.createObjectStore(SMART_TEXT_STORE, { keyPath: "key" });
+        store.createIndex("documentId", "documentId", { unique: false });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => {
+      console.warn("Smart text cache is unavailable:", request.error);
+      resolve(null);
+    };
+  });
+
+  return smartTextDatabasePromise;
+}
+
+async function getCachedSmartDocumentText(documentItem) {
+  const database = await openSmartTextDatabase();
+  if (!database) return null;
+  const key = getSmartDocumentCacheKey(documentItem);
+
+  return new Promise((resolve) => {
+    const transaction = database.transaction(SMART_TEXT_STORE, "readonly");
+    const request = transaction.objectStore(SMART_TEXT_STORE).get(key);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => resolve(null);
+  });
+}
+
+async function saveCachedSmartDocumentText(documentItem, record) {
+  const database = await openSmartTextDatabase();
+  if (!database) return false;
+
+  const payload = {
+    ...record,
+    key: getSmartDocumentCacheKey(documentItem),
+    documentId: String(documentItem.id),
+    version: Math.max(1, Number(documentItem.current_version || 1)),
+    name: documentItem.name,
+    savedAt: new Date().toISOString()
+  };
+
+  return new Promise((resolve) => {
+    const transaction = database.transaction(SMART_TEXT_STORE, "readwrite");
+    transaction.objectStore(SMART_TEXT_STORE).put(payload);
+    transaction.oncomplete = () => resolve(true);
+    transaction.onerror = () => resolve(false);
+  });
+}
+
+async function deleteCachedSmartDocumentText(documentItem) {
+  const database = await openSmartTextDatabase();
+  if (!database) return false;
+  const key = getSmartDocumentCacheKey(documentItem);
+
+  return new Promise((resolve) => {
+    const transaction = database.transaction(SMART_TEXT_STORE, "readwrite");
+    transaction.objectStore(SMART_TEXT_STORE).delete(key);
+    transaction.oncomplete = () => resolve(true);
+    transaction.onerror = () => resolve(false);
+  });
+}
+
+function normalizeSmartExtractedText(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\t ]+\n/g, "\n")
+    .replace(/\n[\t ]+/g, "\n")
+    .replace(/[\t ]{3,}/g, "  ")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+}
+
+function setSmartDocumentStatus(message, type = "") {
+  const element = $("documentSmartStatus");
+  if (!element) return;
+  element.textContent = message;
+  element.className = `document-smart-status ${type}`.trim();
+}
+
+function setSmartDocumentBusy(busy) {
+  smartDocumentExtractionBusy = busy;
+  const support = getSmartDocumentSupport(smartDocumentItem);
+  const extractButton = $("extractDocumentTextButton");
+  const refreshButton = $("refreshDocumentTextButton");
+  const clearButton = $("clearDocumentTextCacheButton");
+
+  if (extractButton) {
+    extractButton.disabled = busy || !support.supported;
+    extractButton.textContent = busy ? "Extracting…" : (smartDocumentRecord ? "Use saved text" : "Extract text");
+  }
+  if (refreshButton) refreshButton.disabled = busy || !support.supported || !smartDocumentRecord;
+  if (clearButton) clearButton.disabled = busy || !smartDocumentRecord;
+}
+
+function countSmartWords(text) {
+  const matches = String(text || "").trim().match(/\S+/g);
+  return matches ? matches.length : 0;
+}
+
+function getSmartSelectedText({ fallbackToAll = false } = {}) {
+  const textarea = $("documentSmartText");
+  if (!textarea) return "";
+  const start = textarea.selectionStart || 0;
+  const end = textarea.selectionEnd || 0;
+  const selected = start !== end ? textarea.value.slice(start, end).trim() : "";
+  if (selected) return selected;
+  return fallbackToAll ? textarea.value.trim() : "";
+}
+
+function updateSmartSelectionStats() {
+  const selection = getSmartSelectedText();
+  const element = $("documentSmartSelectionStats");
+  if (!element) return;
+  element.textContent = selection
+    ? `${selection.length.toLocaleString("en-PH")} selected characters`
+    : "No passage selected";
+}
+
+function updateSmartActionButtons() {
+  const hasText = Boolean(smartDocumentRecord?.text);
+  [
+    "copySelectedDocumentTextButton",
+    "createTaskFromDocumentTextButton",
+    "createEventFromDocumentTextButton",
+    "copyAllDocumentTextButton",
+    "exportDocumentTextReportButton",
+    "copyDocumentForChatGPTButton"
+  ].forEach((id) => {
+    const button = $(id);
+    if (button) button.disabled = !hasText || smartDocumentExtractionBusy;
+  });
+  if ($("documentSmartSearch")) $("documentSmartSearch").disabled = !hasText;
+}
+
+function renderSmartDocumentRecord(record, { fromCache = false } = {}) {
+  smartDocumentRecord = record;
+  const text = String(record?.text || "");
+  $("documentSmartText").value = text;
+  $("documentSmartSearch").value = "";
+  smartDocumentSearchMatches = [];
+  smartDocumentSearchIndex = -1;
+  $("documentSmartMatchCount").textContent = "0 matches";
+  $("documentSmartPreviousMatch").disabled = true;
+  $("documentSmartNextMatch").disabled = true;
+
+  if (text) {
+    const words = countSmartWords(text);
+    const details = [
+      `${text.length.toLocaleString("en-PH")} characters`,
+      `${words.toLocaleString("en-PH")} words`
+    ];
+    if (record.pages) details.push(`${record.pages} page${record.pages === 1 ? "" : "s"}`);
+    if (record.sheets) details.push(`${record.sheets} sheet${record.sheets === 1 ? "" : "s"}`);
+    if (record.slides) details.push(`${record.slides} slide${record.slides === 1 ? "" : "s"}`);
+    if (record.truncated) details.push("text limit reached");
+    $("documentSmartTextStats").textContent = details.join(" · ");
+    setSmartDocumentStatus(
+      fromCache
+        ? `Loaded locally saved text from ${formatDocumentDate(record.savedAt)}.`
+        : "Text extracted and saved locally on this device.",
+      "success"
+    );
+  } else {
+    $("documentSmartTextStats").textContent = "No readable text found";
+  }
+
+  updateSmartSelectionStats();
+  updateSmartActionButtons();
+  setSmartDocumentBusy(false);
+}
+
+function resetSmartDocumentReader() {
+  smartDocumentRecord = null;
+  smartDocumentSearchMatches = [];
+  smartDocumentSearchIndex = -1;
+  $("documentSmartText").value = "";
+  $("documentSmartSearch").value = "";
+  $("documentSmartSearch").disabled = true;
+  $("documentSmartMatchCount").textContent = "0 matches";
+  $("documentSmartPreviousMatch").disabled = true;
+  $("documentSmartNextMatch").disabled = true;
+  $("documentSmartTextStats").textContent = "No local text saved";
+  $("documentSmartSelectionStats").textContent = "No passage selected";
+  updateSmartActionButtons();
+}
+
+async function openDocumentSmartTools(documentItem) {
+  if (!documentItem) return;
+  smartDocumentItem = documentItem;
+  resetSmartDocumentReader();
+
+  const support = getSmartDocumentSupport(documentItem);
+  $("documentSmartToolsFileName").textContent = documentItem.name;
+  $("documentSmartSupportLabel").textContent = support.label;
+  $("documentSmartSupportHelp").textContent = support.supported
+    ? "Text is extracted locally in your browser and saved only on this device for faster reuse."
+    : "This file can still be previewed or downloaded, but local text extraction is not available.";
+
+  $("documentSmartToolsModal").classList.add("open");
+  $("documentSmartToolsModal").setAttribute("aria-hidden", "false");
+  setSmartDocumentStatus(
+    support.supported
+      ? "Checking this device for previously extracted text…"
+      : "Supported formats include PDF, DOCX, PPTX, XLSX, ODT, RTF, and common text files.",
+    support.supported ? "" : "warning"
+  );
+  setSmartDocumentBusy(false);
+
+  if (!support.supported) return;
+  const cached = await getCachedSmartDocumentText(documentItem);
+  if (smartDocumentItem?.id !== documentItem.id) return;
+
+  if (cached?.text) {
+    renderSmartDocumentRecord(cached, { fromCache: true });
+  } else {
+    setSmartDocumentStatus("No local text is saved yet. Tap Extract text to process this document.");
+    setSmartDocumentBusy(false);
+  }
+}
+
+function closeDocumentSmartTools() {
+  $("documentSmartToolsModal").classList.remove("open");
+  $("documentSmartToolsModal").setAttribute("aria-hidden", "true");
+  smartDocumentItem = null;
+  smartDocumentRecord = null;
+  smartDocumentSearchMatches = [];
+  smartDocumentSearchIndex = -1;
+}
+
+async function getPdfJsModule() {
+  if (!smartPdfModulePromise) {
+    smartPdfModulePromise = import(PDFJS_MODULE_URL).then((pdfjs) => {
+      pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+      return pdfjs;
+    }).catch((error) => {
+      smartPdfModulePromise = null;
+      throw error;
+    });
+  }
+  return smartPdfModulePromise;
+}
+
+async function extractPdfText(arrayBuffer, onProgress) {
+  const pdfjs = await getPdfJsModule();
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(arrayBuffer),
+    cMapUrl: PDFJS_CMAP_URL,
+    cMapPacked: true,
+    standardFontDataUrl: PDFJS_STANDARD_FONT_URL,
+    useWorkerFetch: true
+  });
+  const pdf = await loadingTask.promise;
+  const totalPages = pdf.numPages;
+  const pageLimit = Math.min(totalPages, SMART_PDF_MAX_PAGES);
+  const pageTexts = [];
+  let totalCharacters = 0;
+  let truncated = totalPages > pageLimit;
+
+  try {
+    for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
+      onProgress?.(`Reading PDF page ${pageNumber} of ${pageLimit}…`);
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent({ disableNormalization: false });
+      const parts = [];
+      content.items.forEach((item) => {
+        if (typeof item.str !== "string") return;
+        parts.push(item.str);
+        parts.push(item.hasEOL ? "\n" : " ");
+      });
+      const pageText = normalizeSmartExtractedText(parts.join(""));
+      if (pageText) pageTexts.push(`--- Page ${pageNumber} ---\n${pageText}`);
+      totalCharacters += pageText.length;
+      if (totalCharacters >= SMART_TEXT_MAX_CHARACTERS) {
+        truncated = true;
+        break;
+      }
+      page.cleanup?.();
+    }
+  } finally {
+    await pdf.destroy();
+  }
+
+  let text = normalizeSmartExtractedText(pageTexts.join("\n\n"));
+  if (text.length > SMART_TEXT_MAX_CHARACTERS) {
+    text = text.slice(0, SMART_TEXT_MAX_CHARACTERS);
+    truncated = true;
+  }
+  if (text.replace(/--- Page \d+ ---/g, "").trim().length < 10) {
+    throw new Error("No readable PDF text was found. This may be a scanned image-only PDF, which needs OCR.");
+  }
+  return { text, pages: totalPages, truncated, sourceType: "pdf" };
+}
+
+function findZipEndOfCentralDirectory(view) {
+  const minimum = Math.max(0, view.byteLength - 65557);
+  for (let offset = view.byteLength - 22; offset >= minimum; offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) return offset;
+  }
+  return -1;
+}
+
+async function inflateZipEntry(bytes, method) {
+  if (method === 0) return bytes;
+  if (method !== 8) throw new Error(`Unsupported ZIP compression method ${method}.`);
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("This browser cannot decompress Office documents locally.");
+  }
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function readSelectedZipEntries(arrayBuffer, selector) {
+  const view = new DataView(arrayBuffer);
+  const eocdOffset = findZipEndOfCentralDirectory(view);
+  if (eocdOffset < 0) throw new Error("The document ZIP structure could not be read.");
+
+  const totalEntries = view.getUint16(eocdOffset + 10, true);
+  let cursor = view.getUint32(eocdOffset + 16, true);
+  const decoder = new TextDecoder("utf-8");
+  const result = new Map();
+
+  for (let entryIndex = 0; entryIndex < totalEntries; entryIndex += 1) {
+    if (view.getUint32(cursor, true) !== 0x02014b50) {
+      throw new Error("The Office document directory is invalid.");
+    }
+
+    const compressionMethod = view.getUint16(cursor + 10, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const fileNameLength = view.getUint16(cursor + 28, true);
+    const extraLength = view.getUint16(cursor + 30, true);
+    const commentLength = view.getUint16(cursor + 32, true);
+    const localHeaderOffset = view.getUint32(cursor + 42, true);
+    const fileNameBytes = new Uint8Array(arrayBuffer, cursor + 46, fileNameLength);
+    const fileName = decoder.decode(fileNameBytes);
+
+    if (selector(fileName)) {
+      if (view.getUint32(localHeaderOffset, true) !== 0x04034b50) {
+        throw new Error("A document file entry is invalid.");
+      }
+      const localNameLength = view.getUint16(localHeaderOffset + 26, true);
+      const localExtraLength = view.getUint16(localHeaderOffset + 28, true);
+      const dataOffset = localHeaderOffset + 30 + localNameLength + localExtraLength;
+      const compressedBytes = new Uint8Array(arrayBuffer, dataOffset, compressedSize);
+      const inflated = await inflateZipEntry(compressedBytes, compressionMethod);
+      result.set(fileName, inflated);
+    }
+
+    cursor += 46 + fileNameLength + extraLength + commentLength;
+  }
+
+  return result;
+}
+
+function parseXmlDocument(xmlText, label = "document") {
+  const xml = new DOMParser().parseFromString(xmlText, "application/xml");
+  if (xml.querySelector("parsererror")) {
+    throw new Error(`The ${label} XML could not be read.`);
+  }
+  return xml;
+}
+
+function walkOfficeXmlText(node, output, mode = "word") {
+  if (node.nodeType === 3) {
+    if (mode === "odt") output.push(node.nodeValue || "");
+    return;
+  }
+  if (node.nodeType !== 1) {
+    Array.from(node.childNodes || []).forEach((child) => walkOfficeXmlText(child, output, mode));
+    return;
+  }
+
+  const localName = String(node.localName || node.nodeName || "").split(":").pop();
+  const textNames = mode === "odt" ? new Set(["span"]) : new Set(["t"]);
+
+  if (textNames.has(localName)) {
+    output.push(node.textContent || "");
+    return;
+  }
+  if (["tab"].includes(localName)) {
+    output.push("\t");
+    return;
+  }
+  if (["br", "cr", "line-break"].includes(localName)) {
+    output.push("\n");
+    return;
+  }
+
+  Array.from(node.childNodes || []).forEach((child) => walkOfficeXmlText(child, output, mode));
+
+  if (["p", "h"].includes(localName)) output.push("\n");
+  if (["tc", "table-cell"].includes(localName)) output.push("\t");
+  if (["tr", "table-row"].includes(localName)) output.push("\n");
+}
+
+function extractOfficeXmlText(xmlText, mode = "word") {
+  const xml = parseXmlDocument(xmlText, mode);
+  const output = [];
+  walkOfficeXmlText(xml.documentElement, output, mode);
+  return normalizeSmartExtractedText(output.join(""));
+}
+
+function sortNumberedOfficeFiles(first, second) {
+  const firstNumber = Number((first.match(/(\d+)(?=\.xml$)/i) || [])[1] || 0);
+  const secondNumber = Number((second.match(/(\d+)(?=\.xml$)/i) || [])[1] || 0);
+  return firstNumber - secondNumber || first.localeCompare(second);
+}
+
+async function extractDocxText(arrayBuffer) {
+  const entries = await readSelectedZipEntries(arrayBuffer, (name) =>
+    /^word\/(document|header\d+|footer\d+|footnotes|endnotes)\.xml$/i.test(name)
+  );
+  if (!entries.has("word/document.xml")) throw new Error("The DOCX main document could not be found.");
+
+  const decoder = new TextDecoder("utf-8");
+  const names = [...entries.keys()].sort((first, second) => {
+    if (first === "word/document.xml") return -1;
+    if (second === "word/document.xml") return 1;
+    return sortNumberedOfficeFiles(first, second);
+  });
+  const sections = names.map((name) => extractOfficeXmlText(decoder.decode(entries.get(name)), "word")).filter(Boolean);
+  return { text: normalizeSmartExtractedText(sections.join("\n\n")), sourceType: "docx" };
+}
+
+async function extractPptxText(arrayBuffer) {
+  const entries = await readSelectedZipEntries(arrayBuffer, (name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name));
+  const decoder = new TextDecoder("utf-8");
+  const names = [...entries.keys()].sort(sortNumberedOfficeFiles);
+  const slides = names.map((name, index) => {
+    const text = extractOfficeXmlText(decoder.decode(entries.get(name)), "word");
+    return text ? `--- Slide ${index + 1} ---\n${text}` : "";
+  }).filter(Boolean);
+  if (!slides.length) throw new Error("No readable PowerPoint slide text was found.");
+  return { text: normalizeSmartExtractedText(slides.join("\n\n")), slides: names.length, sourceType: "pptx" };
+}
+
+function elementsByLocalName(root, localName) {
+  return Array.from(root.getElementsByTagName("*")).filter((element) => element.localName === localName);
+}
+
+function getCellColumnIndex(reference) {
+  const letters = String(reference || "").match(/^[A-Z]+/i)?.[0]?.toUpperCase() || "A";
+  let index = 0;
+  for (const letter of letters) index = index * 26 + (letter.charCodeAt(0) - 64);
+  return Math.max(0, index - 1);
+}
+
+async function extractXlsxText(arrayBuffer) {
+  const entries = await readSelectedZipEntries(arrayBuffer, (name) =>
+    name === "xl/sharedStrings.xml" || /^xl\/worksheets\/sheet\d+\.xml$/i.test(name)
+  );
+  const decoder = new TextDecoder("utf-8");
+  const sharedStrings = [];
+
+  if (entries.has("xl/sharedStrings.xml")) {
+    const xml = parseXmlDocument(decoder.decode(entries.get("xl/sharedStrings.xml")), "shared strings");
+    elementsByLocalName(xml, "si").forEach((item) => {
+      const value = elementsByLocalName(item, "t").map((node) => node.textContent || "").join("");
+      sharedStrings.push(value);
+    });
+  }
+
+  const sheetNames = [...entries.keys()].filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name)).sort(sortNumberedOfficeFiles);
+  const sheetTexts = [];
+
+  sheetNames.forEach((name, sheetIndex) => {
+    const xml = parseXmlDocument(decoder.decode(entries.get(name)), `worksheet ${sheetIndex + 1}`);
+    const rows = [];
+    elementsByLocalName(xml, "row").forEach((row) => {
+      const values = [];
+      elementsByLocalName(row, "c").forEach((cell) => {
+        const column = getCellColumnIndex(cell.getAttribute("r"));
+        while (values.length < column) values.push("");
+        const type = cell.getAttribute("t") || "";
+        let value = "";
+        if (type === "inlineStr") {
+          value = elementsByLocalName(cell, "t").map((node) => node.textContent || "").join("");
+        } else {
+          const raw = elementsByLocalName(cell, "v")[0]?.textContent || "";
+          if (type === "s") value = sharedStrings[Number(raw)] ?? raw;
+          else if (type === "b") value = raw === "1" ? "TRUE" : "FALSE";
+          else value = raw;
+        }
+        values[column] = value;
+      });
+      rows.push(values.join("\t").replace(/\t+$/g, ""));
+    });
+    const body = rows.filter((row) => row.trim()).join("\n");
+    if (body) sheetTexts.push(`--- Sheet ${sheetIndex + 1} ---\n${body}`);
+  });
+
+  if (!sheetTexts.length) throw new Error("No readable spreadsheet cell text was found.");
+  return { text: normalizeSmartExtractedText(sheetTexts.join("\n\n")), sheets: sheetNames.length, sourceType: "xlsx" };
+}
+
+async function extractOdtText(arrayBuffer) {
+  const entries = await readSelectedZipEntries(arrayBuffer, (name) => name === "content.xml");
+  if (!entries.has("content.xml")) throw new Error("The ODT content file could not be found.");
+  const text = extractOfficeXmlText(new TextDecoder("utf-8").decode(entries.get("content.xml")), "odt");
+  if (!text) throw new Error("No readable ODT text was found.");
+  return { text, sourceType: "odt" };
+}
+
+function extractRtfText(rawText) {
+  const decodedHex = String(rawText || "").replace(/\\'([0-9a-fA-F]{2})/g, (_match, value) =>
+    String.fromCharCode(parseInt(value, 16))
+  );
+  return normalizeSmartExtractedText(
+    decodedHex
+      .replace(/\\par[d]?\b/g, "\n")
+      .replace(/\\line\b/g, "\n")
+      .replace(/\\tab\b/g, "\t")
+      .replace(/\\u(-?\d+)\??/g, (_match, value) => String.fromCharCode(Number(value) < 0 ? Number(value) + 65536 : Number(value)))
+      .replace(/\\[a-zA-Z]+-?\d* ?/g, "")
+      .replace(/[{}]/g, "")
+      .replace(/\\([\\{}])/g, "$1")
+  );
+}
+
+async function extractPlainFileText(blob, documentItem) {
+  const extension = getSmartDocumentExtension(documentItem);
+  let text = await blob.text();
+
+  if (extension === "json") {
+    try { text = JSON.stringify(JSON.parse(text), null, 2); } catch (_error) { /* keep raw text */ }
+  } else if (["html", "htm"].includes(extension)) {
+    const parsed = new DOMParser().parseFromString(text, "text/html");
+    text = parsed.body?.innerText || parsed.body?.textContent || text;
+  } else if (extension === "xml") {
+    const parsed = new DOMParser().parseFromString(text, "application/xml");
+    if (!parsed.querySelector("parsererror")) text = parsed.documentElement?.textContent || text;
+  } else if (extension === "rtf") {
+    text = extractRtfText(text);
+  }
+
+  text = normalizeSmartExtractedText(text);
+  if (!text) throw new Error("No readable text was found in this file.");
+  return { text, sourceType: extension || "text" };
+}
+
+async function extractSmartTextFromBlob(blob, documentItem, onProgress) {
+  const support = getSmartDocumentSupport(documentItem);
+  if (!support.supported) throw new Error("This file type is not supported for local text extraction.");
+
+  if (support.key === "text" || support.key === "rtf") {
+    onProgress?.("Reading text file…");
+    return extractPlainFileText(blob, documentItem);
+  }
+
+  const arrayBuffer = await blob.arrayBuffer();
+  if (support.key === "pdf") return extractPdfText(arrayBuffer, onProgress);
+  if (support.key === "docx") return extractDocxText(arrayBuffer);
+  if (support.key === "pptx") return extractPptxText(arrayBuffer);
+  if (support.key === "xlsx") return extractXlsxText(arrayBuffer);
+  if (support.key === "odt") return extractOdtText(arrayBuffer);
+  throw new Error("This file type is not supported for local text extraction.");
+}
+
+async function extractCurrentSmartDocument({ force = false } = {}) {
+  if (!smartDocumentItem || smartDocumentExtractionBusy) return;
+  const documentItem = smartDocumentItem;
+  const support = getSmartDocumentSupport(documentItem);
+  if (!support.supported) return;
+
+  if (!force) {
+    const cached = await getCachedSmartDocumentText(documentItem);
+    if (cached?.text) {
+      renderSmartDocumentRecord(cached, { fromCache: true });
+      return;
+    }
+  }
+
+  setSmartDocumentBusy(true);
+  setSmartDocumentStatus("Downloading the private document for local processing…");
+
+  try {
+    const result = await window.BoxCloud.downloadDocument(documentItem.storage_path);
+    if (result.error || !result.data) throw result.error || new Error("The document could not be downloaded.");
+    if (smartDocumentItem?.id !== documentItem.id) return;
+
+    const extracted = await extractSmartTextFromBlob(result.data, documentItem, (message) => {
+      if (smartDocumentItem?.id === documentItem.id) setSmartDocumentStatus(message);
+    });
+
+    let text = normalizeSmartExtractedText(extracted.text);
+    let truncated = Boolean(extracted.truncated);
+    if (text.length > SMART_TEXT_MAX_CHARACTERS) {
+      text = text.slice(0, SMART_TEXT_MAX_CHARACTERS);
+      truncated = true;
+    }
+    if (!text) throw new Error("No readable text was found in this document.");
+
+    const record = { ...extracted, text, truncated, extractedAt: new Date().toISOString() };
+    await saveCachedSmartDocumentText(documentItem, record);
+    if (smartDocumentItem?.id === documentItem.id) renderSmartDocumentRecord(record);
+  } catch (error) {
+    console.error("Smart document extraction failed:", error);
+    setSmartDocumentStatus(error?.message || "The document text could not be extracted.", "error");
+    setSmartDocumentBusy(false);
+    updateSmartActionButtons();
+  }
+}
+
+function updateSmartDocumentSearch({ keepIndex = false } = {}) {
+  const query = $("documentSmartSearch").value.trim().toLocaleLowerCase();
+  const text = $("documentSmartText").value;
+  smartDocumentSearchMatches = [];
+
+  if (query && text) {
+    const haystack = text.toLocaleLowerCase();
+    let position = 0;
+    while (position < haystack.length && smartDocumentSearchMatches.length < 5000) {
+      const match = haystack.indexOf(query, position);
+      if (match < 0) break;
+      smartDocumentSearchMatches.push({ start: match, end: match + query.length });
+      position = match + Math.max(1, query.length);
+    }
+  }
+
+  if (!keepIndex || smartDocumentSearchIndex >= smartDocumentSearchMatches.length) {
+    smartDocumentSearchIndex = smartDocumentSearchMatches.length ? 0 : -1;
+  }
+  $("documentSmartPreviousMatch").disabled = !smartDocumentSearchMatches.length;
+  $("documentSmartNextMatch").disabled = !smartDocumentSearchMatches.length;
+  $("documentSmartMatchCount").textContent = smartDocumentSearchMatches.length
+    ? `${smartDocumentSearchIndex + 1} of ${smartDocumentSearchMatches.length}`
+    : "0 matches";
+
+  if (smartDocumentSearchIndex >= 0) showSmartDocumentSearchMatch(0);
+}
+
+function showSmartDocumentSearchMatch(direction) {
+  if (!smartDocumentSearchMatches.length) return;
+  smartDocumentSearchIndex = (smartDocumentSearchIndex + direction + smartDocumentSearchMatches.length) % smartDocumentSearchMatches.length;
+  const match = smartDocumentSearchMatches[smartDocumentSearchIndex];
+  const textarea = $("documentSmartText");
+  textarea.focus({ preventScroll: true });
+  textarea.setSelectionRange(match.start, match.end);
+  const ratio = match.start / Math.max(1, textarea.value.length);
+  textarea.scrollTop = Math.max(0, ratio * (textarea.scrollHeight - textarea.clientHeight));
+  $("documentSmartMatchCount").textContent = `${smartDocumentSearchIndex + 1} of ${smartDocumentSearchMatches.length}`;
+  updateSmartSelectionStats();
+}
+
+async function copyTextToClipboard(text) {
+  const value = String(text || "");
+  if (!value) return false;
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch (_error) {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    return copied;
+  }
+}
+
+function getSmartSourceText({ selectedFirst = true } = {}) {
+  if (!smartDocumentRecord?.text) return "";
+  const selected = selectedFirst ? getSmartSelectedText() : "";
+  return selected || smartDocumentRecord.text;
+}
+
+function firstUsefulLine(text, maximum = 180) {
+  const line = String(text || "").split(/\n+/).map((item) => item.trim()).find(Boolean) || "Document follow-up";
+  return line.slice(0, maximum);
+}
+
+function workspaceForDocument(documentItem) {
+  const folder = String(documentItem?.folder || "").toLocaleLowerCase();
+  if (folder === "sk") return "sk";
+  if (["fda", "philhealth", "suppliers"].includes(folder)) return "pharmacy";
+  if (["hr"].includes(folder)) return "clinic";
+  return "personal";
+}
+
+function buildSmartDocumentMetadata(documentItem) {
+  const compliance = getDocumentCompliance(documentItem);
+  const taskIds = new Set(getDocumentLinkedTaskIds(documentItem));
+  const eventIds = new Set(getDocumentLinkedEventIds(documentItem));
+  const linkedTasks = tasks.filter((task) => taskIds.has(String(task.id))).map((task) => task.text);
+  const linkedEvents = events.filter((event) => eventIds.has(String(event.id))).map((event) => `${formatEventDate(event.date)} — ${event.title}`);
+
+  return [
+    `Document: ${documentItem.name}`,
+    `Folder: ${documentItem.folder || "Personal"}`,
+    `File type: ${documentItem.mime_type || getDocumentTypeLabel(documentItem)}`,
+    `File size: ${formatBytes(documentItem.size_bytes)}`,
+    `Uploaded: ${formatDocumentDate(documentItem.created_at)}`,
+    `Current version: ${Math.max(1, Number(documentItem.current_version || 1))}`,
+    `Expiry date: ${formatDocumentExpiryDate(documentItem.expiry_date)}`,
+    `Compliance status: ${compliance.label}`,
+    `Reminder: ${documentItem.expiry_date ? `${Number(documentItem.reminder_days ?? 30)} days before` : "Not applicable"}`,
+    `Tags: ${getDocumentTags(documentItem).join(", ") || "None"}`,
+    `Details: ${String(documentItem.details || "").trim() || "None"}`,
+    `Linked tasks: ${linkedTasks.join("; ") || "None"}`,
+    `Linked calendar events: ${linkedEvents.join("; ") || "None"}`
+  ].join("\n");
+}
+
+async function copySelectedSmartText() {
+  const text = getSmartSelectedText();
+  if (!text) {
+    showToast("Select a passage first");
+    return;
+  }
+  const copied = await copyTextToClipboard(text);
+  showToast(copied ? "Selected text copied" : "Could not copy text");
+}
+
+async function copyAllSmartText() {
+  const copied = await copyTextToClipboard(smartDocumentRecord?.text || "");
+  showToast(copied ? "Document text copied" : "Could not copy text");
+}
+
+function createTaskFromSmartText() {
+  const source = getSmartSourceText();
+  if (!source || !smartDocumentItem) return;
+  const documentItem = smartDocumentItem;
+  const title = firstUsefulLine(source, 180);
+  const details = `Source document: ${documentItem.name}\n\n${source}`.slice(0, 4000);
+  const workspace = workspaceForDocument(documentItem);
+  const dueDate = documentItem.expiry_date || "";
+  closeDocumentSmartTools();
+  closeDocumentPreview();
+  openTaskModal({ text: title, details, workspace, priority: "normal", dueDate });
+}
+
+function prepareEventFromSmartText() {
+  const source = getSmartSourceText();
+  if (!source || !smartDocumentItem) return;
+  const title = firstUsefulLine(source, 180);
+  const date = smartDocumentItem.expiry_date || new Date().toISOString().slice(0, 10);
+  const workspace = workspaceForDocument(smartDocumentItem);
+  closeDocumentSmartTools();
+  closeDocumentPreview();
+  openApp("calendar");
+  $("eventTitle").value = title;
+  $("eventDate").value = date;
+  $("eventWorkspace").value = workspace;
+  setTimeout(() => $("eventTitle").focus(), 50);
+  showToast("Review the event date, then tap Save event");
+}
+
+async function copySmartPromptForChatGPT() {
+  if (!smartDocumentItem || !smartDocumentRecord?.text) return;
+  const instruction = $("documentSmartChatGPTInstruction").value.trim() || "Summarize this document.";
+  const source = getSmartSourceText();
+  const maximum = 120000;
+  const limited = source.length > maximum ? source.slice(0, maximum) : source;
+  const prompt = [
+    instruction,
+    "",
+    "DOCUMENT INFORMATION",
+    buildSmartDocumentMetadata(smartDocumentItem),
+    "",
+    "IMPORTANT:",
+    "- Base the response only on the document text below.",
+    "- Preserve the document's terminology.",
+    "- Do not invent missing details.",
+    source.length > maximum ? `- The copied text was limited to the first ${maximum.toLocaleString("en-PH")} characters.` : "",
+    "",
+    "BEGIN DOCUMENT TEXT",
+    limited,
+    "END DOCUMENT TEXT"
+  ].filter((line) => line !== "").join("\n");
+  const copied = await copyTextToClipboard(prompt);
+  showToast(copied ? "Prompt copied for ChatGPT" : "Could not copy prompt");
+}
+
+function exportSmartDocumentReport() {
+  if (!smartDocumentItem || !smartDocumentRecord?.text) return;
+  const report = [
+    "THE BOX OS — DOCUMENT REPORT",
+    `Generated: ${new Date().toLocaleString("en-PH")}`,
+    "",
+    buildSmartDocumentMetadata(smartDocumentItem),
+    "",
+    "EXTRACTED TEXT",
+    smartDocumentRecord.text
+  ].join("\n");
+  const fileName = `${cleanFileNameSegment(smartDocumentItem.name.replace(/\.[^.]+$/, ""))}-document-report.txt`;
+  downloadTextFile(fileName, report, "text/plain");
+  showToast("Document report downloaded");
+}
+
+async function clearCurrentSmartDocumentCache() {
+  if (!smartDocumentItem) return;
+  await deleteCachedSmartDocumentText(smartDocumentItem);
+  resetSmartDocumentReader();
+  setSmartDocumentStatus("Local extracted text cleared. The cloud document was not changed.", "success");
+  setSmartDocumentBusy(false);
+}
+
+
 async function openDocumentPreview(documentItem) {
   if (!window.BoxCloud?.isReady()) {
     openAuthOverlay();
@@ -2605,7 +3475,7 @@ async function uploadSelectedDocuments() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "6B.4";
+const BACKUP_APP_VERSION = "6C.1-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -3586,6 +4456,28 @@ $("previewDocumentVersionsButton").addEventListener("click", () => {
     openDocumentVersionModal(documentItem);
   }
 });
+$("openDocumentSmartToolsButton").addEventListener("click", () => {
+  if (previewDocumentItem) openDocumentSmartTools(previewDocumentItem);
+});
+$("closeDocumentSmartToolsButton").addEventListener("click", closeDocumentSmartTools);
+$("documentSmartToolsModal").addEventListener("pointerdown", (event) => {
+  if (event.target === $("documentSmartToolsModal")) closeDocumentSmartTools();
+});
+$("extractDocumentTextButton").addEventListener("click", () => extractCurrentSmartDocument());
+$("refreshDocumentTextButton").addEventListener("click", () => extractCurrentSmartDocument({ force: true }));
+$("clearDocumentTextCacheButton").addEventListener("click", clearCurrentSmartDocumentCache);
+$("documentSmartSearch").addEventListener("input", () => updateSmartDocumentSearch());
+$("documentSmartPreviousMatch").addEventListener("click", () => showSmartDocumentSearchMatch(-1));
+$("documentSmartNextMatch").addEventListener("click", () => showSmartDocumentSearchMatch(1));
+$("documentSmartText").addEventListener("select", updateSmartSelectionStats);
+$("documentSmartText").addEventListener("pointerup", updateSmartSelectionStats);
+$("documentSmartText").addEventListener("keyup", updateSmartSelectionStats);
+$("copySelectedDocumentTextButton").addEventListener("click", copySelectedSmartText);
+$("copyAllDocumentTextButton").addEventListener("click", copyAllSmartText);
+$("createTaskFromDocumentTextButton").addEventListener("click", createTaskFromSmartText);
+$("createEventFromDocumentTextButton").addEventListener("click", prepareEventFromSmartText);
+$("copyDocumentForChatGPTButton").addEventListener("click", copySmartPromptForChatGPT);
+$("exportDocumentTextReportButton").addEventListener("click", exportSmartDocumentReport);
 $("clearDocumentLinkFilterButton").addEventListener("click", clearDocumentLinkFilter);
 
 $("closeDocumentVersionModalButton").addEventListener("click", closeDocumentVersionModal);
@@ -3677,7 +4569,9 @@ $("documentUploadForm").addEventListener("submit", async (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
 
-  if ($("documentVersionModal").classList.contains("open")) {
+  if ($("documentSmartToolsModal").classList.contains("open")) {
+    closeDocumentSmartTools();
+  } else if ($("documentVersionModal").classList.contains("open")) {
     closeDocumentVersionModal();
   } else if ($("documentPreviewModal").classList.contains("open")) {
     closeDocumentPreview();

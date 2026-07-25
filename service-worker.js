@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6b5-3-honorpad-window-fit-v1";
+const CACHE_NAME = "the-box-os-phase-6c1-free-smart-tools-v1";
 
 const APP_FILES = [
   "./",

@@ -4471,3 +4471,326 @@ body {
     padding-bottom: 24px;
   }
 }
+
+
+/* Phase 6C.1 — Free Smart Document Tools */
+.document-smart-open-button {
+  border-color: rgba(114, 213, 161, 0.35);
+  color: var(--success);
+}
+
+.document-smart-card {
+  width: min(1160px, 100%);
+  max-height: calc(var(--box-viewport-height, 100vh) - 24px);
+  padding: 20px;
+  overflow: auto;
+}
+
+.document-smart-header {
+  position: sticky;
+  top: -20px;
+  z-index: 4;
+  margin: -20px -20px 14px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-solid);
+}
+
+.document-smart-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.document-smart-intro > div:first-child {
+  min-width: 0;
+}
+
+.document-smart-intro strong,
+.document-smart-intro span {
+  display: block;
+}
+
+.document-smart-intro span {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.document-smart-top-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.document-smart-status {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.document-smart-status.success {
+  border-color: rgba(114, 213, 161, 0.35);
+  background: rgba(114, 213, 161, 0.1);
+  color: var(--success);
+}
+
+.document-smart-status.warning {
+  border-color: rgba(255, 199, 106, 0.35);
+  background: rgba(255, 199, 106, 0.1);
+  color: var(--warning);
+}
+
+.document-smart-status.error {
+  border-color: rgba(255, 133, 133, 0.35);
+  background: rgba(255, 133, 133, 0.1);
+  color: var(--danger);
+}
+
+.document-smart-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.75fr);
+  gap: 14px;
+  min-height: 0;
+}
+
+.document-smart-reader,
+.document-smart-actions-panel {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.document-smart-reader {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  min-height: 440px;
+}
+
+.document-smart-searchbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+
+.document-smart-searchbar label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.document-smart-searchbar input {
+  width: 100%;
+}
+
+.document-smart-search-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.document-smart-search-actions button {
+  min-width: 38px;
+  padding: 0 10px;
+}
+
+.document-smart-search-actions span {
+  min-width: 72px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.document-smart-text {
+  flex: 1;
+  width: 100%;
+  min-height: 330px;
+  padding: 14px;
+  resize: vertical;
+  background: var(--surface-solid);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.document-smart-text-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.document-smart-actions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.document-smart-action-group,
+.document-smart-chatgpt,
+.document-smart-limit-note {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface-solid);
+}
+
+.document-smart-action-group small,
+.document-smart-chatgpt > small {
+  color: var(--accent);
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+
+.document-smart-action-group button,
+.document-smart-chatgpt button {
+  width: 100%;
+}
+
+.document-smart-chatgpt label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-soft);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.document-smart-chatgpt textarea {
+  width: 100%;
+  min-height: 96px;
+  padding: 10px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.document-smart-chatgpt p,
+.document-smart-limit-note span {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.document-smart-limit-note strong {
+  color: var(--warning);
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .document-smart-card {
+    width: 100%;
+    max-height: calc(var(--box-viewport-height, 100vh) - 12px);
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .document-smart-header {
+    top: -14px;
+    margin: -14px -14px 12px;
+    padding: 14px;
+  }
+
+  .document-smart-intro {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .document-smart-top-actions {
+    justify-content: stretch;
+  }
+
+  .document-smart-top-actions button {
+    flex: 1 1 120px;
+  }
+
+  .document-smart-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .document-smart-reader {
+    min-height: 360px;
+  }
+
+  .document-smart-actions-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .document-smart-chatgpt,
+  .document-smart-limit-note {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 620px) {
+  .document-smart-overlay {
+    padding: 6px;
+  }
+
+  .document-smart-searchbar {
+    grid-template-columns: 1fr;
+  }
+
+  .document-smart-search-actions {
+    justify-content: space-between;
+  }
+
+  .document-smart-text-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .document-smart-actions-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .document-smart-chatgpt,
+  .document-smart-limit-note {
+    grid-column: auto;
+  }
+}
+
+html.safe-render-ui .document-smart-card,
+html.safe-render-ui .document-smart-header,
+html.safe-render-ui .document-smart-reader,
+html.safe-render-ui .document-smart-actions-panel,
+html.safe-render-ui .document-smart-action-group,
+html.safe-render-ui .document-smart-chatgpt,
+html.safe-render-ui .document-smart-limit-note {
+  background-color: var(--surface-solid) !important;
+  background-image: none !important;
+}
+
+html.safe-render-ui .document-smart-intro,
+html.safe-render-ui .document-smart-status {
+  background-color: var(--surface-soft) !important;
+  background-image: none !important;
+}

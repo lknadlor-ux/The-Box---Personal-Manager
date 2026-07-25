@@ -1036,9 +1036,94 @@
             <p id="documentPreviewDetails">No details added.</p>
           </div>
           <div class="document-preview-actions">
+            <button id="openDocumentSmartToolsButton" class="secondary-button document-smart-open-button" type="button">Smart tools</button>
             <button id="previewDocumentVersionsButton" class="secondary-button" type="button">Version history</button>
             <button id="openDocumentExternallyButton" class="secondary-button" type="button">Open separately</button>
             <button id="downloadPreviewDocumentButton" class="primary-button" type="button">Download</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+
+
+  <div id="documentSmartToolsModal" class="vault-modal-overlay document-smart-overlay" aria-hidden="true">
+    <section class="vault-modal-card document-smart-card" role="dialog" aria-modal="true" aria-labelledby="documentSmartToolsHeading">
+      <div class="vault-modal-header document-smart-header">
+        <div>
+          <small>FREE LOCAL TOOLS</small>
+          <h2 id="documentSmartToolsHeading">Smart document tools</h2>
+          <p id="documentSmartToolsFileName">Select a supported document.</p>
+        </div>
+        <button id="closeDocumentSmartToolsButton" class="window-button" type="button" aria-label="Close smart document tools">✕</button>
+      </div>
+
+      <div class="document-smart-intro">
+        <div>
+          <strong id="documentSmartSupportLabel">Checking file support…</strong>
+          <span id="documentSmartSupportHelp">PDF, DOCX, PPTX, XLSX, ODT, RTF, and common text files are supported.</span>
+        </div>
+        <div class="document-smart-top-actions">
+          <button id="extractDocumentTextButton" class="primary-button" type="button">Extract text</button>
+          <button id="refreshDocumentTextButton" class="secondary-button" type="button" disabled>Re-extract</button>
+          <button id="clearDocumentTextCacheButton" class="secondary-button" type="button" disabled>Clear local text</button>
+        </div>
+      </div>
+
+      <div id="documentSmartStatus" class="document-smart-status" role="status" aria-live="polite">
+        Text is processed on this device. No paid API is used.
+      </div>
+
+      <div class="document-smart-layout">
+        <section class="document-smart-reader">
+          <div class="document-smart-searchbar">
+            <label>
+              <span>Search inside document</span>
+              <input id="documentSmartSearch" type="search" placeholder="Find a word or phrase" disabled>
+            </label>
+            <div class="document-smart-search-actions">
+              <button id="documentSmartPreviousMatch" class="secondary-button" type="button" disabled aria-label="Previous match">‹</button>
+              <button id="documentSmartNextMatch" class="secondary-button" type="button" disabled aria-label="Next match">›</button>
+              <span id="documentSmartMatchCount">0 matches</span>
+            </div>
+          </div>
+
+          <textarea id="documentSmartText" class="document-smart-text" readonly spellcheck="false" placeholder="Extracted text will appear here. You can select a passage for copying, creating a task, or preparing a calendar event."></textarea>
+
+          <div class="document-smart-text-footer">
+            <span id="documentSmartTextStats">No local text saved</span>
+            <span id="documentSmartSelectionStats">No passage selected</span>
+          </div>
+        </section>
+
+        <aside class="document-smart-actions-panel">
+          <section class="document-smart-action-group">
+            <small>USE SELECTED PASSAGE</small>
+            <button id="copySelectedDocumentTextButton" class="secondary-button" type="button" disabled>Copy selected text</button>
+            <button id="createTaskFromDocumentTextButton" class="secondary-button" type="button" disabled>Create task</button>
+            <button id="createEventFromDocumentTextButton" class="secondary-button" type="button" disabled>Prepare calendar event</button>
+          </section>
+
+          <section class="document-smart-action-group">
+            <small>WHOLE DOCUMENT</small>
+            <button id="copyAllDocumentTextButton" class="secondary-button" type="button" disabled>Copy all text</button>
+            <button id="exportDocumentTextReportButton" class="secondary-button" type="button" disabled>Export document report</button>
+          </section>
+
+          <section class="document-smart-chatgpt">
+            <small>COPY FOR CHATGPT</small>
+            <label>
+              Instruction
+              <textarea id="documentSmartChatGPTInstruction" rows="4">Use only the provided document text. Summarize the document, list important requirements, deadlines, and action items, and clearly state when something is not mentioned.</textarea>
+            </label>
+            <p>Uses your regular ChatGPT app manually. The Box OS does not call a paid API.</p>
+            <button id="copyDocumentForChatGPTButton" class="primary-button" type="button" disabled>Copy prompt for ChatGPT</button>
+          </section>
+
+          <div class="document-smart-limit-note">
+            <strong>Limitations</strong>
+            <span>Image-only scanned PDFs and photos need OCR, which is not included in this free tablet-safe version.</span>
           </div>
         </aside>
       </div>
