@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6b4-stability-backup-center";
+const CACHE_NAME = "the-box-os-phase-6b5-polished-dock-labels";
 
 const APP_FILES = [
   "./",

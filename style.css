@@ -1028,41 +1028,100 @@ form button,
 .dock {
   position: fixed;
   left: 50%;
-  bottom: 12px;
+  bottom: 10px;
   z-index: 120;
   display: flex;
-  gap: 7px;
-  padding: 8px;
+  align-items: stretch;
+  gap: 4px;
+  max-width: calc(100vw - 18px);
+  padding: 7px 8px 6px;
   border: 1px solid var(--border-strong);
-  border-radius: 19px;
-  background: rgba(15, 18, 24, 0.82);
+  border-radius: 20px;
+  background: rgba(15, 18, 24, 0.84);
   box-shadow: var(--shadow);
   backdrop-filter: blur(20px);
   transform: translateX(-50%);
 }
 
 body.light-theme .dock {
-  background: rgba(255,255,255,0.82);
+  background: rgba(255,255,255,0.84);
 }
 
 .dock-item {
   position: relative;
-  display: grid;
-  place-items: center;
-  width: 45px;
-  height: 45px;
+  display: flex;
+  flex: 0 0 52px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 52px;
+  height: 50px;
+  padding: 5px 4px 4px;
   border: 0;
   border-radius: 13px;
   background: transparent;
   color: var(--text);
-  font-size: 19px;
-  transition: 0.18s ease;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.dock-icon {
+  display: grid;
+  place-items: center;
+  min-height: 21px;
+  font-size: 18px;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+
+.dock-label {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 650;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  transition: color 0.18s ease;
 }
 
 .dock-item:hover,
+.dock-item:focus-visible,
 .dock-item.active {
   background: var(--accent-soft);
-  transform: translateY(-5px);
+  transform: translateY(-4px);
+}
+
+.dock-item:hover .dock-icon,
+.dock-item:focus-visible .dock-icon,
+.dock-item.active .dock-icon {
+  transform: translateY(-1px);
+}
+
+.dock-item:hover .dock-label,
+.dock-item:focus-visible .dock-label,
+.dock-item.active .dock-label {
+  color: var(--accent);
+}
+
+.dock-item.active::after {
+  position: absolute;
+  right: 17px;
+  bottom: 1px;
+  left: 17px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+}
+
+.dock-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 #toast {
@@ -1192,12 +1251,25 @@ body.light-theme .dock {
   }
 
   .dock {
-    max-width: calc(100vw - 18px);
+    justify-content: flex-start;
     overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+
+  .dock::-webkit-scrollbar {
+    display: none;
   }
 
   .dock-item {
-    flex: 0 0 auto;
+    flex: 0 0 48px;
+    width: 48px;
+    scroll-snap-align: center;
+  }
+
+  .dock-label {
+    font-size: 7.5px;
   }
 }
 
