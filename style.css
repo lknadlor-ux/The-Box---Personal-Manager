@@ -4409,3 +4409,65 @@ html.safe-render-ui .cloud-status span {
     max-width: calc(100vw - 16px);
   }
 }
+
+
+/* Phase 6B.5.3 — Honor Pad window fit and accessible sizing */
+html,
+body {
+  height: 100%;
+  min-height: 0;
+}
+
+.desktop-shell {
+  height: var(--box-viewport-height, 100dvh);
+  min-height: 0;
+}
+
+.window-size-button {
+  display: none;
+}
+
+@media (min-width: 681px) {
+  html.tablet-ui .app-window:not(.maximized) {
+    max-width: calc(100% - 24px) !important;
+    max-height: calc(100% - 28px) !important;
+  }
+
+  html.tablet-ui .app-window.maximized {
+    left: 8px !important;
+    top: 8px !important;
+    width: calc(100% - 16px) !important;
+    height: calc(100% - 16px) !important;
+  }
+
+  html.tablet-ui .window-size-button {
+    display: grid;
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: 800;
+  }
+
+  html.tablet-ui .window-resize-handle {
+    right: 4px;
+    bottom: 4px;
+    width: 46px;
+    height: 46px;
+  }
+
+  html.tablet-ui .window-resize-handle::before {
+    right: 8px;
+    bottom: 8px;
+    width: 15px;
+    height: 15px;
+  }
+
+  html.tablet-ui .window-resize-handle::after {
+    right: 14px;
+    bottom: 14px;
+  }
+
+  html.tablet-ui .window-content {
+    overscroll-behavior: contain;
+    padding-bottom: 24px;
+  }
+}

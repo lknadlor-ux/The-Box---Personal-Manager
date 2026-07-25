@@ -25,6 +25,21 @@ function updateDeviceUiClasses() {
 
 updateDeviceUiClasses();
 
+function updateAppViewportHeight() {
+  const viewportHeight = Math.round(
+    window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight
+  );
+
+  if (viewportHeight > 0) {
+    document.documentElement.style.setProperty(
+      "--box-viewport-height",
+      `${viewportHeight}px`
+    );
+  }
+}
+
+updateAppViewportHeight();
+
 const STORAGE = {
   tasks: "theBoxOS4Tasks",
   events: "theBoxOS4Events",
@@ -37,7 +52,7 @@ const STORAGE = {
   documentView: "theBoxOSDocumentView",
   lastBackupAt: "theBoxOSLastBackupAt",
   safetyBackup: "theBoxOSSafetyBackup",
-  honorPadUiFix: "theBoxOSHonorPadUiFixV2"
+  honorPadUiFix: "theBoxOSHonorPadUiFixV3"
 };
 
 const DAVAO = {
@@ -325,6 +340,97 @@ function prepareTabletUiLayoutMigration() {
   localStorage.setItem(STORAGE.honorPadUiFix, "1");
 }
 
+const TABLET_WINDOW_PRESETS = {
+  compact: { width: 0.68, height: 0.62, label: "Compact" },
+  medium: { width: 0.82, height: 0.74, label: "Medium" },
+  large: { width: 0.94, height: 0.86, label: "Large" }
+};
+
+function getDesktopSafeArea() {
+  const desktopRect = $("desktop").getBoundingClientRect();
+  const tablet = isTabletUiMode();
+  const marginX = tablet ? 12 : 0;
+  const marginTop = tablet ? 10 : 0;
+  const marginBottom = tablet ? 18 : 0;
+
+  return {
+    desktopRect,
+    marginX,
+    marginTop,
+    marginBottom,
+    width: Math.max(0, desktopRect.width - marginX * 2),
+    height: Math.max(0, desktopRect.height - marginTop - marginBottom)
+  };
+}
+
+function getNextTabletPreset(windowElement) {
+  const current = windowElement.dataset.windowPreset || "custom";
+  if (current === "compact") return "large";
+  if (current === "large") return "medium";
+  return "compact";
+}
+
+function updateWindowSizeButton(windowElement) {
+  const button = windowElement.querySelector(".window-size-button");
+  if (!button) return;
+
+  const nextPreset = getNextTabletPreset(windowElement);
+  const nextLabel = TABLET_WINDOW_PRESETS[nextPreset]?.label || "Compact";
+  button.textContent = nextPreset === "large" ? "↗" : "↙";
+  button.title = `Set ${nextLabel.toLowerCase()} window size`;
+  button.setAttribute("aria-label", button.title);
+}
+
+function setTabletWindowPreset(
+  windowElement,
+  presetName = "medium",
+  { announce = false, save = true } = {}
+) {
+  if (!isTabletUiMode() || isCompactWindowMode()) return;
+
+  const preset = TABLET_WINDOW_PRESETS[presetName] || TABLET_WINDOW_PRESETS.medium;
+  const safeArea = getDesktopSafeArea();
+  if (!safeArea.width || !safeArea.height) return;
+
+  windowElement.classList.remove("maximized");
+
+  const minWidth = Math.min(360, safeArea.width);
+  const minHeight = Math.min(280, safeArea.height);
+  const width = Math.min(
+    safeArea.width,
+    Math.max(minWidth, safeArea.width * preset.width)
+  );
+  const height = Math.min(
+    safeArea.height,
+    Math.max(minHeight, safeArea.height * preset.height)
+  );
+  const left = safeArea.marginX + Math.max(0, (safeArea.width - width) / 2);
+  const top = safeArea.marginTop + Math.max(0, (safeArea.height - height) / 2);
+
+  windowElement.style.left = `${left}px`;
+  windowElement.style.top = `${top}px`;
+  windowElement.style.width = `${width}px`;
+  windowElement.style.height = `${height}px`;
+  windowElement.dataset.windowPreset = presetName;
+
+  clampWindowToDesktop(windowElement);
+  updateMaximizeButton(windowElement);
+  updateWindowSizeButton(windowElement);
+  updateWindowResponsiveState(windowElement);
+
+  if (save) saveWindowLayout(windowElement);
+  if (announce) showToast(`${preset.label} window size`);
+}
+
+function cycleTabletWindowPreset(windowElement) {
+  const nextPreset = getNextTabletPreset(windowElement);
+  setTabletWindowPreset(windowElement, nextPreset, {
+    announce: true,
+    save: true
+  });
+  focusWindow(windowElement);
+}
+
 function applyTabletDefaultWindowLayout(windowElement) {
   if (!isTabletUiMode() || isCompactWindowMode()) return;
   if (windowElement.classList.contains("maximized")) return;
@@ -332,20 +438,11 @@ function applyTabletDefaultWindowLayout(windowElement) {
   const appName = windowElement.dataset.appWindow;
   if (!appName || readWindowLayouts()[appName]) return;
 
-  const desktopRect = $("desktop").getBoundingClientRect();
-  if (!desktopRect.width || !desktopRect.height) return;
-
-  const width = Math.min(desktopRect.width - 24, desktopRect.width * 0.92);
-  const height = Math.min(desktopRect.height - 20, desktopRect.height * 0.91);
-  const left = Math.max(0, (desktopRect.width - width) / 2);
-  const top = Math.max(0, (desktopRect.height - height) / 2);
-
-  windowElement.style.left = `${left}px`;
-  windowElement.style.top = `${top}px`;
-  windowElement.style.width = `${width}px`;
-  windowElement.style.height = `${height}px`;
+  setTabletWindowPreset(windowElement, "medium", {
+    announce: false,
+    save: false
+  });
 }
-
 const WINDOW_LAYOUT_BREAKPOINTS = {
   medium: 900,
   narrow: 700,
@@ -426,7 +523,8 @@ function saveWindowLayout(windowElement) {
     left: Math.max(0, rect.left - desktopRect.left),
     top: Math.max(0, rect.top - desktopRect.top),
     width: rect.width,
-    height: rect.height
+    height: rect.height,
+    preset: windowElement.dataset.windowPreset || "custom"
   };
   writeWindowLayouts(layouts);
 }
@@ -445,24 +543,30 @@ function applyStoredWindowLayout(windowElement) {
   windowElement.style.top = `${layout.top}px`;
   windowElement.style.width = `${layout.width}px`;
   windowElement.style.height = `${layout.height}px`;
+  windowElement.dataset.windowPreset = layout.preset || "custom";
   clampWindowToDesktop(windowElement);
+  updateWindowSizeButton(windowElement);
 }
 
 function clampWindowToDesktop(windowElement) {
   if (isCompactWindowMode() || windowElement.classList.contains("maximized")) return;
 
-  const desktopRect = $("desktop").getBoundingClientRect();
+  const safeArea = getDesktopSafeArea();
   const rect = windowElement.getBoundingClientRect();
-  if (!desktopRect.width || !desktopRect.height) return;
+  if (!safeArea.desktopRect.width || !safeArea.desktopRect.height) return;
 
-  const minWidth = Math.min(300, desktopRect.width);
-  const minHeight = Math.min(230, desktopRect.height);
-  const width = Math.min(Math.max(rect.width, minWidth), desktopRect.width);
-  const height = Math.min(Math.max(rect.height, minHeight), desktopRect.height);
-  const currentLeft = rect.left - desktopRect.left;
-  const currentTop = rect.top - desktopRect.top;
-  const left = Math.max(0, Math.min(currentLeft, desktopRect.width - width));
-  const top = Math.max(0, Math.min(currentTop, desktopRect.height - height));
+  const minWidth = Math.min(isTabletUiMode() ? 360 : 300, safeArea.width);
+  const minHeight = Math.min(isTabletUiMode() ? 280 : 230, safeArea.height);
+  const width = Math.min(Math.max(rect.width, minWidth), safeArea.width);
+  const height = Math.min(Math.max(rect.height, minHeight), safeArea.height);
+  const currentLeft = rect.left - safeArea.desktopRect.left;
+  const currentTop = rect.top - safeArea.desktopRect.top;
+  const minLeft = safeArea.marginX;
+  const minTop = safeArea.marginTop;
+  const maxLeft = safeArea.marginX + Math.max(0, safeArea.width - width);
+  const maxTop = safeArea.marginTop + Math.max(0, safeArea.height - height);
+  const left = Math.max(minLeft, Math.min(currentLeft, maxLeft));
+  const top = Math.max(minTop, Math.min(currentTop, maxTop));
 
   windowElement.style.left = `${left}px`;
   windowElement.style.top = `${top}px`;
@@ -470,7 +574,6 @@ function clampWindowToDesktop(windowElement) {
   windowElement.style.height = `${height}px`;
   updateWindowResponsiveState(windowElement);
 }
-
 function updateMaximizeButton(windowElement) {
   const button = windowElement.querySelector(".maximize-button");
   if (!button) return;
@@ -479,6 +582,7 @@ function updateMaximizeButton(windowElement) {
   button.textContent = maximized ? "❐" : "□";
   button.title = maximized ? "Restore window" : "Maximize window";
   button.setAttribute("aria-label", button.title);
+  updateWindowSizeButton(windowElement);
 }
 
 function toggleMaximize(windowElement) {
@@ -526,6 +630,17 @@ function initializeWindowControls() {
       toggleMaximize(windowElement);
     });
 
+    const controls = windowElement.querySelector(".window-controls");
+    const maximizeButton = windowElement.querySelector(".maximize-button");
+    const sizeButton = document.createElement("button");
+    sizeButton.type = "button";
+    sizeButton.className = "window-button window-size-button";
+    sizeButton.textContent = "↙";
+    sizeButton.addEventListener("click", () => {
+      cycleTabletWindowPreset(windowElement);
+    });
+    controls.insertBefore(sizeButton, maximizeButton);
+
     const resizeHandle = document.createElement("div");
     resizeHandle.className = "window-resize-handle";
     resizeHandle.setAttribute("role", "button");
@@ -536,6 +651,7 @@ function initializeWindowControls() {
     applyTabletDefaultWindowLayout(windowElement);
     applyStoredWindowLayout(windowElement);
     updateMaximizeButton(windowElement);
+    updateWindowSizeButton(windowElement);
     observeWindowResponsiveState(windowElement);
     enableDragging(windowElement);
     enableResizing(windowElement, resizeHandle);
@@ -654,16 +770,24 @@ function enableResizing(windowElement, resizeHandle) {
   resizeHandle.addEventListener("pointermove", (event) => {
     if (!resizing) return;
 
-    const desktopRect = $("desktop").getBoundingClientRect();
-    const minWidth = Math.min(300, desktopRect.width);
-    const minHeight = Math.min(230, desktopRect.height);
-    const maxWidth = Math.max(minWidth, desktopRect.width - startLeft);
-    const maxHeight = Math.max(minHeight, desktopRect.height - startTop);
+    const safeArea = getDesktopSafeArea();
+    const minWidth = Math.min(isTabletUiMode() ? 360 : 300, safeArea.width);
+    const minHeight = Math.min(isTabletUiMode() ? 280 : 230, safeArea.height);
+    const maxWidth = Math.max(
+      minWidth,
+      safeArea.marginX + safeArea.width - startLeft
+    );
+    const maxHeight = Math.max(
+      minHeight,
+      safeArea.marginTop + safeArea.height - startTop
+    );
     const width = Math.max(minWidth, Math.min(startWidth + event.clientX - startX, maxWidth));
     const height = Math.max(minHeight, Math.min(startHeight + event.clientY - startY, maxHeight));
 
     windowElement.style.width = `${width}px`;
     windowElement.style.height = `${height}px`;
+    windowElement.dataset.windowPreset = "custom";
+    updateWindowSizeButton(windowElement);
     updateWindowResponsiveState(windowElement, { width, height });
   });
 
@@ -684,18 +808,21 @@ function enableResizing(windowElement, resizeHandle) {
   resizeHandle.addEventListener("pointercancel", finishResize);
 }
 
-window.addEventListener("resize", () => {
+function handleViewportResize() {
   updateDeviceUiClasses();
+  updateAppViewportHeight();
 
   document.querySelectorAll(".app-window").forEach((windowElement) => {
     if (!isCompactWindowMode()) {
       applyTabletDefaultWindowLayout(windowElement);
-      applyStoredWindowLayout(windowElement);
       clampWindowToDesktop(windowElement);
     }
     updateWindowResponsiveState(windowElement);
   });
-});
+}
+
+window.addEventListener("resize", handleViewportResize);
+window.visualViewport?.addEventListener("resize", handleViewportResize);
 
 let editingTaskId = null;
 let pendingTaskSource = null;
