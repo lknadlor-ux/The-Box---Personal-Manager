@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6c2-free-templates-reports";
+const CACHE_NAME = "the-box-os-phase-6c2-1-template-interface-hotfix";
 
 const APP_FILES = [
   "./",
