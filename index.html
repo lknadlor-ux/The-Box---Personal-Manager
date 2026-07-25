@@ -102,6 +102,12 @@
           <small>Private cloud vault</small>
         </button>
 
+        <button class="app-tile" data-open-app="templates">
+          <span class="app-icon">▤</span>
+          <strong>Templates &amp; Reports</strong>
+          <small>Reusable forms and compliance exports</small>
+        </button>
+
         <button class="app-tile" data-open-app="pharmacy">
           <span class="app-icon">⚕</span>
           <strong>Pharmacy</strong>
@@ -205,6 +211,11 @@
         <button class="desktop-icon" data-open-app="calendar">
           <span>◫</span>
           <strong>Calendar</strong>
+        </button>
+
+        <button class="desktop-icon" data-open-app="templates">
+          <span>▤</span>
+          <strong>Templates</strong>
         </button>
       </section>
 
@@ -752,6 +763,159 @@
         </article>
 
 
+        <article class="app-window" data-app-window="templates" style="--x: 12%; --y: 7%; --w: 74%; --h: 80%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>▤</span><strong>Templates &amp; Reports</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content template-center-window">
+            <section class="template-center-hero">
+              <div>
+                <small>FREE PRODUCTIVITY TOOLS</small>
+                <h2>Templates &amp; Compliance Reports</h2>
+                <p>Create reusable documents and export organized reports from your Document Vault. No paid API is used.</p>
+              </div>
+              <button id="newTemplateButton" class="primary-button" type="button">＋ New template</button>
+            </section>
+
+            <div class="template-center-notice">
+              Starter checklists are customizable working aids. Confirm current official requirements before submitting regulatory documents.
+            </div>
+
+            <section class="template-center-layout">
+              <aside class="template-library-panel">
+                <div class="template-library-heading">
+                  <div>
+                    <small>LIBRARY</small>
+                    <h3>Saved templates</h3>
+                  </div>
+                  <span id="templateLibraryCount">0</span>
+                </div>
+
+                <input id="templateSearch" type="search" placeholder="Search templates">
+                <select id="templateCategoryFilter" aria-label="Filter template category">
+                  <option value="all">All categories</option>
+                </select>
+
+                <div id="templateList" class="template-list"></div>
+                <p id="templateEmptyState" class="empty-state">No templates match this search.</p>
+              </aside>
+
+              <section class="template-editor-panel">
+                <div class="template-editor-heading">
+                  <div>
+                    <small>EDITOR</small>
+                    <h3>Prepare a reusable document</h3>
+                  </div>
+                  <span id="templateEditorBadge" class="template-editor-badge">Built-in</span>
+                </div>
+
+                <div class="template-editor-fields">
+                  <label>
+                    Template title
+                    <input id="templateEditorTitle" type="text" maxlength="120" placeholder="Template title">
+                  </label>
+                  <label>
+                    Category
+                    <input id="templateEditorCategory" type="text" maxlength="50" placeholder="General">
+                  </label>
+                </div>
+
+                <label class="template-content-field">
+                  Content
+                  <textarea id="templateEditorContent" spellcheck="true" placeholder="Write your reusable template here..."></textarea>
+                </label>
+
+                <div class="template-placeholder-bar" aria-label="Insert template placeholders">
+                  <span>Insert:</span>
+                  <button type="button" data-template-placeholder="{{today}}">Today</button>
+                  <button type="button" data-template-placeholder="{{year}}">Year</button>
+                  <button type="button" data-template-placeholder="{{document_name}}">Document</button>
+                  <button type="button" data-template-placeholder="{{expiry_date}}">Expiry</button>
+                  <button type="button" data-template-placeholder="{{facility_name}}">Facility</button>
+                  <button type="button" data-template-placeholder="{{recipient_name}}">Recipient</button>
+                </div>
+
+                <p class="template-editor-help">
+                  <code>{{today}}</code> and <code>{{year}}</code> are filled automatically when copying or exporting. Other placeholders remain editable.
+                </p>
+
+                <div class="template-editor-actions">
+                  <button id="saveTemplateButton" class="primary-button" type="button">Save as custom copy</button>
+                  <button id="duplicateTemplateButton" class="secondary-button" type="button">Duplicate</button>
+                  <button id="copyTemplateButton" class="secondary-button" type="button">Copy</button>
+                  <button id="downloadTemplateButton" class="secondary-button" type="button">Download TXT</button>
+                  <button id="resetTemplateButton" class="secondary-button" type="button">Reset built-in</button>
+                  <button id="deleteTemplateButton" class="template-danger-button" type="button" disabled>Delete</button>
+                </div>
+              </section>
+            </section>
+
+            <section class="compliance-report-panel">
+              <div class="compliance-report-heading">
+                <div>
+                  <small>DOCUMENT VAULT REPORTS</small>
+                  <h3>Compliance Report Builder</h3>
+                  <p>Generate an inventory, expiry report, attention list, or folder summary from your current vault metadata.</p>
+                </div>
+                <button id="generateComplianceReportButton" class="primary-button" type="button">Generate report</button>
+              </div>
+
+              <div class="compliance-report-filters">
+                <label>
+                  Report type
+                  <select id="complianceReportType">
+                    <option value="inventory">Document inventory</option>
+                    <option value="expiry">Expiry report</option>
+                    <option value="attention">Needs attention</option>
+                    <option value="folder-summary">Folder summary</option>
+                  </select>
+                </label>
+                <label>
+                  Folder
+                  <select id="complianceReportFolder">
+                    <option value="all">All folders</option>
+                  </select>
+                </label>
+                <label>
+                  Status
+                  <select id="complianceReportStatus">
+                    <option value="all">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="expiring">Expiring soon</option>
+                    <option value="expired">Expired</option>
+                    <option value="no-expiry">No expiry date</option>
+                  </select>
+                </label>
+                <label>
+                  Expiry month
+                  <input id="complianceReportMonth" type="month">
+                </label>
+              </div>
+
+              <div class="compliance-report-stats">
+                <div><span>Included</span><strong id="complianceReportIncludedCount">0</strong></div>
+                <div><span>Active</span><strong id="complianceReportActiveCount">0</strong></div>
+                <div><span>Expiring</span><strong id="complianceReportExpiringCount">0</strong></div>
+                <div><span>Expired</span><strong id="complianceReportExpiredCount">0</strong></div>
+              </div>
+
+              <div class="compliance-report-actions">
+                <button id="downloadComplianceCsvButton" class="secondary-button" type="button" disabled>Download CSV</button>
+                <button id="downloadComplianceTextButton" class="secondary-button" type="button" disabled>Download TXT</button>
+                <button id="printComplianceReportButton" class="secondary-button" type="button" disabled>Print report</button>
+              </div>
+
+              <pre id="complianceReportPreview" class="compliance-report-preview">Generate a report to preview it here.</pre>
+            </section>
+          </div>
+        </article>
+
         <article class="app-window" data-app-window="backup" style="--x: 18%; --y: 10%; --w: 64%; --h: 74%;">
           <div class="window-titlebar">
             <div class="window-title"><span>⇩</span><strong>Backup &amp; Restore</strong></div>
@@ -828,6 +992,7 @@
                   <label class="backup-check compact"><input id="restoreBackupFinance" type="checkbox" checked><span><strong>Finance</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupNotes" type="checkbox" checked><span><strong>Notes</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupPreferences" type="checkbox" checked><span><strong>Preferences &amp; layouts</strong></span></label>
+                  <label class="backup-check compact"><input id="restoreBackupTemplates" type="checkbox" checked><span><strong>Custom templates</strong></span></label>
                 </div>
 
                 <label class="backup-check">
@@ -905,6 +1070,10 @@
       <button class="dock-item" data-open-app="assistant" title="Assistant" aria-label="Assistant">
         <span class="dock-icon" aria-hidden="true">✦</span>
         <span class="dock-label">Assistant</span>
+      </button>
+      <button class="dock-item" data-open-app="templates" title="Templates and Reports" aria-label="Templates and Reports">
+        <span class="dock-icon" aria-hidden="true">▤</span>
+        <span class="dock-label">Templates</span>
       </button>
       <button class="dock-item" data-open-app="backup" title="Backup &amp; Restore" aria-label="Backup and Restore">
         <span class="dock-icon" aria-hidden="true">⇩</span>

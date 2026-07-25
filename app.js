@@ -52,7 +52,8 @@ const STORAGE = {
   documentView: "theBoxOSDocumentView",
   lastBackupAt: "theBoxOSLastBackupAt",
   safetyBackup: "theBoxOSSafetyBackup",
-  honorPadUiFix: "theBoxOSHonorPadUiFixV3"
+  honorPadUiFix: "theBoxOSHonorPadUiFixV3",
+  customTemplates: "theBoxOSCustomTemplates"
 };
 
 const DAVAO = {
@@ -126,6 +127,7 @@ const $ = (id) => document.getElementById(id);
 let tasks = loadJSON(STORAGE.tasks, []);
 let events = loadJSON(STORAGE.events, []);
 let financeEntries = loadJSON(STORAGE.finance, []);
+let customTemplates = loadJSON(STORAGE.customTemplates, []);
 
 let activeFilter = "all";
 let activeWorkspaceFilter = "all";
@@ -188,6 +190,306 @@ let smartDocumentExtractionBusy = false;
 let smartPdfModulePromise = null;
 let smartTextDatabasePromise = null;
 
+
+const BUILT_IN_TEMPLATES = [
+  {
+    id: "builtin-sk-program-design",
+    title: "SK Program Design",
+    category: "SK",
+    content: `TITLE
+{{program_title}}
+
+RATIONALE
+{{rationale}}
+
+OBJECTIVES
+• {{objective_1}}
+• {{objective_2}}
+• {{objective_3}}
+
+DATE AND TIME
+{{date_and_time}}
+
+PARTICIPANTS
+{{participants}}
+
+BUDGETARY REQUIREMENTS
+{{budgetary_requirements}}
+
+EXPECTED OUTPUT
+{{expected_output}}
+
+Prepared by:
+
+______________________________
+SK Secretary
+
+Noted by:
+
+______________________________
+SK Chairperson`
+  },
+  {
+    id: "builtin-sk-post-activity",
+    title: "SK Post-Activity Report",
+    category: "SK",
+    content: `TITLE
+{{activity_title}}
+
+DATE
+{{activity_date}}
+
+VENUE
+{{venue}}
+
+TOTAL PARTICIPANTS
+{{total_participants}}
+
+OBJECTIVES
+• {{objective_1}}
+• {{objective_2}}
+• {{objective_3}}
+
+HIGHLIGHTS
+
+{{highlights_paragraph_1}}
+
+{{highlights_paragraph_2}}
+
+A. Activities Conducted
+{{activities_conducted}}
+
+B. Participation and Engagement
+{{participation_and_engagement}}
+
+C. Issues and Challenges
+{{issues_and_challenges}}
+
+D. Recommendations
+{{recommendations}}
+
+Prepared by:
+
+______________________________
+SK Secretary
+
+Noted by:
+
+______________________________
+SK Chairperson`
+  },
+  {
+    id: "builtin-supplier-follow-up-email",
+    title: "Supplier Order Follow-up Email",
+    category: "Suppliers",
+    content: `Subject: Follow-up on {{order_reference}}
+
+Dear {{recipient_name}},
+
+Good day.
+
+We would like to follow up on {{order_reference}}, placed on {{order_date}}. Please provide the current status, expected delivery date, and any items that are unavailable or pending.
+
+Delivery details:
+Facility: {{facility_name}}
+Address: {{delivery_address}}
+Contact person: {{contact_person}}
+
+Thank you.
+
+Sincerely,
+{{sender_name}}
+{{position}}
+{{facility_name}}`
+  },
+  {
+    id: "builtin-clinic-staff-memo",
+    title: "Clinic Staff Memorandum",
+    category: "Clinic",
+    content: `MEMORANDUM
+
+Date: {{today}}
+To: {{recipients}}
+From: {{sender_name}}
+Subject: {{subject}}
+
+{{opening_statement}}
+
+Please observe the following:
+
+1. {{instruction_1}}
+2. {{instruction_2}}
+3. {{instruction_3}}
+
+{{closing_statement}}
+
+For strict compliance.
+
+______________________________
+{{sender_name}}
+{{position}}`
+  },
+  {
+    id: "builtin-document-renewal-notice",
+    title: "Document Renewal Notice",
+    category: "Compliance",
+    content: `DOCUMENT RENEWAL NOTICE
+
+Date: {{today}}
+
+Document: {{document_name}}
+Current expiry date: {{expiry_date}}
+Responsible person/unit: {{responsible_person}}
+Target filing date: {{target_filing_date}}
+
+Required actions:
+☐ Confirm the latest documentary requirements
+☐ Prepare and review supporting documents
+☐ Verify names, dates, addresses, and signatures
+☐ Arrange payment or filing, when applicable
+☐ Save the submission and acknowledgement copies
+☐ Update the Document Vault record after completion
+
+Notes:
+{{notes}}`
+  },
+  {
+    id: "builtin-compliance-incident-report",
+    title: "Compliance Incident Report",
+    category: "Compliance",
+    content: `COMPLIANCE INCIDENT REPORT
+
+Date and time identified: {{incident_date_time}}
+Facility/unit: {{facility_name}}
+Reported by: {{reported_by}}
+
+INCIDENT
+{{incident_description}}
+
+IMMEDIATE ACTIONS TAKEN
+{{immediate_actions}}
+
+POTENTIAL IMPACT
+{{potential_impact}}
+
+ROOT CAUSE OR CONTRIBUTING FACTORS
+{{root_cause}}
+
+CORRECTIVE ACTIONS
+{{corrective_actions}}
+
+PREVENTIVE ACTIONS
+{{preventive_actions}}
+
+RESPONSIBLE PERSON AND TARGET DATE
+{{responsible_person_and_target}}
+
+STATUS
+{{status}}
+
+Attachments or references:
+{{attachments}}`
+  },
+  {
+    id: "builtin-fda-renewal-planning",
+    title: "FDA LTO Renewal Planning Checklist",
+    category: "FDA",
+    content: `FDA LTO RENEWAL PLANNING CHECKLIST
+Customizable working copy — verify the current official FDA requirements.
+
+Facility: {{facility_name}}
+LTO type: {{lto_type}}
+Current validity: {{validity_period}}
+Target submission date: {{target_submission_date}}
+
+PLANNING
+☐ Confirm the correct application or variation type
+☐ Review the current FDA portal instructions
+☐ Verify establishment and qualified-person details
+☐ Review business and location information
+☐ Check all supporting documents for validity
+☐ Confirm fees and payment instructions
+☐ Prepare clear, readable file copies
+☐ Review consistency of names, addresses, and dates
+☐ Submit and save the acknowledgement/reference number
+☐ Track clarifications, inspection, or compliance requests
+☐ Save the approved record in the Document Vault
+
+Additional requirements to confirm:
+{{requirements_to_confirm}}
+
+Notes:
+{{notes}}`
+  },
+  {
+    id: "builtin-philhealth-operations-checklist",
+    title: "PhilHealth YAKAP/GAMOT Operations Checklist",
+    category: "PhilHealth",
+    content: `PHILHEALTH YAKAP/GAMOT OPERATIONS CHECKLIST
+Customizable working copy — confirm current PhilHealth issuances and portal rules.
+
+Date: {{today}}
+Facility: {{facility_name}}
+Prepared by: {{prepared_by}}
+
+DAILY REVIEW
+☐ Check portal access and account status
+☐ Review pending patient or member concerns
+☐ Verify completeness of required records
+☐ Check pending claims, availments, or submissions
+☐ Record system errors or downtime
+☐ Follow up unresolved cases
+☐ Save official advisories and reference documents
+☐ Escalate urgent operational issues
+
+PENDING ITEMS
+{{pending_items}}
+
+SYSTEM OR PROCESS ISSUES
+{{system_issues}}
+
+FOLLOW-UP OWNER AND DUE DATE
+{{follow_up_owner_and_due_date}}`
+  },
+  {
+    id: "builtin-formal-request-letter",
+    title: "Formal Request Letter",
+    category: "General",
+    content: `{{today}}
+
+{{recipient_name}}
+{{recipient_position}}
+{{organization}}
+{{organization_address}}
+
+Subject: {{subject}}
+
+Dear {{recipient_salutation}},
+
+{{opening_paragraph}}
+
+{{request_details}}
+
+{{supporting_context}}
+
+Thank you for your consideration.
+
+Respectfully,
+
+{{sender_name}}
+{{position}}
+{{facility_name}}
+{{contact_details}}`
+  }
+];
+
+let selectedTemplateId = BUILT_IN_TEMPLATES[0].id;
+let templateSearchTerm = "";
+let templateCategoryFilter = "all";
+let generatedComplianceReport = null;
+let templatesCloudLoading = false;
+
+
 function loadJSON(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -196,6 +498,37 @@ function loadJSON(key, fallback) {
     console.error(`Could not read ${key}:`, error);
     return fallback;
   }
+}
+
+
+function createLocalTemplateId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `template-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeCustomTemplate(template = {}) {
+  const createdAt = template.createdAt || template.created_at || new Date().toISOString();
+  return {
+    id: String(template.id || createLocalTemplateId()),
+    title: String(template.title || "Untitled template").trim().slice(0, 120),
+    category: String(template.category || "General").trim().slice(0, 50) || "General",
+    content: String(template.content || "").slice(0, 250000),
+    createdAt,
+    updatedAt: template.updatedAt || template.updated_at || createdAt
+  };
+}
+
+function normalizeCustomTemplates(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value
+    .map(normalizeCustomTemplate)
+    .filter((template) => {
+      if (!template.id || seen.has(template.id)) return false;
+      seen.add(template.id);
+      return true;
+    })
+    .slice(0, 500);
 }
 
 function saveJSON(key, value) {
@@ -252,6 +585,8 @@ function normalizeData() {
     date: event.date || new Date().toISOString().slice(0, 10),
     workspace: event.workspace || "personal"
   }));
+
+  customTemplates = normalizeCustomTemplates(customTemplates);
 
   financeEntries = financeEntries.map((entry) => ({
     id: entry.id || Date.now() + Math.random(),
@@ -323,6 +658,16 @@ function openApp(appName) {
 
   if (appName === "backup") {
     renderBackupCenter();
+  }
+
+  if (appName === "templates") {
+    renderTemplateCenter();
+    if (window.BoxCloud?.isReady() && !templatesCloudLoading) {
+      loadCustomTemplatesFromCloud({ mergeLocal: true });
+    }
+    if (window.BoxCloud?.isReady() && !documents.length) {
+      loadDocuments({ silent: true });
+    }
   }
 }
 
@@ -3473,9 +3818,546 @@ async function uploadSelectedDocuments() {
 }
 
 
+
+function getAllTemplates() {
+  return [
+    ...BUILT_IN_TEMPLATES.map((template) => ({ ...template, builtIn: true })),
+    ...customTemplates.map((template) => ({ ...template, builtIn: false }))
+  ];
+}
+
+function getSelectedTemplate() {
+  return getAllTemplates().find((template) => template.id === selectedTemplateId)
+    || getAllTemplates()[0]
+    || null;
+}
+
+function persistCustomTemplates() {
+  customTemplates = normalizeCustomTemplates(customTemplates);
+  localStorage.setItem(STORAGE.customTemplates, JSON.stringify(customTemplates));
+}
+
+async function loadCustomTemplatesFromCloud({ mergeLocal = false } = {}) {
+  if (!window.BoxCloud?.isReady() || templatesCloudLoading) return;
+  templatesCloudLoading = true;
+
+  try {
+    const result = await window.BoxCloud.listCustomTemplates();
+    if (result.error) throw result.error;
+
+    const cloudTemplates = normalizeCustomTemplates(result.data || []);
+    if (mergeLocal && customTemplates.length) {
+      const merged = new Map();
+      [...cloudTemplates, ...customTemplates].forEach((template) => {
+        const current = merged.get(template.id);
+        if (!current || new Date(template.updatedAt) >= new Date(current.updatedAt)) {
+          merged.set(template.id, template);
+        }
+      });
+      customTemplates = Array.from(merged.values());
+      persistCustomTemplates();
+      await window.BoxCloud.replaceCustomTemplates(customTemplates);
+    } else {
+      customTemplates = cloudTemplates;
+      persistCustomTemplates();
+    }
+
+    if (!getSelectedTemplate()) {
+      selectedTemplateId = BUILT_IN_TEMPLATES[0]?.id || customTemplates[0]?.id || "";
+    }
+    renderTemplateCenter();
+  } catch (error) {
+    console.error("Could not load custom templates:", error);
+    showToast("Templates are available locally");
+  } finally {
+    templatesCloudLoading = false;
+  }
+}
+
+function resolveTemplateDynamicFields(content) {
+  const now = new Date();
+  const today = now.toLocaleDateString("en-PH", {
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+
+  return String(content || "")
+    .replaceAll("{{today}}", today)
+    .replaceAll("{{current_date}}", today)
+    .replaceAll("{{year}}", String(now.getFullYear()));
+}
+
+function getTemplateCategories() {
+  return Array.from(new Set(
+    getAllTemplates()
+      .map((template) => template.category)
+      .filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b));
+}
+
+function renderTemplateCategoryFilter() {
+  const select = $("templateCategoryFilter");
+  if (!select) return;
+
+  const current = templateCategoryFilter;
+  select.innerHTML = `<option value="all">All categories</option>` +
+    getTemplateCategories()
+      .map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`)
+      .join("");
+
+  select.value = getTemplateCategories().includes(current) ? current : "all";
+  templateCategoryFilter = select.value;
+}
+
+function renderTemplateLibrary() {
+  const list = $("templateList");
+  if (!list) return;
+
+  const query = templateSearchTerm.toLocaleLowerCase();
+  const filtered = getAllTemplates().filter((template) => {
+    const categoryMatch = templateCategoryFilter === "all"
+      || template.category === templateCategoryFilter;
+    const searchMatch = !query
+      || template.title.toLocaleLowerCase().includes(query)
+      || template.category.toLocaleLowerCase().includes(query)
+      || template.content.toLocaleLowerCase().includes(query);
+    return categoryMatch && searchMatch;
+  });
+
+  $("templateLibraryCount").textContent = String(getAllTemplates().length);
+  $("templateEmptyState").hidden = filtered.length > 0;
+
+  list.innerHTML = filtered.map((template) => `
+    <button class="template-list-item ${template.id === selectedTemplateId ? "active" : ""}"
+      type="button" data-template-id="${escapeHtml(template.id)}">
+      <span class="template-list-icon">${template.builtIn ? "▤" : "✎"}</span>
+      <span>
+        <strong>${escapeHtml(template.title)}</strong>
+        <small>${escapeHtml(template.category)} · ${template.builtIn ? "Built-in" : "Custom"}</small>
+      </span>
+    </button>
+  `).join("");
+
+  list.querySelectorAll("[data-template-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedTemplateId = button.dataset.templateId;
+      renderTemplateCenter();
+    });
+  });
+}
+
+function populateTemplateEditor() {
+  const template = getSelectedTemplate();
+  if (!template || !$("templateEditorTitle")) return;
+
+  $("templateEditorTitle").value = template.title;
+  $("templateEditorCategory").value = template.category;
+  $("templateEditorContent").value = template.content;
+
+  $("templateEditorBadge").textContent = template.builtIn ? "Built-in" : "Custom";
+  $("templateEditorBadge").className = `template-editor-badge ${template.builtIn ? "built-in" : "custom"}`;
+  $("saveTemplateButton").textContent = template.builtIn ? "Save as custom copy" : "Save changes";
+  $("deleteTemplateButton").disabled = template.builtIn;
+  $("resetTemplateButton").disabled = !template.builtIn;
+}
+
+function renderComplianceReportFolderOptions() {
+  const select = $("complianceReportFolder");
+  if (!select) return;
+
+  const current = select.value || "all";
+  const folders = Array.from(new Set([
+    ...DEFAULT_DOCUMENT_FOLDERS,
+    ...documentFolders.map((folder) => folder.name),
+    ...documents.map((documentItem) => documentItem.folder)
+  ].filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
+  select.innerHTML = `<option value="all">All folders</option>` +
+    folders.map((folder) => `<option value="${escapeHtml(folder)}">${escapeHtml(folder)}</option>`).join("");
+  select.value = folders.includes(current) ? current : "all";
+}
+
+function renderTemplateCenter() {
+  if (!$("templateList")) return;
+  renderTemplateCategoryFilter();
+  renderTemplateLibrary();
+  populateTemplateEditor();
+  renderComplianceReportFolderOptions();
+  if (generatedComplianceReport) renderComplianceReport(generatedComplianceReport);
+}
+
+function createNewCustomTemplate() {
+  const now = new Date().toISOString();
+  const template = normalizeCustomTemplate({
+    id: createLocalTemplateId(),
+    title: "Untitled template",
+    category: "General",
+    content: "TITLE\n\nWrite your reusable content here.",
+    createdAt: now,
+    updatedAt: now
+  });
+
+  customTemplates.unshift(template);
+  persistCustomTemplates();
+  selectedTemplateId = template.id;
+  renderTemplateCenter();
+  $("templateEditorTitle").focus();
+
+  if (window.BoxCloud?.isReady()) {
+    window.BoxCloud.saveCustomTemplate(template).catch(console.error);
+  }
+}
+
+async function saveTemplateEditor() {
+  const source = getSelectedTemplate();
+  if (!source) return;
+
+  const title = $("templateEditorTitle").value.trim();
+  const category = $("templateEditorCategory").value.trim() || "General";
+  const content = $("templateEditorContent").value;
+
+  if (!title) {
+    showToast("Enter a template title");
+    $("templateEditorTitle").focus();
+    return;
+  }
+  if (!content.trim()) {
+    showToast("Template content cannot be empty");
+    $("templateEditorContent").focus();
+    return;
+  }
+
+  const now = new Date().toISOString();
+  let savedTemplate;
+
+  if (source.builtIn) {
+    savedTemplate = normalizeCustomTemplate({
+      id: createLocalTemplateId(),
+      title,
+      category,
+      content,
+      createdAt: now,
+      updatedAt: now
+    });
+    customTemplates.unshift(savedTemplate);
+  } else {
+    const index = customTemplates.findIndex((template) => template.id === source.id);
+    if (index < 0) return;
+    savedTemplate = normalizeCustomTemplate({
+      ...customTemplates[index],
+      title,
+      category,
+      content,
+      updatedAt: now
+    });
+    customTemplates[index] = savedTemplate;
+  }
+
+  persistCustomTemplates();
+  selectedTemplateId = savedTemplate.id;
+  renderTemplateCenter();
+
+  if (window.BoxCloud?.isReady()) {
+    const result = await window.BoxCloud.saveCustomTemplate(savedTemplate);
+    if (result.error) {
+      showToast("Saved locally; cloud sync failed");
+      return;
+    }
+  }
+  showToast(source.builtIn ? "Custom template created" : "Template saved");
+}
+
+async function duplicateSelectedTemplate() {
+  const source = getSelectedTemplate();
+  if (!source) return;
+  const now = new Date().toISOString();
+  const copy = normalizeCustomTemplate({
+    id: createLocalTemplateId(),
+    title: `${source.title} — Copy`,
+    category: source.category,
+    content: $("templateEditorContent").value || source.content,
+    createdAt: now,
+    updatedAt: now
+  });
+
+  customTemplates.unshift(copy);
+  persistCustomTemplates();
+  selectedTemplateId = copy.id;
+  renderTemplateCenter();
+
+  if (window.BoxCloud?.isReady()) {
+    await window.BoxCloud.saveCustomTemplate(copy);
+  }
+  showToast("Template duplicated");
+}
+
+async function deleteSelectedTemplate() {
+  const source = getSelectedTemplate();
+  if (!source || source.builtIn) return;
+  if (!window.confirm(`Delete “${source.title}”?`)) return;
+
+  customTemplates = customTemplates.filter((template) => template.id !== source.id);
+  persistCustomTemplates();
+  selectedTemplateId = BUILT_IN_TEMPLATES[0]?.id || customTemplates[0]?.id || "";
+  renderTemplateCenter();
+
+  if (window.BoxCloud?.isReady()) {
+    const result = await window.BoxCloud.deleteCustomTemplate(source.id);
+    if (result.error) showToast("Deleted locally; cloud delete failed");
+  }
+  showToast("Template deleted");
+}
+
+function resetBuiltInTemplateEditor() {
+  const source = getSelectedTemplate();
+  if (!source?.builtIn) return;
+  populateTemplateEditor();
+  showToast("Built-in template restored");
+}
+
+function getEditorTemplateOutput() {
+  return resolveTemplateDynamicFields($("templateEditorContent")?.value || "");
+}
+
+async function copySelectedTemplate() {
+  const output = getEditorTemplateOutput();
+  if (!output.trim()) return;
+  await copyTextToClipboard(output);
+  showToast("Template copied");
+}
+
+function downloadSelectedTemplate() {
+  const title = $("templateEditorTitle").value.trim() || "template";
+  downloadTextFile(
+    `${cleanFileNameSegment(title)}.txt`,
+    getEditorTemplateOutput(),
+    "text/plain"
+  );
+  showToast("Template downloaded");
+}
+
+function insertTemplatePlaceholder(value) {
+  const textarea = $("templateEditorContent");
+  if (!textarea) return;
+
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? start;
+  textarea.setRangeText(value, start, end, "end");
+  textarea.focus();
+}
+
+function escapeCsvCell(value) {
+  const text = String(value ?? "");
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function getComplianceReportRows() {
+  const reportType = $("complianceReportType").value;
+  const folder = $("complianceReportFolder").value;
+  const status = $("complianceReportStatus").value;
+  const month = $("complianceReportMonth").value;
+
+  return documents
+    .filter((documentItem) => !documentItem.deleted_at)
+    .map((documentItem) => {
+      const compliance = getDocumentCompliance(documentItem);
+      return {
+        documentItem,
+        compliance,
+        name: documentItem.name || "Untitled document",
+        folder: documentItem.folder || "Unfiled",
+        status: compliance.key,
+        statusLabel: compliance.label,
+        expiryDate: documentItem.expiry_date || "",
+        reminderDays: compliance.reminderDays,
+        tags: getDocumentTags(documentItem),
+        details: documentItem.details || "",
+        version: Number(documentItem.current_version || 1),
+        uploadedAt: documentItem.created_at || ""
+      };
+    })
+    .filter((row) => {
+      if (folder !== "all" && row.folder !== folder) return false;
+      if (status !== "all" && row.status !== status) return false;
+      if (month && !row.expiryDate.startsWith(month)) return false;
+      if (reportType === "expiry" && !row.expiryDate) return false;
+      if (reportType === "attention" && !["expiring", "expired"].includes(row.status)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const aDate = a.expiryDate || "9999-12-31";
+      const bDate = b.expiryDate || "9999-12-31";
+      return aDate.localeCompare(bDate) || a.name.localeCompare(b.name);
+    });
+}
+
+function buildComplianceReport() {
+  const rows = getComplianceReportRows();
+  const reportType = $("complianceReportType").value;
+  const now = new Date();
+  const summary = {
+    total: rows.length,
+    active: rows.filter((row) => row.status === "active").length,
+    expiring: rows.filter((row) => row.status === "expiring").length,
+    expired: rows.filter((row) => row.status === "expired").length,
+    noExpiry: rows.filter((row) => row.status === "no-expiry").length
+  };
+
+  const titleMap = {
+    inventory: "Document Inventory",
+    expiry: "Document Expiry Report",
+    attention: "Documents Requiring Attention",
+    "folder-summary": "Document Folder Summary"
+  };
+
+  const folderGroups = rows.reduce((groups, row) => {
+    groups[row.folder] = groups[row.folder] || [];
+    groups[row.folder].push(row);
+    return groups;
+  }, {});
+
+  let text = `${titleMap[reportType] || "Compliance Report"}\n`;
+  text += `Generated: ${now.toLocaleString("en-PH")}\n`;
+  text += `Included: ${summary.total} | Active: ${summary.active} | Expiring: ${summary.expiring} | Expired: ${summary.expired} | No expiry: ${summary.noExpiry}\n`;
+  text += `${"=".repeat(78)}\n\n`;
+
+  if (!rows.length) {
+    text += "No documents matched the selected filters.\n";
+  } else if (reportType === "folder-summary") {
+    Object.entries(folderGroups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([folderName, folderRows]) => {
+        const folderExpired = folderRows.filter((row) => row.status === "expired").length;
+        const folderExpiring = folderRows.filter((row) => row.status === "expiring").length;
+        text += `${folderName}: ${folderRows.length} document(s), ${folderExpiring} expiring, ${folderExpired} expired\n`;
+      });
+  } else {
+    rows.forEach((row, index) => {
+      text += `${index + 1}. ${row.name}\n`;
+      text += `   Folder: ${row.folder}\n`;
+      text += `   Status: ${row.statusLabel}\n`;
+      text += `   Expiry: ${row.expiryDate ? formatDocumentExpiryDate(row.expiryDate) : "Not set"}\n`;
+      text += `   Tags: ${row.tags.length ? row.tags.join(", ") : "None"}\n`;
+      if (row.details) text += `   Details: ${row.details}\n`;
+      text += "\n";
+    });
+  }
+
+  const csvRows = [
+    ["Name", "Folder", "Status", "Expiry Date", "Reminder Days", "Tags", "Details", "Version", "Uploaded At"],
+    ...rows.map((row) => [
+      row.name,
+      row.folder,
+      row.statusLabel,
+      row.expiryDate,
+      row.reminderDays,
+      row.tags.join(", "),
+      row.details,
+      row.version,
+      row.uploadedAt
+    ])
+  ];
+
+  return {
+    generatedAt: now.toISOString(),
+    reportType,
+    title: titleMap[reportType] || "Compliance Report",
+    rows,
+    summary,
+    text,
+    csv: csvRows.map((row) => row.map(escapeCsvCell).join(",")).join("\n")
+  };
+}
+
+function renderComplianceReport(report) {
+  if (!report || !$("complianceReportPreview")) return;
+  $("complianceReportIncludedCount").textContent = String(report.summary.total);
+  $("complianceReportActiveCount").textContent = String(report.summary.active);
+  $("complianceReportExpiringCount").textContent = String(report.summary.expiring);
+  $("complianceReportExpiredCount").textContent = String(report.summary.expired);
+  $("complianceReportPreview").textContent = report.text;
+  $("downloadComplianceCsvButton").disabled = false;
+  $("downloadComplianceTextButton").disabled = false;
+  $("printComplianceReportButton").disabled = false;
+}
+
+function generateComplianceReport() {
+  generatedComplianceReport = buildComplianceReport();
+  renderComplianceReport(generatedComplianceReport);
+  showToast("Compliance report generated");
+}
+
+function downloadComplianceCsv() {
+  if (!generatedComplianceReport) return;
+  downloadTextFile(
+    `the-box-${cleanFileNameSegment(generatedComplianceReport.title)}.csv`,
+    generatedComplianceReport.csv,
+    "text/csv"
+  );
+}
+
+function downloadComplianceText() {
+  if (!generatedComplianceReport) return;
+  downloadTextFile(
+    `the-box-${cleanFileNameSegment(generatedComplianceReport.title)}.txt`,
+    generatedComplianceReport.text,
+    "text/plain"
+  );
+}
+
+function printComplianceReport() {
+  if (!generatedComplianceReport) return;
+  const report = generatedComplianceReport;
+  const printable = window.open("", "_blank", "noopener,noreferrer");
+  if (!printable) {
+    showToast("Allow pop-ups to print the report");
+    return;
+  }
+
+  const rows = report.rows.map((row) => `
+    <tr>
+      <td>${escapeHtml(row.name)}</td>
+      <td>${escapeHtml(row.folder)}</td>
+      <td>${escapeHtml(row.statusLabel)}</td>
+      <td>${escapeHtml(row.expiryDate ? formatDocumentExpiryDate(row.expiryDate) : "Not set")}</td>
+      <td>${escapeHtml(row.tags.join(", ") || "None")}</td>
+    </tr>
+  `).join("");
+
+  printable.document.write(`<!doctype html>
+    <html><head><title>${escapeHtml(report.title)}</title>
+    <style>
+      body{font-family:Arial,sans-serif;padding:24px;color:#111}
+      h1{margin-bottom:6px}
+      p{color:#444}
+      table{width:100%;border-collapse:collapse;margin-top:20px}
+      th,td{border:1px solid #bbb;padding:8px;text-align:left;vertical-align:top}
+      th{background:#eee}
+      .summary{display:flex;gap:16px;flex-wrap:wrap;margin:18px 0}
+      .summary span{border:1px solid #ccc;padding:8px 12px;border-radius:8px}
+    </style></head><body>
+      <h1>${escapeHtml(report.title)}</h1>
+      <p>Generated ${escapeHtml(new Date(report.generatedAt).toLocaleString("en-PH"))}</p>
+      <div class="summary">
+        <span>Included: ${report.summary.total}</span>
+        <span>Active: ${report.summary.active}</span>
+        <span>Expiring: ${report.summary.expiring}</span>
+        <span>Expired: ${report.summary.expired}</span>
+      </div>
+      <table>
+        <thead><tr><th>Document</th><th>Folder</th><th>Status</th><th>Expiry</th><th>Tags</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5">No matching documents.</td></tr>'}</tbody>
+      </table>
+      <script>window.addEventListener("load",()=>{window.print();});<\/script>
+    </body></html>`);
+  printable.document.close();
+}
+
+
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "6C.1-Free";
+const BACKUP_APP_VERSION = "6C.2-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -3521,6 +4403,7 @@ function buildLocalBackupData() {
     events: events.map((event) => ({ ...event })),
     financeEntries: financeEntries.map((entry) => ({ ...entry })),
     notes: $("quickNotes")?.value ?? localStorage.getItem(STORAGE.notes) ?? "",
+    customTemplates: customTemplates.map((template) => ({ ...template })),
     preferences: {
       theme: localStorage.getItem(STORAGE.theme) || "dark",
       timerMinutes: Number(localStorage.getItem(STORAGE.timerMinutes) || 25),
@@ -3736,6 +4619,7 @@ function renderBackupImportPreview(backup, integrityResult) {
       <small>${backup.data.events.length} events</small>
       <small>${backup.data.financeEntries.length} finance entries</small>
       <small>${inventory?.documents?.length || 0} document records</small>
+      <small>${backup.data.customTemplates?.length || 0} custom templates</small>
     </div>
     <em>${escapeHtml(integrityLabel)}</em>
   `;
@@ -3822,7 +4706,8 @@ async function restoreSelectedBackup() {
     events: $("restoreBackupEvents").checked,
     finance: $("restoreBackupFinance").checked,
     notes: $("restoreBackupNotes").checked,
-    preferences: $("restoreBackupPreferences").checked
+    preferences: $("restoreBackupPreferences").checked,
+    templates: $("restoreBackupTemplates").checked
   };
 
   if (!Object.values(selected).some(Boolean)) {
@@ -3868,11 +4753,20 @@ async function restoreSelectedBackup() {
     if (selected.preferences) {
       restoreBackupPreferences(data.preferences || {});
     }
+    if (selected.templates) {
+      customTemplates = normalizeCustomTemplates(data.customTemplates || []);
+      persistCustomTemplates();
+      selectedTemplateId = BUILT_IN_TEMPLATES[0]?.id || customTemplates[0]?.id || "";
+    }
 
     renderAll();
 
     if (shouldSync) {
       setBackupStatus("Local restore complete. Syncing restored data to cloud…", "working");
+      if (selected.templates && window.BoxCloud?.replaceCustomTemplates) {
+        const templateSyncResult = await window.BoxCloud.replaceCustomTemplates(customTemplates);
+        if (templateSyncResult.error) throw templateSyncResult.error;
+      }
       const syncResult = await window.BoxCloud.syncNow();
       if (syncResult.error) throw syncResult.error;
     }
@@ -3941,6 +4835,7 @@ function renderAll() {
   renderFinance();
   renderDocuments();
   renderBackupCenter();
+  renderTemplateCenter();
 }
 
 async function loadWeather() {
@@ -4583,6 +5478,42 @@ document.addEventListener("keydown", (event) => {
 });
 
 
+
+$("newTemplateButton").addEventListener("click", createNewCustomTemplate);
+$("templateSearch").addEventListener("input", (event) => {
+  templateSearchTerm = event.target.value.trim();
+  renderTemplateLibrary();
+});
+$("templateCategoryFilter").addEventListener("change", (event) => {
+  templateCategoryFilter = event.target.value;
+  renderTemplateLibrary();
+});
+$("saveTemplateButton").addEventListener("click", saveTemplateEditor);
+$("duplicateTemplateButton").addEventListener("click", duplicateSelectedTemplate);
+$("deleteTemplateButton").addEventListener("click", deleteSelectedTemplate);
+$("resetTemplateButton").addEventListener("click", resetBuiltInTemplateEditor);
+$("copyTemplateButton").addEventListener("click", copySelectedTemplate);
+$("downloadTemplateButton").addEventListener("click", downloadSelectedTemplate);
+document.querySelectorAll("[data-template-placeholder]").forEach((button) => {
+  button.addEventListener("click", () => {
+    insertTemplatePlaceholder(button.dataset.templatePlaceholder);
+  });
+});
+$("generateComplianceReportButton").addEventListener("click", generateComplianceReport);
+$("downloadComplianceCsvButton").addEventListener("click", downloadComplianceCsv);
+$("downloadComplianceTextButton").addEventListener("click", downloadComplianceText);
+$("printComplianceReportButton").addEventListener("click", printComplianceReport);
+["complianceReportType", "complianceReportFolder", "complianceReportStatus", "complianceReportMonth"]
+  .forEach((id) => {
+    $(id).addEventListener("change", () => {
+      generatedComplianceReport = null;
+      $("downloadComplianceCsvButton").disabled = true;
+      $("downloadComplianceTextButton").disabled = true;
+      $("printComplianceReportButton").disabled = true;
+      $("complianceReportPreview").textContent = "Filters changed. Generate the report again.";
+    });
+  });
+
 $("downloadBackupButton").addEventListener("click", downloadWorkspaceBackup);
 $("chooseBackupFileButton").addEventListener("click", () => $("backupFileInput").click());
 $("backupFileInput").addEventListener("change", async () => {
@@ -4630,6 +5561,14 @@ window.BoxOSCloudHydrate = function cloudHydrate(data) {
   if (typeof data.notes === "string") {
     $("quickNotes").value = data.notes;
     localStorage.setItem(STORAGE.notes, data.notes);
+  }
+
+  if (Array.isArray(data.custom_templates)) {
+    customTemplates = normalizeCustomTemplates(data.custom_templates);
+    persistCustomTemplates();
+    if (!getSelectedTemplate()) {
+      selectedTemplateId = BUILT_IN_TEMPLATES[0]?.id || customTemplates[0]?.id || "";
+    }
   }
 
   localStorage.setItem(STORAGE.tasks, JSON.stringify(tasks));

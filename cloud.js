@@ -546,6 +546,87 @@ window.BoxCloud = (() => {
     return { error: metadataError };
   }
 
+
+  const TEMPLATE_SELECT = "id,title,category,content,created_at,updated_at";
+
+  async function listCustomTemplates() {
+    if (!isReady()) return { data: [], error: new Error("Sign in to access custom templates.") };
+
+    const { data, error } = await client
+      .from("custom_templates")
+      .select(TEMPLATE_SELECT)
+      .eq("user_id", session.user.id)
+      .order("updated_at", { ascending: false });
+
+    return { data: data || [], error };
+  }
+
+  async function saveCustomTemplate(template = {}) {
+    if (!isReady()) return { data: null, error: new Error("Sign in to sync templates.") };
+
+    const now = new Date().toISOString();
+    const row = {
+      id: String(template.id || createUuid()),
+      user_id: session.user.id,
+      title: String(template.title || "Untitled template").trim().slice(0, 120),
+      category: String(template.category || "General").trim().slice(0, 50) || "General",
+      content: String(template.content || "").slice(0, 250000),
+      created_at: template.createdAt || template.created_at || now,
+      updated_at: template.updatedAt || template.updated_at || now
+    };
+
+    const { data, error } = await client
+      .from("custom_templates")
+      .upsert(row, { onConflict: "id" })
+      .select(TEMPLATE_SELECT)
+      .single();
+
+    emit(error ? "error" : "online", error ? "Template sync error" : "Synced");
+    return { data, error };
+  }
+
+  async function deleteCustomTemplate(templateId) {
+    if (!isReady()) return { error: new Error("Sign in to sync templates.") };
+
+    const { error } = await client
+      .from("custom_templates")
+      .delete()
+      .eq("id", String(templateId))
+      .eq("user_id", session.user.id);
+
+    emit(error ? "error" : "online", error ? "Template delete error" : "Synced");
+    return { error };
+  }
+
+  async function replaceCustomTemplates(templates = []) {
+    if (!isReady()) return { error: null };
+
+    const { error: deleteError } = await client
+      .from("custom_templates")
+      .delete()
+      .eq("user_id", session.user.id);
+
+    if (deleteError) return { error: deleteError };
+
+    const normalized = Array.isArray(templates) ? templates : [];
+    if (!normalized.length) return { error: null };
+
+    const now = new Date().toISOString();
+    const rows = normalized.map((template) => ({
+      id: String(template.id || createUuid()),
+      user_id: session.user.id,
+      title: String(template.title || "Untitled template").trim().slice(0, 120),
+      category: String(template.category || "General").trim().slice(0, 50) || "General",
+      content: String(template.content || "").slice(0, 250000),
+      created_at: template.createdAt || template.created_at || now,
+      updated_at: template.updatedAt || template.updated_at || now
+    }));
+
+    const { error } = await client.from("custom_templates").insert(rows);
+    emit(error ? "error" : "online", error ? "Template sync error" : "Synced");
+    return { error };
+  }
+
   async function createBackupSnapshot() {
     if (!isReady()) {
       return {
@@ -556,7 +637,7 @@ window.BoxCloud = (() => {
 
     emit("syncing", "Preparing backup");
 
-    const [documentsResult, foldersResult, versionsResult] = await Promise.all([
+    const [documentsResult, foldersResult, versionsResult, templatesResult] = await Promise.all([
       client
         .from("documents")
         .select(DOCUMENT_SELECT)
@@ -571,10 +652,15 @@ window.BoxCloud = (() => {
         .from("document_versions")
         .select(VERSION_SELECT)
         .eq("user_id", session.user.id)
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: false }),
+      client
+        .from("custom_templates")
+        .select(TEMPLATE_SELECT)
+        .eq("user_id", session.user.id)
+        .order("updated_at", { ascending: false })
     ]);
 
-    const error = documentsResult.error || foldersResult.error || versionsResult.error;
+    const error = documentsResult.error || foldersResult.error || versionsResult.error || templatesResult.error;
     if (error) {
       emit("error", "Backup error");
       return { data: null, error };
@@ -587,6 +673,7 @@ window.BoxCloud = (() => {
         documents: documentsResult.data || [],
         documentFolders: foldersResult.data || [],
         documentVersions: versionsResult.data || [],
+        customTemplates: templatesResult.data || [],
         includesFileContents: false
       },
       error: null
@@ -611,19 +698,25 @@ window.BoxCloud = (() => {
 
     emit("syncing", "Loading");
 
-    const [tasksResult, eventsResult, financeResult, noteResult] =
+    const [tasksResult, eventsResult, financeResult, noteResult, templatesResult] =
       await Promise.all([
         fetchCollection("tasks"),
         fetchCollection("events"),
         fetchCollection("finance_entries"),
-        client.from("notes").select("content").eq("user_id", session.user.id).maybeSingle()
+        client.from("notes").select("content").eq("user_id", session.user.id).maybeSingle(),
+        client
+          .from("custom_templates")
+          .select(TEMPLATE_SELECT)
+          .eq("user_id", session.user.id)
+          .order("updated_at", { ascending: false })
       ]);
 
     const firstError =
       tasksResult.error ||
       eventsResult.error ||
       financeResult.error ||
-      noteResult.error;
+      noteResult.error ||
+      templatesResult.error;
 
     if (firstError) {
       emit("error", "Cloud error");
@@ -634,14 +727,16 @@ window.BoxCloud = (() => {
       tasksResult.data.length ||
       eventsResult.data.length ||
       financeResult.data.length ||
-      typeof noteResult.data?.content === "string";
+      typeof noteResult.data?.content === "string" ||
+      templatesResult.data?.length;
 
     if (cloudHasData && typeof window.BoxOSCloudHydrate === "function") {
       window.BoxOSCloudHydrate({
         tasks: tasksResult.data,
         events: eventsResult.data,
         finance_entries: financeResult.data,
-        notes: noteResult.data?.content
+        notes: noteResult.data?.content,
+        custom_templates: templatesResult.data || []
       });
     } else {
       await syncNow();
@@ -662,12 +757,14 @@ window.BoxCloud = (() => {
       const localEvents = JSON.parse(localStorage.getItem("theBoxOS4Events") || "[]");
       const localFinance = JSON.parse(localStorage.getItem("theBoxOS4Finance") || "[]");
       const localNotes = localStorage.getItem("theBoxOS4Notes") || "";
+      const localTemplates = JSON.parse(localStorage.getItem("theBoxOSCustomTemplates") || "[]");
 
       const results = await Promise.all([
         replaceCollection("tasks", localTasks),
         replaceCollection("events", localEvents),
         replaceCollection("finance_entries", localFinance),
-        saveNote(localNotes)
+        saveNote(localNotes),
+        replaceCustomTemplates(localTemplates)
       ]);
 
       const failure = results.find((result) => result.error);
@@ -728,6 +825,10 @@ window.BoxCloud = (() => {
     moveDocumentToTrash,
     restoreDocument,
     permanentlyDeleteDocument,
-    createBackupSnapshot
+    createBackupSnapshot,
+    listCustomTemplates,
+    saveCustomTemplate,
+    deleteCustomTemplate,
+    replaceCustomTemplates
   };
 })();

@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6c1-free-smart-tools-v1";
+const CACHE_NAME = "the-box-os-phase-6c2-free-templates-reports";
 
 const APP_FILES = [
   "./",
