@@ -28,7 +28,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=6c3">
+  <link rel="stylesheet" href="style.css?v=7a2">
 </head>
 <body>
   <div class="desktop-shell">
@@ -329,23 +329,36 @@
               <button type="submit">Add details</button>
             </form>
 
-            <div class="toolbar">
-              <div class="filter-group">
-                <button class="filter active" data-filter="all">All</button>
-                <button class="filter" data-filter="open">Open</button>
-                <button class="filter" data-filter="done">Done</button>
+            <div class="toolbar task-toolbar">
+              <div class="task-toolbar-left">
+                <div class="filter-group">
+                  <button class="filter active" data-filter="all">All</button>
+                  <button class="filter" data-filter="open">Open</button>
+                  <button class="filter" data-filter="done">Done</button>
+                </div>
+
+                <div class="task-view-switch" aria-label="Task view">
+                  <button id="taskListViewButton" class="task-view-button active" type="button" title="List view">☷ <span>List</span></button>
+                  <button id="taskKanbanViewButton" class="task-view-button" type="button" title="Kanban view">▦ <span>Board</span></button>
+                </div>
               </div>
 
-              <select id="workspaceFilter">
-                <option value="all">All workspaces</option>
-                <option value="pharmacy">Pharmacy</option>
-                <option value="clinic">Clinic</option>
-                <option value="sk">SK</option>
-                <option value="personal">Personal</option>
-              </select>
+              <div class="task-toolbar-right">
+                <select id="workspaceFilter">
+                  <option value="all">All workspaces</option>
+                  <option value="pharmacy">Pharmacy</option>
+                  <option value="clinic">Clinic</option>
+                  <option value="sk">SK</option>
+                  <option value="personal">Personal</option>
+                </select>
+                <select id="taskTagFilter" aria-label="Filter tasks by tag">
+                  <option value="all">All tags</option>
+                </select>
+              </div>
             </div>
 
             <div id="taskList" class="list-stack"></div>
+            <div id="taskKanban" class="task-kanban hidden" aria-live="polite"></div>
             <p id="emptyTasks" class="empty-state">No matching tasks.</p>
           </div>
         </article>
@@ -1504,10 +1517,62 @@
           </select>
         </label>
 
-        <label class="task-field task-field-wide">
+        <label class="task-field">
+          Status
+          <select id="taskModalStatus">
+            <option value="todo">To Do</option>
+            <option value="in-progress">In Progress</option>
+            <option value="waiting">Waiting</option>
+            <option value="done">Done</option>
+          </select>
+        </label>
+
+        <label class="task-field">
           Due date <small>Optional</small>
           <input id="taskModalDueDate" type="date">
         </label>
+
+        <label class="task-field task-field-wide">
+          Tags <small>Optional · separate with commas</small>
+          <input id="taskModalTags" type="text" maxlength="300" placeholder="example: renewal, supplier, urgent follow-up">
+        </label>
+
+        <label class="task-field">
+          Repeat
+          <select id="taskModalRecurrence">
+            <option value="none">Does not repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekdays">Every weekday</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="custom">Custom weekdays</option>
+          </select>
+        </label>
+
+        <div id="taskCustomDaysField" class="task-field task-custom-days hidden">
+          Repeat on
+          <div class="task-weekday-picker">
+            <label><input type="checkbox" value="1"><span>Mon</span></label>
+            <label><input type="checkbox" value="2"><span>Tue</span></label>
+            <label><input type="checkbox" value="3"><span>Wed</span></label>
+            <label><input type="checkbox" value="4"><span>Thu</span></label>
+            <label><input type="checkbox" value="5"><span>Fri</span></label>
+            <label><input type="checkbox" value="6"><span>Sat</span></label>
+            <label><input type="checkbox" value="0"><span>Sun</span></label>
+          </div>
+        </div>
+
+        <section class="task-field task-field-wide task-checklist-builder">
+          <div class="task-checklist-builder-heading">
+            <div>
+              <strong>Checklist</strong>
+              <small>Optional · each item can have details and private Vault files</small>
+            </div>
+            <button id="addTaskChecklistItemButton" class="secondary-button" type="button">＋ Add checklist item</button>
+          </div>
+          <div id="taskModalChecklistList" class="task-modal-checklist-list"></div>
+          <p id="taskModalChecklistEmpty" class="task-checklist-empty">No checklist items yet.</p>
+        </section>
 
         <label class="task-field task-field-wide">
           Notes or details <small>Optional</small>
@@ -1519,6 +1584,60 @@
           <button id="saveTaskModalButton" class="primary-button" type="submit">Create task</button>
         </div>
       </form>
+    </section>
+  </div>
+
+
+  <div id="taskChecklistFileModal" class="vault-modal-overlay task-checklist-file-overlay" aria-hidden="true">
+    <section class="vault-modal-card task-checklist-file-card" role="dialog" aria-modal="true" aria-labelledby="taskChecklistFileHeading">
+      <div class="vault-modal-header">
+        <div>
+          <small>CHECKLIST ATTACHMENT</small>
+          <h2 id="taskChecklistFileHeading">Add a file</h2>
+          <p id="taskChecklistFileTarget">Choose a document for this checklist item.</p>
+        </div>
+        <button id="closeTaskChecklistFileModalButton" class="window-button" type="button" aria-label="Close checklist file picker">✕</button>
+      </div>
+
+      <div id="taskChecklistFileStatus" class="document-upload-status">Select an existing Document Vault file or upload a new one.</div>
+
+      <section class="task-checklist-existing-files">
+        <div class="task-checklist-file-section-heading">
+          <div>
+            <small>DOCUMENT VAULT</small>
+            <h3>Attach an existing file</h3>
+          </div>
+          <button id="refreshTaskChecklistFilesButton" class="secondary-button" type="button">Refresh</button>
+        </div>
+        <input id="taskChecklistFileSearch" type="search" placeholder="Search filename, folder, or details">
+        <div id="taskChecklistDocumentList" class="task-checklist-document-list"></div>
+        <p id="taskChecklistDocumentEmpty" class="empty-state">No matching Vault documents.</p>
+      </section>
+
+      <section class="task-checklist-upload-new">
+        <div class="task-checklist-file-section-heading">
+          <div>
+            <small>UPLOAD NEW</small>
+            <h3>Upload and attach</h3>
+          </div>
+        </div>
+        <div class="task-checklist-upload-grid">
+          <label>
+            File
+            <input id="taskChecklistUploadInput" type="file">
+          </label>
+          <label>
+            Vault folder
+            <select id="taskChecklistUploadFolder"></select>
+          </label>
+          <button id="uploadTaskChecklistFileButton" class="primary-button" type="button">Upload and attach</button>
+        </div>
+        <small>Maximum file size: 25 MB. The file is stored privately in your existing Document Vault.</small>
+      </section>
+
+      <div class="task-checklist-file-footer">
+        <button id="cancelTaskChecklistFileButton" class="secondary-button" type="button">Close</button>
+      </div>
     </section>
   </div>
 

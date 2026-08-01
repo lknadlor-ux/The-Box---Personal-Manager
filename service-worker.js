@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-6c3-free-reminders";
+const CACHE_NAME = "the-box-os-phase-7a2-checklist-files";
 
 const APP_FILES = [
   "./",

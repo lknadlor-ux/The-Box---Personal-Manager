@@ -57,7 +57,8 @@ const STORAGE = {
   reminderSettings: "theBoxOSReminderSettings",
   dismissedReminders: "theBoxOSDismissedReminders",
   lastDailyReminderSummary: "theBoxOSLastDailyReminderSummary",
-  lastBrowserReminderSignature: "theBoxOSLastBrowserReminderSignature"
+  lastBrowserReminderSignature: "theBoxOSLastBrowserReminderSignature",
+  taskView: "theBoxOSTaskView"
 };
 
 const DAVAO = {
@@ -136,6 +137,8 @@ let customTemplates = loadJSON(STORAGE.customTemplates, []);
 let activeFilter = "all";
 let activeWorkspaceFilter = "all";
 let searchTerm = "";
+let activeTaskTagFilter = "all";
+let taskViewMode = localStorage.getItem(STORAGE.taskView) === "kanban" ? "kanban" : "list";
 let shownMonth = new Date().getMonth();
 let shownYear = new Date().getFullYear();
 
@@ -576,8 +579,61 @@ function showToast(message) {
   toastTimer = setTimeout(() => toast.classList.remove("show"), 2400);
 }
 
+function normalizeTaskTags(value) {
+  const source = Array.isArray(value) ? value : String(value || "").split(",");
+  return Array.from(new Set(source
+    .map((tag) => String(tag).trim().replace(/^#/, "").slice(0, 40))
+    .filter(Boolean)))
+    .slice(0, 20);
+}
+
+function normalizeTaskAttachment(value = {}) {
+  const documentId = value.documentId || value.document_id || value.id || "";
+  if (!documentId) return null;
+  return {
+    documentId: String(documentId),
+    name: String(value.name || "Attached document").trim().slice(0, 240),
+    folder: String(value.folder || "Documents").trim().slice(0, 80),
+    mimeType: String(value.mimeType || value.mime_type || "").slice(0, 160),
+    sizeBytes: Math.max(0, Number(value.sizeBytes ?? value.size_bytes) || 0)
+  };
+}
+
+function normalizeTaskSubtasks(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => ({
+      id: item?.id || `subtask-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      text: String(item?.text || item || "").trim().slice(0, 240),
+      details: String(item?.details || "").trim().slice(0, 2000),
+      completed: Boolean(item?.completed),
+      attachments: Array.from(new Map(
+        (Array.isArray(item?.attachments) ? item.attachments : [])
+          .map(normalizeTaskAttachment)
+          .filter(Boolean)
+          .map((attachment) => [attachment.documentId, attachment])
+      ).values()).slice(0, 20)
+    }))
+    .filter((item) => item.text)
+    .slice(0, 50);
+}
+
+function normalizeTaskRecurrence(value) {
+  const allowed = ["none", "daily", "weekdays", "weekly", "monthly", "custom"];
+  const type = allowed.includes(value?.type) ? value.type : "none";
+  const days = Array.isArray(value?.days)
+    ? Array.from(new Set(value.days.map(Number).filter((day) => day >= 0 && day <= 6))).sort()
+    : [];
+  return { type, days };
+}
+
 function normalizeTask(task = {}) {
   const createdAt = task.createdAt || new Date().toISOString();
+  const legacyCompleted = Boolean(task.completed);
+  const allowedStatuses = ["todo", "in-progress", "waiting", "done"];
+  const status = allowedStatuses.includes(task.status)
+    ? task.status
+    : (legacyCompleted ? "done" : "todo");
 
   return {
     id: task.id || Date.now() + Math.random(),
@@ -590,7 +646,14 @@ function normalizeTask(task = {}) {
       : "",
     workspace: task.workspace || "personal",
     priority: task.priority || "normal",
-    completed: Boolean(task.completed),
+    status,
+    completed: status === "done",
+    tags: normalizeTaskTags(task.tags),
+    subtasks: normalizeTaskSubtasks(task.subtasks),
+    recurrence: normalizeTaskRecurrence(task.recurrence),
+    recurrenceSeriesId: task.recurrenceSeriesId || task.id || null,
+    nextOccurrenceId: task.nextOccurrenceId || null,
+    sourceOccurrenceId: task.sourceOccurrenceId || null,
     createdAt,
     updatedAt: task.updatedAt || createdAt
   };
@@ -1213,24 +1276,409 @@ window.visualViewport?.addEventListener("resize", handleViewportResize);
 
 let editingTaskId = null;
 let pendingTaskSource = null;
+let taskDraftSubtasks = [];
+let taskChecklistAttachmentContext = null;
+let taskChecklistFileSearchTerm = "";
 
-function createTask({ text, workspace, priority, details = "", dueDate = "" }) {
+function buildSubtasksFromText(value, existing = []) {
+  const previousByText = new Map(existing.map((item) => [item.text.toLocaleLowerCase(), item]));
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .slice(0, 50)
+    .map((text) => {
+      const previous = previousByText.get(text.toLocaleLowerCase());
+      return normalizeTaskSubtasks([{
+        id: previous?.id,
+        text,
+        details: previous?.details || "",
+        completed: Boolean(previous?.completed),
+        attachments: previous?.attachments || []
+      }])[0];
+    });
+}
+
+function createDraftChecklistItem(defaults = {}) {
+  return normalizeTaskSubtasks([{
+    id: defaults.id || `subtask-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    text: defaults.text || "",
+    details: defaults.details || "",
+    completed: defaults.completed,
+    attachments: defaults.attachments || []
+  }])[0] || {
+    id: `subtask-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    text: "",
+    details: "",
+    completed: false,
+    attachments: []
+  };
+}
+
+function getChecklistAttachmentCount(task) {
+  return normalizeTaskSubtasks(task?.subtasks).reduce(
+    (count, item) => count + item.attachments.length,
+    0
+  );
+}
+
+function findChecklistContextSubtask() {
+  const context = taskChecklistAttachmentContext;
+  if (!context) return null;
+  if (context.mode === "draft") {
+    return taskDraftSubtasks.find((item) => String(item.id) === String(context.subtaskId)) || null;
+  }
+  const task = tasks.find((item) => String(item.id) === String(context.taskId));
+  return task?.subtasks.find((item) => String(item.id) === String(context.subtaskId)) || null;
+}
+
+function saveChecklistContextChanges() {
+  const context = taskChecklistAttachmentContext;
+  if (!context || context.mode === "draft") {
+    renderTaskModalChecklist();
+    return;
+  }
+  const task = tasks.find((item) => String(item.id) === String(context.taskId));
+  if (!task) return;
+  task.updatedAt = new Date().toISOString();
+  saveJSON(STORAGE.tasks, tasks);
+  renderAll();
+}
+
+function getDocumentAttachmentRecord(documentItem) {
+  return normalizeTaskAttachment({
+    documentId: documentItem.id,
+    name: documentItem.name,
+    folder: documentItem.folder,
+    mimeType: documentItem.mime_type,
+    sizeBytes: documentItem.size_bytes
+  });
+}
+
+function attachDocumentToChecklist(documentItem) {
+  const subtask = findChecklistContextSubtask();
+  const attachment = getDocumentAttachmentRecord(documentItem);
+  if (!subtask || !attachment) return;
+  if (subtask.attachments.some((item) => String(item.documentId) === String(attachment.documentId))) {
+    showToast("File is already attached");
+    return;
+  }
+  subtask.attachments.push(attachment);
+  subtask.attachments = subtask.attachments.slice(0, 20);
+  saveChecklistContextChanges();
+  renderTaskChecklistFilePicker();
+  showToast("File attached to checklist item");
+}
+
+function removeChecklistAttachment(context, documentId) {
+  taskChecklistAttachmentContext = context;
+  const subtask = findChecklistContextSubtask();
+  if (!subtask) return;
+  subtask.attachments = subtask.attachments.filter(
+    (item) => String(item.documentId) !== String(documentId)
+  );
+  saveChecklistContextChanges();
+  if (context.mode === "draft") renderTaskModalChecklist();
+}
+
+async function openTaskChecklistAttachment(attachment) {
+  if (!window.BoxCloud?.isReady()) {
+    openAuthOverlay();
+    return;
+  }
+  let documentItem = documents.find(
+    (item) => String(item.id) === String(attachment.documentId) && !item.deleted_at
+  );
+  if (!documentItem) {
+    await loadDocuments({ silent: true });
+    documentItem = documents.find(
+      (item) => String(item.id) === String(attachment.documentId) && !item.deleted_at
+    );
+  }
+  if (!documentItem) {
+    showToast("Attached file is unavailable or in the Recycle Bin");
+    return;
+  }
+  const result = await window.BoxCloud.createDocumentUrl(documentItem.storage_path, 600);
+  const signedUrl = result.data?.signedUrl || result.data?.signedURL;
+  if (signedUrl) window.open(signedUrl, "_blank", "noopener");
+  else showToast(result.error?.message || "Could not open attached file");
+}
+
+function renderTaskModalChecklist() {
+  const list = $("taskModalChecklistList");
+  if (!list) return;
+  list.innerHTML = "";
+  $("taskModalChecklistEmpty").hidden = taskDraftSubtasks.length > 0;
+
+  taskDraftSubtasks.forEach((subtask, index) => {
+    const row = document.createElement("article");
+    row.className = "task-checklist-editor-item";
+
+    const top = document.createElement("div");
+    top.className = "task-checklist-editor-top";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = subtask.completed;
+    checkbox.setAttribute("aria-label", "Checklist item completed");
+    checkbox.addEventListener("change", () => { subtask.completed = checkbox.checked; });
+
+    const titleInput = document.createElement("input");
+    titleInput.type = "text";
+    titleInput.maxLength = 240;
+    titleInput.placeholder = `Checklist item ${index + 1}`;
+    titleInput.value = subtask.text;
+    titleInput.addEventListener("input", () => { subtask.text = titleInput.value; });
+
+    const actions = document.createElement("div");
+    actions.className = "task-checklist-editor-actions";
+
+    const addFile = document.createElement("button");
+    addFile.type = "button";
+    addFile.className = "secondary-button";
+    addFile.textContent = "＋ Add file";
+    addFile.addEventListener("click", () => openTaskChecklistFileModal({ mode: "draft", subtaskId: subtask.id }));
+
+    const detailsButton = document.createElement("button");
+    detailsButton.type = "button";
+    detailsButton.className = "secondary-button";
+    detailsButton.textContent = subtask.details ? "Edit details" : "＋ Details";
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "task-checklist-remove-button";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+      taskDraftSubtasks = taskDraftSubtasks.filter((item) => item.id !== subtask.id);
+      renderTaskModalChecklist();
+    });
+
+    actions.append(addFile, detailsButton, remove);
+    top.append(checkbox, titleInput, actions);
+
+    const detailsWrap = document.createElement("div");
+    detailsWrap.className = `task-checklist-editor-details ${subtask.details ? "open" : ""}`;
+    const detailsInput = document.createElement("textarea");
+    detailsInput.maxLength = 2000;
+    detailsInput.placeholder = "Add instructions, requirements, notes, or status details for this checklist item.";
+    detailsInput.value = subtask.details;
+    detailsInput.addEventListener("input", () => {
+      subtask.details = detailsInput.value;
+      detailsButton.textContent = subtask.details.trim() ? "Edit details" : "＋ Details";
+    });
+    detailsWrap.appendChild(detailsInput);
+    detailsButton.addEventListener("click", () => {
+      detailsWrap.classList.toggle("open");
+      if (detailsWrap.classList.contains("open")) detailsInput.focus();
+    });
+
+    const attachments = document.createElement("div");
+    attachments.className = "task-checklist-editor-attachments";
+    subtask.attachments.forEach((attachment) => {
+      const chip = document.createElement("span");
+      chip.className = "task-checklist-file-chip";
+      const open = document.createElement("button");
+      open.type = "button";
+      open.textContent = `▣ ${attachment.name}`;
+      open.title = `Open ${attachment.name}`;
+      open.addEventListener("click", () => openTaskChecklistAttachment(attachment));
+      const detach = document.createElement("button");
+      detach.type = "button";
+      detach.className = "task-checklist-file-remove";
+      detach.textContent = "✕";
+      detach.title = "Remove attachment from checklist item";
+      detach.addEventListener("click", () => removeChecklistAttachment(
+        { mode: "draft", subtaskId: subtask.id }, attachment.documentId
+      ));
+      chip.append(open, detach);
+      attachments.appendChild(chip);
+    });
+
+    row.append(top, detailsWrap, attachments);
+    list.appendChild(row);
+  });
+}
+
+function addTaskModalChecklistItem() {
+  const item = createDraftChecklistItem();
+  taskDraftSubtasks.push(item);
+  renderTaskModalChecklist();
+  setTimeout(() => {
+    const rows = $("taskModalChecklistList").querySelectorAll(".task-checklist-editor-item input[type='text']");
+    rows[rows.length - 1]?.focus();
+  }, 0);
+}
+
+function populateTaskChecklistUploadFolders() {
+  const select = $("taskChecklistUploadFolder");
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = getAllDocumentFolderNames()
+    .map((folder) => `<option value="${escapeHtml(folder)}">${escapeHtml(folder)}</option>`)
+    .join("");
+  if (getAllDocumentFolderNames().includes(current)) select.value = current;
+  else select.value = getAllDocumentFolderNames().includes("Personal") ? "Personal" : getAllDocumentFolderNames()[0];
+}
+
+function renderTaskChecklistFilePicker() {
+  const list = $("taskChecklistDocumentList");
+  if (!list) return;
+  const subtask = findChecklistContextSubtask();
+  const attachedIds = new Set((subtask?.attachments || []).map((item) => String(item.documentId)));
+  const query = taskChecklistFileSearchTerm.toLocaleLowerCase();
+  const visible = documents
+    .filter((item) => !item.deleted_at)
+    .filter((item) => [item.name, item.folder, item.details, ...(item.tags || [])]
+      .join(" ").toLocaleLowerCase().includes(query))
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+
+  list.innerHTML = visible.map((item) => {
+    const attached = attachedIds.has(String(item.id));
+    return `<article class="task-checklist-document-option">
+      <span class="task-checklist-document-icon">${escapeHtml(getDocumentTypeLabel(item).slice(0, 4))}</span>
+      <span class="task-checklist-document-copy">
+        <strong>${escapeHtml(item.name)}</strong>
+        <small>${escapeHtml(item.folder || "Documents")} · ${escapeHtml(formatBytes(item.size_bytes))}</small>
+      </span>
+      <button class="${attached ? "secondary-button" : "primary-button"}" type="button"
+        data-task-checklist-document="${escapeHtml(String(item.id))}" ${attached ? "disabled" : ""}>
+        ${attached ? "Attached" : "Attach"}
+      </button>
+    </article>`;
+  }).join("");
+  $("taskChecklistDocumentEmpty").hidden = visible.length > 0;
+
+  list.querySelectorAll("[data-task-checklist-document]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = documents.find((documentItem) => String(documentItem.id) === button.dataset.taskChecklistDocument);
+      if (item) attachDocumentToChecklist(item);
+    });
+  });
+}
+
+async function openTaskChecklistFileModal(context) {
+  taskChecklistAttachmentContext = context;
+  taskChecklistFileSearchTerm = "";
+  $("taskChecklistFileSearch").value = "";
+  $("taskChecklistUploadInput").value = "";
+  const subtask = findChecklistContextSubtask();
+  $("taskChecklistFileTarget").textContent = subtask?.text
+    ? `Checklist item: ${subtask.text}`
+    : "Choose a document for this checklist item.";
+  $("taskChecklistFileStatus").textContent = window.BoxCloud?.isReady()
+    ? "Select an existing Document Vault file or upload a new one."
+    : "Sign in to use private Document Vault attachments.";
+  $("taskChecklistFileModal").classList.add("open");
+  $("taskChecklistFileModal").setAttribute("aria-hidden", "false");
+  populateTaskChecklistUploadFolders();
+  renderTaskChecklistFilePicker();
+  if (window.BoxCloud?.isReady()) {
+    await loadDocuments({ silent: true });
+    populateTaskChecklistUploadFolders();
+    renderTaskChecklistFilePicker();
+  }
+}
+
+function closeTaskChecklistFileModal() {
+  $("taskChecklistFileModal").classList.remove("open");
+  $("taskChecklistFileModal").setAttribute("aria-hidden", "true");
+  $("taskChecklistUploadInput").value = "";
+  taskChecklistAttachmentContext = null;
+}
+
+async function uploadTaskChecklistFile() {
+  if (!window.BoxCloud?.isReady()) {
+    openAuthOverlay();
+    return;
+  }
+  const file = $("taskChecklistUploadInput").files?.[0];
+  if (!file) {
+    $("taskChecklistUploadInput").click();
+    return;
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    $("taskChecklistFileStatus").textContent = `${file.name} is larger than the 25 MB limit.`;
+    return;
+  }
+  const subtask = findChecklistContextSubtask();
+  const button = $("uploadTaskChecklistFileButton");
+  button.disabled = true;
+  button.textContent = "Uploading…";
+  $("taskChecklistFileStatus").textContent = `Uploading ${file.name}…`;
+  const result = await window.BoxCloud.uploadDocument(
+    file,
+    $("taskChecklistUploadFolder").value,
+    subtask?.text ? `Checklist attachment: ${subtask.text}` : "Checklist attachment",
+    {}
+  );
+  button.disabled = false;
+  button.textContent = "Upload and attach";
+  if (result.error) {
+    $("taskChecklistFileStatus").textContent = result.error.message;
+    return;
+  }
+  documents.unshift(result.data);
+  $("taskChecklistUploadInput").value = "";
+  $("taskChecklistFileStatus").textContent = `${file.name} uploaded and attached.`;
+  attachDocumentToChecklist(result.data);
+  renderDocuments();
+}
+
+function getTaskModalCustomDays() {
+  return Array.from(document.querySelectorAll("#taskCustomDaysField input[type='checkbox']:checked"))
+    .map((input) => Number(input.value))
+    .sort();
+}
+
+function setTaskModalCustomDays(days = []) {
+  const selected = new Set(days.map(Number));
+  document.querySelectorAll("#taskCustomDaysField input[type='checkbox']").forEach((input) => {
+    input.checked = selected.has(Number(input.value));
+  });
+}
+
+function updateTaskRecurrenceControls() {
+  const type = $("taskModalRecurrence").value;
+  $("taskCustomDaysField").classList.toggle("hidden", type !== "custom");
+}
+
+function createTask({
+  text,
+  workspace,
+  priority,
+  status = "todo",
+  details = "",
+  dueDate = "",
+  tags = [],
+  subtasks = [],
+  recurrence = { type: "none", days: [] }
+}) {
   const cleanText = text.trim();
   if (!cleanText) return false;
 
   const timestamp = new Date().toISOString();
+  const taskId = Date.now() + Math.random();
+  const cleanStatus = ["todo", "in-progress", "waiting", "done"].includes(status) ? status : "todo";
 
-  tasks.unshift({
-    id: Date.now() + Math.random(),
+  const createdTask = normalizeTask({
+    id: taskId,
     text: cleanText,
     details: details.trim(),
     dueDate,
     workspace,
     priority,
-    completed: false,
+    status: cleanStatus,
+    completed: cleanStatus === "done",
+    tags,
+    subtasks,
+    recurrence,
+    recurrenceSeriesId: taskId,
     createdAt: timestamp,
     updatedAt: timestamp
   });
+  tasks.unshift(createdTask);
+  if (createdTask.completed) ensureNextRecurringTask(createdTask);
 
   saveJSON(STORAGE.tasks, tasks);
   renderAll();
@@ -1249,8 +1697,16 @@ function updateTask(taskId, values) {
   task.dueDate = values.dueDate;
   task.workspace = values.workspace;
   task.priority = values.priority;
+  task.tags = normalizeTaskTags(values.tags);
+  task.subtasks = normalizeTaskSubtasks(values.subtasks);
+  task.recurrence = normalizeTaskRecurrence(values.recurrence);
+  task.status = ["todo", "in-progress", "waiting", "done"].includes(values.status)
+    ? values.status
+    : task.status;
+  task.completed = task.status === "done";
   task.updatedAt = new Date().toISOString();
 
+  if (task.completed) ensureNextRecurringTask(task);
   saveJSON(STORAGE.tasks, tasks);
   renderAll();
   return true;
@@ -1263,8 +1719,19 @@ function openTaskModal(defaults = {}, source = null, taskId = null) {
   $("taskModalTitle").value = defaults.text || "";
   $("taskModalWorkspace").value = defaults.workspace || "personal";
   $("taskModalPriority").value = defaults.priority || "normal";
+  $("taskModalStatus").value = defaults.status || (defaults.completed ? "done" : "todo");
   $("taskModalDueDate").value = defaults.dueDate || "";
+  $("taskModalTags").value = normalizeTaskTags(defaults.tags).join(", ");
+  taskDraftSubtasks = normalizeTaskSubtasks(defaults.subtasks).map((item) => ({
+    ...item,
+    attachments: item.attachments.map((attachment) => ({ ...attachment }))
+  }));
+  renderTaskModalChecklist();
   $("taskModalDetails").value = defaults.details || "";
+  const recurrence = normalizeTaskRecurrence(defaults.recurrence);
+  $("taskModalRecurrence").value = recurrence.type;
+  setTaskModalCustomDays(recurrence.days);
+  updateTaskRecurrenceControls();
 
   $("taskModalHeading").textContent = taskId ? "Edit task" : "Create task";
   $("saveTaskModalButton").textContent = taskId ? "Save changes" : "Create task";
@@ -1285,6 +1752,100 @@ function closeTaskModal() {
   modal.setAttribute("aria-hidden", "true");
   editingTaskId = null;
   pendingTaskSource = null;
+  taskDraftSubtasks = [];
+}
+
+const TASK_STATUSES = [
+  { key: "todo", label: "To Do" },
+  { key: "in-progress", label: "In Progress" },
+  { key: "waiting", label: "Waiting" },
+  { key: "done", label: "Done" }
+];
+
+function getTaskStatusLabel(status) {
+  return TASK_STATUSES.find((item) => item.key === status)?.label || "To Do";
+}
+
+function getTaskRecurrenceLabel(recurrence) {
+  const rule = normalizeTaskRecurrence(recurrence);
+  if (rule.type === "daily") return "Daily";
+  if (rule.type === "weekdays") return "Weekdays";
+  if (rule.type === "weekly") return "Weekly";
+  if (rule.type === "monthly") return "Monthly";
+  if (rule.type === "custom") {
+    const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return rule.days.length ? rule.days.map((day) => labels[day]).join(", ") : "Custom";
+  }
+  return "";
+}
+
+function getNextRecurringDate(task) {
+  const rule = normalizeTaskRecurrence(task.recurrence);
+  if (rule.type === "none" || !task.dueDate) return "";
+
+  const date = new Date(`${task.dueDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+
+  if (rule.type === "daily") date.setDate(date.getDate() + 1);
+  else if (rule.type === "weekdays") {
+    do date.setDate(date.getDate() + 1);
+    while ([0, 6].includes(date.getDay()));
+  } else if (rule.type === "weekly") date.setDate(date.getDate() + 7);
+  else if (rule.type === "monthly") {
+    const targetDay = date.getDate();
+    date.setDate(1);
+    date.setMonth(date.getMonth() + 1);
+    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    date.setDate(Math.min(targetDay, lastDay));
+  } else if (rule.type === "custom") {
+    if (!rule.days.length) return "";
+    do date.setDate(date.getDate() + 1);
+    while (!rule.days.includes(date.getDay()));
+  }
+
+  return getLocalDateKey(date);
+}
+
+function ensureNextRecurringTask(task) {
+  const nextDueDate = getNextRecurringDate(task);
+  if (!nextDueDate || task.nextOccurrenceId) return null;
+
+  const timestamp = new Date().toISOString();
+  const nextId = Date.now() + Math.random();
+  const nextTask = normalizeTask({
+    ...task,
+    id: nextId,
+    status: "todo",
+    completed: false,
+    dueDate: nextDueDate,
+    subtasks: task.subtasks.map((item) => ({
+      ...item,
+      id: `subtask-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      completed: false,
+      attachments: item.attachments.map((attachment) => ({ ...attachment }))
+    })),
+    recurrenceSeriesId: task.recurrenceSeriesId || task.id,
+    nextOccurrenceId: null,
+    sourceOccurrenceId: task.id,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  });
+
+  task.nextOccurrenceId = nextId;
+  task.updatedAt = timestamp;
+  tasks.unshift(nextTask);
+  showToast(`Next recurring task created for ${formatTaskDate(nextDueDate)}`);
+  return nextTask;
+}
+
+function setTaskStatus(task, status) {
+  const nextStatus = TASK_STATUSES.some((item) => item.key === status) ? status : "todo";
+  task.status = nextStatus;
+  task.completed = nextStatus === "done";
+  task.updatedAt = new Date().toISOString();
+  if (task.completed) ensureNextRecurringTask(task);
+  saveJSON(STORAGE.tasks, tasks);
+  renderAll();
 }
 
 function formatTaskDate(dateString) {
@@ -1348,11 +1909,33 @@ function getVisibleTasks() {
       activeWorkspaceFilter === "all" ||
       task.workspace === activeWorkspaceFilter;
 
-    const searchableText = `${task.text} ${task.details || ""}`.toLowerCase();
+    const matchesTag = activeTaskTagFilter === "all" || task.tags.includes(activeTaskTagFilter);
+    const searchableText = [
+      task.text,
+      task.details || "",
+      task.tags.join(" "),
+      task.subtasks.map((item) => [
+        item.text,
+        item.details || "",
+        item.attachments.map((attachment) => attachment.name).join(" ")
+      ].join(" ")).join(" ")
+    ].join(" ").toLowerCase();
     const matchesSearch = searchableText.includes(searchTerm.toLowerCase());
 
-    return matchesStatus && matchesWorkspace && matchesSearch;
+    return matchesStatus && matchesWorkspace && matchesTag && matchesSearch;
   });
+}
+
+function renderTaskTagFilter() {
+  const select = $("taskTagFilter");
+  if (!select) return;
+  const tags = Array.from(new Set(tasks.flatMap((task) => task.tags))).sort((x, y) => x.localeCompare(y));
+  const current = activeTaskTagFilter;
+  select.innerHTML = `<option value="all">All tags</option>` + tags
+    .map((tag) => `<option value="${escapeHtml(tag)}">#${escapeHtml(tag)}</option>`)
+    .join("");
+  activeTaskTagFilter = tags.includes(current) ? current : "all";
+  select.value = activeTaskTagFilter;
 }
 
 function buildTaskRow(task) {
@@ -1370,10 +1953,7 @@ function buildTaskRow(task) {
   checkbox.setAttribute("aria-label", `Mark ${task.text} as ${task.completed ? "open" : "complete"}`);
 
   checkbox.addEventListener("change", () => {
-    task.completed = checkbox.checked;
-    task.updatedAt = new Date().toISOString();
-    saveJSON(STORAGE.tasks, tasks);
-    renderAll();
+    setTaskStatus(task, checkbox.checked ? "done" : "todo");
   });
 
   const content = document.createElement("div");
@@ -1394,7 +1974,26 @@ function buildTaskRow(task) {
   priorityBadge.className = `task-badge priority-${task.priority}`;
   priorityBadge.textContent = task.priority;
 
-  meta.append(workspaceBadge, priorityBadge);
+  const statusBadge = document.createElement("span");
+  statusBadge.className = `task-badge task-status-badge status-${task.status}`;
+  statusBadge.textContent = getTaskStatusLabel(task.status);
+
+  meta.append(workspaceBadge, priorityBadge, statusBadge);
+
+  const recurrenceLabel = getTaskRecurrenceLabel(task.recurrence);
+  if (recurrenceLabel) {
+    const recurrenceBadge = document.createElement("span");
+    recurrenceBadge.className = "task-badge recurrence-badge";
+    recurrenceBadge.textContent = `↻ ${recurrenceLabel}`;
+    meta.appendChild(recurrenceBadge);
+  }
+
+  task.tags.forEach((tag) => {
+    const tagBadge = document.createElement("span");
+    tagBadge.className = "task-badge task-tag-badge";
+    tagBadge.textContent = `#${tag}`;
+    meta.appendChild(tagBadge);
+  });
 
   if (dueInfo) {
     const dueBadge = document.createElement("span");
@@ -1404,6 +2003,117 @@ function buildTaskRow(task) {
   }
 
   content.append(title, meta);
+
+  if (task.subtasks.length) {
+    const checklist = document.createElement("div");
+    checklist.className = "task-checklist task-checklist-rich";
+    const completedCount = task.subtasks.filter((item) => item.completed).length;
+
+    const checklistHeading = document.createElement("div");
+    checklistHeading.className = "task-checklist-heading";
+    checklistHeading.innerHTML = `<strong>Checklist</strong><span>${completedCount}/${task.subtasks.length}</span>`;
+    checklist.appendChild(checklistHeading);
+
+    task.subtasks.forEach((subtask) => {
+      const item = document.createElement("article");
+      item.className = `task-subtask-rich ${subtask.completed ? "completed" : ""}`;
+
+      const main = document.createElement("div");
+      main.className = "task-subtask-main";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = subtask.completed;
+      input.addEventListener("change", () => {
+        subtask.completed = input.checked;
+        task.updatedAt = new Date().toISOString();
+        saveJSON(STORAGE.tasks, tasks);
+        renderAll();
+      });
+      const text = document.createElement("span");
+      text.textContent = subtask.text;
+      main.append(input, text);
+
+      const itemActions = document.createElement("div");
+      itemActions.className = "task-subtask-actions";
+      const addFile = document.createElement("button");
+      addFile.type = "button";
+      addFile.className = "task-subtask-action-button";
+      addFile.textContent = "＋ Add file";
+      addFile.addEventListener("click", () => openTaskChecklistFileModal({
+        mode: "task", taskId: task.id, subtaskId: subtask.id
+      }));
+      const editDetails = document.createElement("button");
+      editDetails.type = "button";
+      editDetails.className = "task-subtask-action-button";
+      editDetails.textContent = subtask.details ? "Edit details" : "＋ Details";
+      itemActions.append(addFile, editDetails);
+
+      const detailsEditor = document.createElement("div");
+      detailsEditor.className = "task-subtask-inline-details";
+      const detailsInput = document.createElement("textarea");
+      detailsInput.maxLength = 2000;
+      detailsInput.placeholder = "Add checklist item details";
+      detailsInput.value = subtask.details;
+      const detailsButtons = document.createElement("div");
+      const saveDetails = document.createElement("button");
+      saveDetails.type = "button";
+      saveDetails.className = "primary-button";
+      saveDetails.textContent = "Save details";
+      const cancelDetails = document.createElement("button");
+      cancelDetails.type = "button";
+      cancelDetails.className = "secondary-button";
+      cancelDetails.textContent = "Cancel";
+      detailsButtons.append(saveDetails, cancelDetails);
+      detailsEditor.append(detailsInput, detailsButtons);
+      editDetails.addEventListener("click", () => {
+        detailsInput.value = subtask.details;
+        detailsEditor.classList.toggle("open");
+        if (detailsEditor.classList.contains("open")) detailsInput.focus();
+      });
+      cancelDetails.addEventListener("click", () => detailsEditor.classList.remove("open"));
+      saveDetails.addEventListener("click", () => {
+        subtask.details = detailsInput.value.trim();
+        task.updatedAt = new Date().toISOString();
+        saveJSON(STORAGE.tasks, tasks);
+        detailsEditor.classList.remove("open");
+        renderAll();
+        showToast("Checklist details saved");
+      });
+
+      const attachments = document.createElement("div");
+      attachments.className = "task-subtask-attachments";
+      subtask.attachments.forEach((attachment) => {
+        const chip = document.createElement("span");
+        chip.className = "task-checklist-file-chip";
+        const open = document.createElement("button");
+        open.type = "button";
+        open.textContent = `▣ ${attachment.name}`;
+        open.title = `Open ${attachment.name}`;
+        open.addEventListener("click", () => openTaskChecklistAttachment(attachment));
+        const detach = document.createElement("button");
+        detach.type = "button";
+        detach.className = "task-checklist-file-remove";
+        detach.textContent = "✕";
+        detach.title = "Detach file";
+        detach.addEventListener("click", () => removeChecklistAttachment(
+          { mode: "task", taskId: task.id, subtaskId: subtask.id }, attachment.documentId
+        ));
+        chip.append(open, detach);
+        attachments.appendChild(chip);
+      });
+
+      item.append(main, itemActions);
+      if (subtask.details) {
+        const detailPreview = document.createElement("p");
+        detailPreview.className = "task-subtask-detail-preview";
+        detailPreview.textContent = subtask.details;
+        item.appendChild(detailPreview);
+      }
+      item.append(attachments, detailsEditor);
+      checklist.appendChild(item);
+    });
+    content.appendChild(checklist);
+  }
 
   if (task.details) {
     const details = document.createElement("details");
@@ -1425,6 +2135,19 @@ function buildTaskRow(task) {
 
   const actions = document.createElement("div");
   actions.className = "task-actions";
+
+  const statusSelect = document.createElement("select");
+  statusSelect.className = "task-status-select";
+  statusSelect.title = "Move task";
+  TASK_STATUSES.forEach((statusOption) => {
+    const option = document.createElement("option");
+    option.value = statusOption.key;
+    option.textContent = statusOption.label;
+    statusSelect.appendChild(option);
+  });
+  statusSelect.value = task.status;
+  statusSelect.addEventListener("change", () => setTaskStatus(task, statusSelect.value));
+  actions.appendChild(statusSelect);
 
   const editButton = document.createElement("button");
   editButton.className = "edit-button";
@@ -1468,12 +2191,124 @@ function buildTaskRow(task) {
   return row;
 }
 
+function buildKanbanTaskCard(task) {
+  const card = document.createElement("article");
+  card.className = `kanban-task-card priority-${task.priority}`;
+
+  const title = document.createElement("strong");
+  title.textContent = task.text;
+  card.appendChild(title);
+
+  const dueInfo = getDueDateInfo(task);
+  const meta = document.createElement("div");
+  meta.className = "kanban-task-meta";
+  if (dueInfo) {
+    const due = document.createElement("span");
+    due.className = `kanban-due ${dueInfo.className}`;
+    due.textContent = dueInfo.label;
+    meta.appendChild(due);
+  }
+  if (task.subtasks.length) {
+    const progress = document.createElement("span");
+    progress.textContent = `☑ ${task.subtasks.filter((item) => item.completed).length}/${task.subtasks.length}`;
+    meta.appendChild(progress);
+    const attachmentCount = getChecklistAttachmentCount(task);
+    if (attachmentCount) {
+      const files = document.createElement("span");
+      files.textContent = `▣ ${attachmentCount}`;
+      meta.appendChild(files);
+    }
+  }
+  if (getTaskRecurrenceLabel(task.recurrence)) {
+    const recurring = document.createElement("span");
+    recurring.textContent = `↻ ${getTaskRecurrenceLabel(task.recurrence)}`;
+    meta.appendChild(recurring);
+  }
+  card.appendChild(meta);
+
+  if (task.tags.length) {
+    const tags = document.createElement("div");
+    tags.className = "kanban-task-tags";
+    task.tags.slice(0, 4).forEach((tag) => {
+      const badge = document.createElement("span");
+      badge.textContent = `#${tag}`;
+      tags.appendChild(badge);
+    });
+    card.appendChild(tags);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "kanban-task-actions";
+  const statusSelect = document.createElement("select");
+  statusSelect.setAttribute("aria-label", `Move ${task.text}`);
+  TASK_STATUSES.forEach((item) => {
+    const option = document.createElement("option");
+    option.value = item.key;
+    option.textContent = item.label;
+    statusSelect.appendChild(option);
+  });
+  statusSelect.value = task.status;
+  statusSelect.addEventListener("change", () => setTaskStatus(task, statusSelect.value));
+
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.textContent = "Edit";
+  edit.addEventListener("click", () => openTaskModal(task, null, task.id));
+  actions.append(statusSelect, edit);
+  card.appendChild(actions);
+  return card;
+}
+
+function renderTaskKanban(visibleTasks) {
+  const board = $("taskKanban");
+  board.innerHTML = "";
+  TASK_STATUSES.forEach((status) => {
+    const column = document.createElement("section");
+    column.className = `kanban-column status-${status.key}`;
+    const columnTasks = visibleTasks.filter((task) => task.status === status.key);
+    const heading = document.createElement("div");
+    heading.className = "kanban-column-heading";
+    heading.innerHTML = `<strong>${status.label}</strong><span>${columnTasks.length}</span>`;
+    const list = document.createElement("div");
+    list.className = "kanban-column-list";
+    columnTasks.forEach((task) => list.appendChild(buildKanbanTaskCard(task)));
+    if (!columnTasks.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty-state";
+      empty.textContent = "No tasks";
+      list.appendChild(empty);
+    }
+    column.append(heading, list);
+    board.appendChild(column);
+  });
+}
+
+function updateTaskViewControls() {
+  const listMode = taskViewMode === "list";
+  $("taskList").classList.toggle("hidden", !listMode);
+  $("taskKanban").classList.toggle("hidden", listMode);
+  $("taskListViewButton").classList.toggle("active", listMode);
+  $("taskKanbanViewButton").classList.toggle("active", !listMode);
+}
+
+function setTaskViewMode(mode) {
+  taskViewMode = mode === "kanban" ? "kanban" : "list";
+  localStorage.setItem(STORAGE.taskView, taskViewMode);
+  renderTasks();
+}
+
 function renderTasks() {
   const list = $("taskList");
+  renderTaskTagFilter();
   const visible = getVisibleTasks();
   list.innerHTML = "";
+  updateTaskViewControls();
 
-  visible.forEach((task) => list.appendChild(buildTaskRow(task)));
+  if (taskViewMode === "list") {
+    visible.forEach((task) => list.appendChild(buildTaskRow(task)));
+  } else {
+    renderTaskKanban(visible);
+  }
   $("emptyTasks").style.display = visible.length ? "none" : "block";
 
   renderWorkspaceTaskList("pharmacy", $("pharmacyTaskList"));
@@ -4803,7 +5638,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "6C.3-Free";
+const BACKUP_APP_VERSION = "7A.2-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -5516,15 +6351,52 @@ document.querySelectorAll("[data-template-task]").forEach((button) => {
   });
 });
 
+$("addTaskChecklistItemButton").addEventListener("click", addTaskModalChecklistItem);
+$("closeTaskChecklistFileModalButton").addEventListener("click", closeTaskChecklistFileModal);
+$("cancelTaskChecklistFileButton").addEventListener("click", closeTaskChecklistFileModal);
+$("refreshTaskChecklistFilesButton").addEventListener("click", async () => {
+  await loadDocuments({ silent: true });
+  populateTaskChecklistUploadFolders();
+  renderTaskChecklistFilePicker();
+});
+$("taskChecklistFileSearch").addEventListener("input", (event) => {
+  taskChecklistFileSearchTerm = event.target.value.trim();
+  renderTaskChecklistFilePicker();
+});
+$("uploadTaskChecklistFileButton").addEventListener("click", uploadTaskChecklistFile);
+$("taskChecklistFileModal").addEventListener("pointerdown", (event) => {
+  if (event.target === $("taskChecklistFileModal")) closeTaskChecklistFileModal();
+});
+
 $("taskModalForm").addEventListener("submit", (event) => {
   event.preventDefault();
+
+  const recurrenceType = $("taskModalRecurrence").value;
+  const recurrenceDays = getTaskModalCustomDays();
+  if (recurrenceType !== "none" && !$("taskModalDueDate").value) {
+    showToast("Add a due date for recurring tasks");
+    $("taskModalDueDate").focus();
+    return;
+  }
+  if (recurrenceType === "custom" && !recurrenceDays.length) {
+    showToast("Select at least one repeat day");
+    return;
+  }
+
+  const existingTask = editingTaskId === null
+    ? null
+    : tasks.find((task) => String(task.id) === String(editingTaskId));
 
   const values = {
     text: $("taskModalTitle").value,
     details: $("taskModalDetails").value,
     dueDate: $("taskModalDueDate").value,
     workspace: $("taskModalWorkspace").value,
-    priority: $("taskModalPriority").value
+    priority: $("taskModalPriority").value,
+    status: $("taskModalStatus").value,
+    tags: normalizeTaskTags($("taskModalTags").value),
+    subtasks: normalizeTaskSubtasks(taskDraftSubtasks),
+    recurrence: { type: recurrenceType, days: recurrenceDays }
   };
 
   const wasEditing = editingTaskId !== null;
@@ -5554,7 +6426,9 @@ $("taskModal").addEventListener("pointerdown", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && $("taskModal").classList.contains("open")) {
+  if (event.key === "Escape" && $("taskChecklistFileModal").classList.contains("open")) {
+    closeTaskChecklistFileModal();
+  } else if (event.key === "Escape" && $("taskModal").classList.contains("open")) {
     closeTaskModal();
   }
 });
@@ -5572,6 +6446,15 @@ $("workspaceFilter").addEventListener("change", (event) => {
   activeWorkspaceFilter = event.target.value;
   renderTasks();
 });
+
+$("taskTagFilter").addEventListener("change", (event) => {
+  activeTaskTagFilter = event.target.value;
+  renderTasks();
+});
+
+$("taskListViewButton").addEventListener("click", () => setTaskViewMode("list"));
+$("taskKanbanViewButton").addEventListener("click", () => setTaskViewMode("kanban"));
+$("taskModalRecurrence").addEventListener("change", updateTaskRecurrenceControls);
 
 $("globalSearch").addEventListener("input", (event) => {
   searchTerm = event.target.value.trim();
