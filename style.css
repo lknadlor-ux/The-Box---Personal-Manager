@@ -6638,3 +6638,148 @@ html.safe-render-ui .task-checklist-document-option {
     margin-left: 0;
   }
 }
+
+
+/* Phase 7A.2.2 — Task Save button visibility hotfix
+   The task modal now has a fixed header and action footer. Only the form fields
+   scroll, so Create task / Save changes remains visible after adding checklist
+   items on Windows PCs, Honor Pad, and smaller screens. */
+
+.task-modal-card {
+  display: flex !important;
+  flex-direction: column;
+  width: min(760px, 100%);
+  max-height: min(92dvh, calc(100vh - 28px));
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.task-modal-header {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  padding: 20px 22px 15px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-solid);
+}
+
+.task-modal-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 17px 22px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.task-modal-actions {
+  position: sticky !important;
+  right: auto !important;
+  bottom: 0 !important;
+  left: auto !important;
+  z-index: 50;
+  grid-column: 1 / -1;
+  align-self: stretch;
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 9px;
+  width: auto;
+  margin: 8px -22px 0 !important;
+  padding: 13px 22px 17px !important;
+  border-top: 1px solid var(--border);
+  background: var(--surface-solid) !important;
+  background-image: none !important;
+  box-shadow: 0 -10px 22px rgba(0, 0, 0, 0.18);
+  transform: none !important;
+}
+
+.task-modal-actions .secondary-button,
+.task-modal-actions .primary-button {
+  min-width: 130px;
+  min-height: 43px;
+}
+
+.task-modal-form::after {
+  display: block;
+  grid-column: 1 / -1;
+  height: 1px;
+  content: "";
+}
+
+html.touch-ui .task-modal-card,
+html.safe-render-ui .task-modal-card {
+  display: flex !important;
+  flex-direction: column;
+  max-height: min(92dvh, calc(100vh - 24px)) !important;
+  overflow: hidden !important;
+}
+
+html.touch-ui .task-modal-form,
+html.safe-render-ui .task-modal-form {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+
+html.touch-ui .task-modal-actions,
+html.safe-render-ui .task-modal-actions {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 50 !important;
+  background: var(--surface-solid) !important;
+  background-image: none !important;
+  box-shadow: 0 -10px 22px rgba(0, 0, 0, 0.18) !important;
+}
+
+@media (max-width: 680px) {
+  .task-modal-overlay {
+    align-items: center;
+    padding: 8px;
+  }
+
+  .task-modal-card {
+    width: 100%;
+    max-height: calc(100dvh - 16px);
+    border-radius: 19px;
+  }
+
+  .task-modal-header {
+    padding: 16px 16px 12px;
+  }
+
+  .task-modal-form {
+    grid-template-columns: 1fr;
+    padding: 14px 16px 0;
+  }
+
+  .task-modal-actions {
+    margin: 8px -16px 0 !important;
+    padding: 11px 16px 14px !important;
+  }
+
+  .task-modal-actions button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+@media (max-height: 660px) {
+  .task-modal-card {
+    max-height: calc(100dvh - 12px);
+  }
+
+  .task-modal-header {
+    padding-top: 12px;
+    padding-bottom: 10px;
+  }
+
+  .task-modal-form {
+    padding-top: 12px;
+  }
+
+  .task-modal-actions {
+    padding-top: 9px !important;
+    padding-bottom: 10px !important;
+  }
+}
