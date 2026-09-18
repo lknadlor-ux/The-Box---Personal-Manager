@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7a2-2-task-save-button-hotfix";
+const CACHE_NAME = "the-box-os-phase-7j1-journal";
 
 const APP_FILES = [
   "./",

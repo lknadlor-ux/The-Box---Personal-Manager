@@ -58,7 +58,10 @@ const STORAGE = {
   dismissedReminders: "theBoxOSDismissedReminders",
   lastDailyReminderSummary: "theBoxOSLastDailyReminderSummary",
   lastBrowserReminderSignature: "theBoxOSLastBrowserReminderSignature",
-  taskView: "theBoxOSTaskView"
+  taskView: "theBoxOSTaskView",
+  journal: "theBoxOSJournalEntries",
+  journalDraft: "theBoxOSJournalDraft",
+  journalPendingSync: "theBoxOSJournalPendingSync"
 };
 
 const DAVAO = {
@@ -133,6 +136,15 @@ let tasks = loadJSON(STORAGE.tasks, []);
 let events = loadJSON(STORAGE.events, []);
 let financeEntries = loadJSON(STORAGE.finance, []);
 let customTemplates = loadJSON(STORAGE.customTemplates, []);
+let journalEntries = normalizeJournalEntries(loadJSON(STORAGE.journal, []));
+let selectedJournalEntryId = null;
+let journalSearchTerm = "";
+let journalMoodFilter = "all";
+let journalFavoritesOnly = false;
+let journalDateFrom = "";
+let journalDateTo = "";
+let journalEditorInitialized = false;
+let journalEditorDirty = false;
 
 let activeFilter = "all";
 let activeWorkspaceFilter = "all";
@@ -524,6 +536,77 @@ function loadJSON(key, fallback) {
 }
 
 
+
+function createJournalEntryId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+function normalizeJournalDate(value) {
+  const text = String(value || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : new Date().toISOString().slice(0, 10);
+}
+
+function normalizeJournalTime(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/^(\d{2}):(\d{2})/);
+  return match ? `${match[1]}:${match[2]}` : "";
+}
+
+function normalizeJournalTags(value) {
+  const raw = Array.isArray(value) ? value : String(value || "").split(",");
+  const seen = new Set();
+  return raw
+    .map((item) => String(item || "").trim().replace(/\s+/g, " ").slice(0, 40))
+    .filter((item) => {
+      if (!item) return false;
+      const key = item.toLocaleLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 20);
+}
+
+function normalizeJournalEntry(entry = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: String(entry.id || createJournalEntryId()),
+    entry_date: normalizeJournalDate(entry.entry_date || entry.entryDate),
+    entry_time: normalizeJournalTime(entry.entry_time || entry.entryTime),
+    title: String(entry.title || "").trim().slice(0, 180),
+    content: String(entry.content || "").slice(0, 100000),
+    mood: ["Great", "Good", "Okay", "Low", "Stressed"].includes(entry.mood) ? entry.mood : "",
+    tags: normalizeJournalTags(entry.tags),
+    favorite: Boolean(entry.favorite),
+    created_at: entry.created_at || entry.createdAt || now,
+    updated_at: entry.updated_at || entry.updatedAt || entry.created_at || entry.createdAt || now
+  };
+}
+
+function normalizeJournalEntries(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value
+    .map(normalizeJournalEntry)
+    .filter((entry) => {
+      if (!entry.id || seen.has(entry.id)) return false;
+      seen.add(entry.id);
+      return true;
+    })
+    .slice(0, 5000);
+}
+
+function persistJournalEntries({ pendingCloudSync = false } = {}) {
+  journalEntries = normalizeJournalEntries(journalEntries);
+  localStorage.setItem(STORAGE.journal, JSON.stringify(journalEntries));
+  if (pendingCloudSync) localStorage.setItem(STORAGE.journalPendingSync, "1");
+}
+
 function createLocalTemplateId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   return `template-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -745,6 +828,10 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "journal") {
+    renderJournalCenter();
   }
 
   if (appName === "templates") {
@@ -4678,6 +4765,390 @@ async function uploadSelectedDocuments() {
 
 
 
+
+function getJournalEditorSnapshot() {
+  if (!$('journalEntryDate')) return null;
+  return {
+    selectedId: selectedJournalEntryId,
+    entry_date: $('journalEntryDate').value || new Date().toISOString().slice(0, 10),
+    entry_time: $('journalEntryTime').value || "",
+    title: $('journalEntryTitle').value || "",
+    content: $('journalEntryContent').value || "",
+    mood: $('journalEntryMood').value || "",
+    tags: normalizeJournalTags($('journalEntryTags').value || ""),
+    favorite: $('journalEntryFavorite').checked,
+    savedAt: new Date().toISOString()
+  };
+}
+
+function saveJournalDraft() {
+  const draft = getJournalEditorSnapshot();
+  if (!draft) return;
+  const hasWriting = draft.title.trim() || draft.content.trim() || draft.tags.length || draft.mood || draft.favorite;
+  if (!hasWriting && !draft.selectedId) {
+    localStorage.removeItem(STORAGE.journalDraft);
+  } else {
+    localStorage.setItem(STORAGE.journalDraft, JSON.stringify(draft));
+  }
+  $('journalDraftStatus').textContent = 'Draft saved locally';
+}
+
+function clearJournalDraft() {
+  localStorage.removeItem(STORAGE.journalDraft);
+  journalEditorDirty = false;
+  if ($('journalDraftStatus')) $('journalDraftStatus').textContent = 'Saved';
+}
+
+function readJournalDraft() {
+  try {
+    const draft = JSON.parse(localStorage.getItem(STORAGE.journalDraft) || 'null');
+    return draft && typeof draft === 'object' ? draft : null;
+  } catch (error) {
+    console.error('Could not read journal draft:', error);
+    return null;
+  }
+}
+
+function getJournalToday() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getJournalCurrentTime() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
+function getJournalWordCount(value = $('journalEntryContent')?.value || '') {
+  const words = String(value).trim().match(/\S+/g);
+  return words ? words.length : 0;
+}
+
+function updateJournalWordCount() {
+  if (!$('journalWordCount')) return;
+  const count = getJournalWordCount();
+  $('journalWordCount').textContent = `${count} word${count === 1 ? '' : 's'}`;
+}
+
+function formatJournalDate(value) {
+  if (!value) return 'No date';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatJournalTime(value) {
+  if (!value) return '';
+  const match = String(value).match(/^(\d{2}):(\d{2})/);
+  if (!match) return value;
+  const date = new Date();
+  date.setHours(Number(match[1]), Number(match[2]), 0, 0);
+  return date.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' });
+}
+
+function getJournalMoodIcon(mood) {
+  return ({ Great: '☀', Good: '◉', Okay: '○', Low: '☂', Stressed: '⚡' })[mood] || '·';
+}
+
+function compareJournalEntries(a, b) {
+  const dateCompare = String(b.entry_date).localeCompare(String(a.entry_date));
+  if (dateCompare) return dateCompare;
+  const timeCompare = String(b.entry_time || '').localeCompare(String(a.entry_time || ''));
+  if (timeCompare) return timeCompare;
+  return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+}
+
+function getFilteredJournalEntries() {
+  const query = journalSearchTerm.toLocaleLowerCase();
+  return journalEntries
+    .filter((entry) => {
+      if (journalMoodFilter !== 'all') {
+        if (journalMoodFilter === 'Unspecified') {
+          if (entry.mood) return false;
+        } else if (entry.mood !== journalMoodFilter) return false;
+      }
+      if (journalFavoritesOnly && !entry.favorite) return false;
+      if (journalDateFrom && entry.entry_date < journalDateFrom) return false;
+      if (journalDateTo && entry.entry_date > journalDateTo) return false;
+      if (!query) return true;
+      const haystack = [entry.title, entry.content, entry.mood, ...entry.tags].join(' ').toLocaleLowerCase();
+      return haystack.includes(query);
+    })
+    .sort(compareJournalEntries);
+}
+
+function canLeaveJournalEditor() {
+  if (!journalEditorDirty) return true;
+  return window.confirm('You have unsaved journal changes. A local draft has been saved. Continue without saving the entry?');
+}
+
+function populateJournalEditor(values = {}, { mode = 'new', draftRestored = false } = {}) {
+  if (!$('journalEntryDate')) return;
+  selectedJournalEntryId = values.id || values.selectedId || null;
+  $('journalEntryDate').value = normalizeJournalDate(values.entry_date || getJournalToday());
+  $('journalEntryTime').value = normalizeJournalTime(values.entry_time || (mode === 'new' ? getJournalCurrentTime() : ''));
+  $('journalEntryTitle').value = values.title || '';
+  $('journalEntryContent').value = values.content || '';
+  $('journalEntryMood').value = values.mood || '';
+  $('journalEntryTags').value = normalizeJournalTags(values.tags).join(', ');
+  $('journalEntryFavorite').checked = Boolean(values.favorite);
+
+  journalEditorInitialized = true;
+  journalEditorDirty = Boolean(draftRestored);
+  $('journalEditorModeLabel').textContent = selectedJournalEntryId ? 'EDIT ENTRY' : 'NEW ENTRY';
+  $('journalEditorHeading').textContent = selectedJournalEntryId
+    ? (values.title || 'Untitled entry')
+    : "Write today's entry";
+  $('deleteJournalEntryButton').disabled = !selectedJournalEntryId;
+  $('exportJournalEntryButton').disabled = !selectedJournalEntryId;
+  $('journalDraftStatus').textContent = draftRestored ? 'Local draft restored' : (selectedJournalEntryId ? 'Saved entry' : 'Draft ready');
+  updateJournalWordCount();
+}
+
+function initializeJournalEditor() {
+  if (journalEditorInitialized || !$('journalEntryDate')) return;
+  const draft = readJournalDraft();
+  if (draft) {
+    populateJournalEditor(draft, { mode: draft.selectedId ? 'edit' : 'new', draftRestored: true });
+    return;
+  }
+  populateJournalEditor({ entry_date: getJournalToday(), entry_time: getJournalCurrentTime() }, { mode: 'new' });
+}
+
+function newJournalEntry() {
+  if (!canLeaveJournalEditor()) return;
+  selectedJournalEntryId = null;
+  localStorage.removeItem(STORAGE.journalDraft);
+  populateJournalEditor({ entry_date: getJournalToday(), entry_time: getJournalCurrentTime() }, { mode: 'new' });
+  renderJournalCenter();
+  $('journalEntryTitle').focus();
+}
+
+function selectJournalEntry(entryId, { bypassDirtyCheck = false } = {}) {
+  if (!bypassDirtyCheck && !canLeaveJournalEditor()) return;
+  const entry = journalEntries.find((item) => item.id === entryId);
+  if (!entry) return;
+  localStorage.removeItem(STORAGE.journalDraft);
+  populateJournalEditor(entry, { mode: 'edit' });
+  renderJournalCenter();
+}
+
+function renderJournalEntryList() {
+  const list = $('journalEntryList');
+  if (!list) return;
+  const entries = getFilteredJournalEntries();
+  $('journalEntryCount').textContent = String(entries.length);
+  $('journalEmptyState').hidden = entries.length > 0;
+
+  list.innerHTML = entries.map((entry) => {
+    const preview = String(entry.content || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    return `
+      <button class="journal-entry-card ${entry.id === selectedJournalEntryId ? 'active' : ''}"
+        type="button" data-journal-entry-id="${escapeHtml(entry.id)}">
+        <div class="journal-entry-card-top">
+          <span>${escapeHtml(formatJournalDate(entry.entry_date))}${entry.entry_time ? ` · ${escapeHtml(formatJournalTime(entry.entry_time))}` : ''}</span>
+          <span class="journal-entry-card-icons">${entry.favorite ? '★' : ''} ${escapeHtml(getJournalMoodIcon(entry.mood))}</span>
+        </div>
+        <strong>${escapeHtml(entry.title || 'Untitled entry')}</strong>
+        <p>${escapeHtml(preview || 'No entry text yet.')}</p>
+        <div class="journal-entry-card-tags">
+          ${entry.mood ? `<span>${escapeHtml(entry.mood)}</span>` : ''}
+          ${entry.tags.slice(0, 3).map((tag) => `<span>#${escapeHtml(tag)}</span>`).join('')}
+        </div>
+      </button>`;
+  }).join('');
+
+  list.querySelectorAll('[data-journal-entry-id]').forEach((button) => {
+    button.addEventListener('click', () => selectJournalEntry(button.dataset.journalEntryId));
+  });
+}
+
+function updateJournalNavigation() {
+  if (!$('previousJournalEntryButton')) return;
+  const entries = getFilteredJournalEntries();
+  const index = entries.findIndex((entry) => entry.id === selectedJournalEntryId);
+  $('previousJournalEntryButton').disabled = index < 0 || index >= entries.length - 1;
+  $('nextJournalEntryButton').disabled = index <= 0;
+}
+
+function renderJournalCenter() {
+  if (!$('journalEntryList')) return;
+  initializeJournalEditor();
+  $('journalSearchInput').value = journalSearchTerm;
+  $('journalMoodFilter').value = journalMoodFilter;
+  $('journalFavoritesOnly').checked = journalFavoritesOnly;
+  $('journalDateFrom').value = journalDateFrom;
+  $('journalDateTo').value = journalDateTo;
+  renderJournalEntryList();
+  updateJournalNavigation();
+  updateJournalWordCount();
+}
+
+async function saveJournalEntryFromEditor() {
+  const snapshot = getJournalEditorSnapshot();
+  if (!snapshot) return;
+  if (!snapshot.entry_date) {
+    showToast('Choose a journal date');
+    $('journalEntryDate').focus();
+    return;
+  }
+  if (!snapshot.title.trim() && !snapshot.content.trim()) {
+    showToast('Add a title or write something before saving');
+    $('journalEntryContent').focus();
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const existing = selectedJournalEntryId
+    ? journalEntries.find((entry) => entry.id === selectedJournalEntryId)
+    : null;
+
+  const entry = normalizeJournalEntry({
+    id: existing?.id || createJournalEntryId(),
+    entry_date: snapshot.entry_date,
+    entry_time: snapshot.entry_time,
+    title: snapshot.title,
+    content: snapshot.content,
+    mood: snapshot.mood,
+    tags: snapshot.tags,
+    favorite: snapshot.favorite,
+    created_at: existing?.created_at || now,
+    updated_at: now
+  });
+
+  const index = journalEntries.findIndex((item) => item.id === entry.id);
+  if (index >= 0) journalEntries[index] = entry;
+  else journalEntries.unshift(entry);
+
+  persistJournalEntries({ pendingCloudSync: !window.BoxCloud?.isReady() });
+  selectedJournalEntryId = entry.id;
+  clearJournalDraft();
+  populateJournalEditor(entry, { mode: 'edit' });
+  renderJournalCenter();
+
+  if (window.BoxCloud?.isReady() && window.BoxCloud.saveJournalEntry) {
+    $('journalDraftStatus').textContent = 'Syncing…';
+    const result = await window.BoxCloud.saveJournalEntry(entry);
+    if (result.error) {
+      localStorage.setItem(STORAGE.journalPendingSync, '1');
+      $('journalDraftStatus').textContent = 'Saved locally · cloud sync pending';
+      showToast('Journal saved locally; cloud sync failed');
+      return;
+    }
+    localStorage.removeItem(STORAGE.journalPendingSync);
+    $('journalDraftStatus').textContent = 'Saved & synced';
+  }
+  showToast('Journal entry saved');
+}
+
+async function deleteSelectedJournalEntry() {
+  if (!selectedJournalEntryId) return;
+  const entry = journalEntries.find((item) => item.id === selectedJournalEntryId);
+  if (!entry) return;
+  if (!window.confirm(`Delete “${entry.title || 'this journal entry'}”?`)) return;
+
+  const deletedId = entry.id;
+  journalEntries = journalEntries.filter((item) => item.id !== deletedId);
+  persistJournalEntries({ pendingCloudSync: !window.BoxCloud?.isReady() });
+  localStorage.removeItem(STORAGE.journalDraft);
+  selectedJournalEntryId = null;
+  journalEditorInitialized = false;
+
+  if (window.BoxCloud?.isReady() && window.BoxCloud.deleteJournalEntry) {
+    const result = await window.BoxCloud.deleteJournalEntry(deletedId);
+    if (result.error) {
+      localStorage.setItem(STORAGE.journalPendingSync, '1');
+      showToast('Deleted locally; cloud delete is pending');
+    }
+  }
+
+  initializeJournalEditor();
+  renderJournalCenter();
+  showToast('Journal entry deleted');
+}
+
+function journalEntryToText(entry) {
+  const lines = [
+    entry.title || 'Untitled entry',
+    `${formatJournalDate(entry.entry_date)}${entry.entry_time ? ` · ${formatJournalTime(entry.entry_time)}` : ''}`,
+    entry.mood ? `Mood: ${entry.mood}` : '',
+    entry.tags.length ? `Tags: ${entry.tags.join(', ')}` : '',
+    entry.favorite ? 'Favorite: Yes' : '',
+    '',
+    entry.content || ''
+  ].filter((line, index) => line || index >= 5);
+  return lines.join('\n');
+}
+
+function exportSelectedJournalEntry() {
+  const entry = journalEntries.find((item) => item.id === selectedJournalEntryId);
+  if (!entry) return;
+  const name = cleanFileNameSegment(entry.title || `journal-${entry.entry_date}`);
+  downloadTextFile(`${entry.entry_date}-${name}.txt`, journalEntryToText(entry), 'text/plain');
+  showToast('Journal entry exported');
+}
+
+function exportFilteredJournalEntries() {
+  const entries = getFilteredJournalEntries();
+  if (!entries.length) {
+    showToast('No journal entries match the current filters');
+    return;
+  }
+  const text = entries.map((entry) => journalEntryToText(entry)).join(`\n\n${'='.repeat(72)}\n\n`);
+  const range = journalDateFrom || journalDateTo
+    ? `${journalDateFrom || 'start'}-to-${journalDateTo || 'latest'}`
+    : 'filtered';
+  downloadTextFile(`the-box-journal-${cleanFileNameSegment(range)}.txt`, text, 'text/plain');
+  showToast(`${entries.length} journal ${entries.length === 1 ? 'entry' : 'entries'} exported`);
+}
+
+function showJournalToday() {
+  const today = getJournalToday();
+  journalDateFrom = today;
+  journalDateTo = today;
+  renderJournalCenter();
+  const todayEntry = getFilteredJournalEntries()[0];
+  if (todayEntry && canLeaveJournalEditor()) selectJournalEntry(todayEntry.id, { bypassDirtyCheck: true });
+}
+
+function clearJournalFilters() {
+  journalSearchTerm = '';
+  journalMoodFilter = 'all';
+  journalFavoritesOnly = false;
+  journalDateFrom = '';
+  journalDateTo = '';
+  renderJournalCenter();
+}
+
+function navigateJournalEntry(direction) {
+  if (!canLeaveJournalEditor()) return;
+  const entries = getFilteredJournalEntries();
+  const index = entries.findIndex((entry) => entry.id === selectedJournalEntryId);
+  const targetIndex = direction === 'previous' ? index + 1 : index - 1;
+  const target = entries[targetIndex];
+  if (target) selectJournalEntry(target.id, { bypassDirtyCheck: true });
+}
+
+function markJournalEditorDirty() {
+  journalEditorDirty = true;
+  $('journalDraftStatus').textContent = 'Saving local draft…';
+  updateJournalWordCount();
+  saveJournalDraft();
+}
+
+async function syncPendingJournalIfNeeded() {
+  if (!window.BoxCloud?.isReady() || !window.BoxCloud.replaceJournalEntries) return;
+  if (localStorage.getItem(STORAGE.journalPendingSync) !== '1') return;
+  const result = await window.BoxCloud.replaceJournalEntries(journalEntries);
+  if (!result.error) {
+    localStorage.removeItem(STORAGE.journalPendingSync);
+    if ($('journalDraftStatus') && !journalEditorDirty) $('journalDraftStatus').textContent = 'Saved & synced';
+  }
+}
+
 function getAllTemplates() {
   return [
     ...BUILT_IN_TEMPLATES.map((template) => ({ ...template, builtIn: true })),
@@ -5268,6 +5739,7 @@ function dismissReminderForToday(reminderId) {
 
   localStorage.setItem(STORAGE.dismissedReminders, JSON.stringify(dismissed));
   renderReminderCenter();
+  renderJournalCenter();
 }
 
 function dismissAllRemindersForToday() {
@@ -5638,7 +6110,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7A.2-Free";
+const BACKUP_APP_VERSION = "7J.1-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -5682,6 +6154,7 @@ function buildLocalBackupData() {
   return {
     tasks: tasks.map((task) => ({ ...task })),
     events: events.map((event) => ({ ...event })),
+    journalEntries: journalEntries.map((entry) => ({ ...entry, tags: [...entry.tags] })),
     financeEntries: financeEntries.map((entry) => ({ ...entry })),
     notes: $("quickNotes")?.value ?? localStorage.getItem(STORAGE.notes) ?? "",
     customTemplates: customTemplates.map((template) => ({ ...template })),
@@ -5794,6 +6267,7 @@ function renderBackupCenter() {
 
   $("backupTaskCount").textContent = String(tasks.length);
   $("backupEventCount").textContent = String(events.length);
+  $("backupJournalCount").textContent = String(journalEntries.length);
   $("backupDocumentCount").textContent = String(documents.filter((item) => !item.deleted_at).length);
   $("backupLastExport").textContent = formatBackupTime(localStorage.getItem(STORAGE.lastBackupAt));
 
@@ -5899,6 +6373,7 @@ function renderBackupImportPreview(backup, integrityResult) {
     <div class="backup-preview-counts">
       <small>${backup.data.tasks.length} tasks</small>
       <small>${backup.data.events.length} events</small>
+      <small>${backup.data.journalEntries?.length || 0} journal entries</small>
       <small>${backup.data.financeEntries.length} finance entries</small>
       <small>${inventory?.documents?.length || 0} document records</small>
       <small>${backup.data.customTemplates?.length || 0} custom templates</small>
@@ -5992,6 +6467,7 @@ async function restoreSelectedBackup() {
   const selected = {
     tasks: $("restoreBackupTasks").checked,
     events: $("restoreBackupEvents").checked,
+    journal: $("restoreBackupJournal").checked,
     finance: $("restoreBackupFinance").checked,
     notes: $("restoreBackupNotes").checked,
     preferences: $("restoreBackupPreferences").checked,
@@ -6027,6 +6503,13 @@ async function restoreSelectedBackup() {
     if (selected.events) {
       events = normalizeBackupEvents(data.events);
       localStorage.setItem(STORAGE.events, JSON.stringify(events));
+    }
+    if (selected.journal) {
+      journalEntries = normalizeJournalEntries(data.journalEntries || []);
+      persistJournalEntries({ pendingCloudSync: shouldSync });
+      selectedJournalEntryId = null;
+      journalEditorInitialized = false;
+      localStorage.removeItem(STORAGE.journalDraft);
     }
     if (selected.finance) {
       financeEntries = normalizeBackupFinance(data.financeEntries);
@@ -6816,6 +7299,45 @@ document.addEventListener("keydown", (event) => {
 
 
 
+
+$('newJournalEntryButton').addEventListener('click', newJournalEntry);
+$('journalTodayButton').addEventListener('click', showJournalToday);
+$('clearJournalFiltersButton').addEventListener('click', clearJournalFilters);
+$('exportJournalRangeButton').addEventListener('click', exportFilteredJournalEntries);
+$('saveJournalEntryButton').addEventListener('click', saveJournalEntryFromEditor);
+$('deleteJournalEntryButton').addEventListener('click', deleteSelectedJournalEntry);
+$('exportJournalEntryButton').addEventListener('click', exportSelectedJournalEntry);
+$('previousJournalEntryButton').addEventListener('click', () => navigateJournalEntry('previous'));
+$('nextJournalEntryButton').addEventListener('click', () => navigateJournalEntry('next'));
+$('journalSearchInput').addEventListener('input', (event) => {
+  journalSearchTerm = event.target.value.trim();
+  renderJournalEntryList();
+  updateJournalNavigation();
+});
+$('journalMoodFilter').addEventListener('change', (event) => {
+  journalMoodFilter = event.target.value;
+  renderJournalEntryList();
+  updateJournalNavigation();
+});
+$('journalFavoritesOnly').addEventListener('change', (event) => {
+  journalFavoritesOnly = event.target.checked;
+  renderJournalEntryList();
+  updateJournalNavigation();
+});
+$('journalDateFrom').addEventListener('change', (event) => {
+  journalDateFrom = event.target.value;
+  renderJournalEntryList();
+  updateJournalNavigation();
+});
+$('journalDateTo').addEventListener('change', (event) => {
+  journalDateTo = event.target.value;
+  renderJournalEntryList();
+  updateJournalNavigation();
+});
+['journalEntryDate', 'journalEntryTime', 'journalEntryTitle', 'journalEntryContent', 'journalEntryMood', 'journalEntryTags']
+  .forEach((id) => $(id).addEventListener('input', markJournalEditorDirty));
+$('journalEntryFavorite').addEventListener('change', markJournalEditorDirty);
+
 $("newTemplateButton").addEventListener("click", createNewCustomTemplate);
 $("templateSearch").addEventListener("input", (event) => {
   templateSearchTerm = event.target.value.trim();
@@ -6927,6 +7449,28 @@ window.BoxOSCloudHydrate = function cloudHydrate(data) {
     }
   }
 
+  if (Array.isArray(data.journal_entries)) {
+    const cloudJournal = normalizeJournalEntries(data.journal_entries);
+    const hasPendingLocalJournal = localStorage.getItem(STORAGE.journalPendingSync) === "1";
+    if (hasPendingLocalJournal && journalEntries.length && window.BoxCloud?.replaceJournalEntries) {
+      const merged = new Map(cloudJournal.map((entry) => [entry.id, entry]));
+      journalEntries.forEach((entry) => {
+        const remote = merged.get(entry.id);
+        if (!remote || String(entry.updated_at) > String(remote.updated_at)) merged.set(entry.id, entry);
+      });
+      journalEntries = normalizeJournalEntries(Array.from(merged.values()));
+      persistJournalEntries({ pendingCloudSync: true });
+      window.BoxCloud.replaceJournalEntries(journalEntries).then((result) => {
+        if (!result.error) localStorage.removeItem(STORAGE.journalPendingSync);
+      });
+    } else {
+      journalEntries = cloudJournal;
+      persistJournalEntries();
+    }
+    selectedJournalEntryId = null;
+    journalEditorInitialized = false;
+  }
+
   localStorage.setItem(STORAGE.tasks, JSON.stringify(tasks));
   localStorage.setItem(STORAGE.events, JSON.stringify(events));
   localStorage.setItem(STORAGE.finance, JSON.stringify(financeEntries));
@@ -7028,6 +7572,8 @@ window.addEventListener("boxcloudstatus", (event) => {
 
   renderBackupCenter();
   renderReminderCenter();
+  renderJournalCenter();
+  if (nextUserId) syncPendingJournalIfNeeded();
 });
 
 
