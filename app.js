@@ -5378,6 +5378,7 @@ function getFilteredOurSpacePlans() {
   const query = ourSpaceSearchTerm.toLocaleLowerCase();
   return sortOurSpacePlans(ourSpacePlans.filter((plan) => {
     if (ourSpaceCategoryFilter !== "all" && plan.category !== ourSpaceCategoryFilter) return false;
+    if (ourSpaceStatusFilter === "all" && plan.status === "done") return false;
     if (ourSpaceStatusFilter !== "all" && plan.status !== ourSpaceStatusFilter) return false;
     if (ourSpaceFavoritesOnly && !plan.favorite) return false;
 
@@ -5403,7 +5404,7 @@ function getOurSpaceSummary() {
     upcoming: ourSpacePlans.filter((plan) => plan.status !== "done" && plan.target_date && plan.target_date >= today).length,
     bucket: ourSpacePlans.filter((plan) => ["idea", "someday"].includes(plan.status)).length,
     planning: ourSpacePlans.filter((plan) => ["planning", "scheduled"].includes(plan.status)).length,
-    memories: ourSpacePlans.filter((plan) => plan.status === "done").length
+    archive: ourSpacePlans.filter((plan) => plan.status === "done").length
   };
 }
 
@@ -5413,7 +5414,7 @@ function renderOurSpaceSummary() {
   $("ourSpaceUpcomingCount").textContent = String(summary.upcoming);
   $("ourSpaceBucketCount").textContent = String(summary.bucket);
   $("ourSpacePlanningCount").textContent = String(summary.planning);
-  $("ourSpaceMemoryCount").textContent = String(summary.memories);
+  $("ourSpaceMemoryCount").textContent = String(summary.archive);
 }
 
 function renderOurSpacePlanList() {
@@ -5438,7 +5439,7 @@ function renderOurSpacePlanList() {
             <strong>${escapeHtml(plan.title || "Untitled plan")}</strong>
             <span>${plan.favorite ? "♥" : ""}</span>
           </span>
-          <small>${escapeHtml(plan.category)} · ${escapeHtml(getOurSpaceStatusLabel(plan.status))}</small>
+          <small>${escapeHtml(plan.category)} · ${plan.status === "done" ? "Archived" : escapeHtml(getOurSpaceStatusLabel(plan.status))}</small>
           <span class="our-space-plan-card-meta">
             ${date ? `<em>${escapeHtml(formatOurSpaceDate(date))}</em>` : ""}
             ${plan.place ? `<em>${escapeHtml(plan.place)}</em>` : ""}
@@ -5659,6 +5660,79 @@ async function openOurSpaceAttachment(documentId) {
   openApp("documents");
 }
 
+
+function updateOurSpaceArchiveButton() {
+  const button = $("ourSpaceArchiveButton");
+  if (!button) return;
+
+  const savedPlan = ourSpacePlans.find((item) => item.id === selectedOurSpacePlanId);
+  if (!savedPlan) {
+    button.disabled = true;
+    button.textContent = "✓ Mark done & archive";
+    button.classList.remove("restore");
+    return;
+  }
+
+  button.disabled = false;
+  const archived = savedPlan.status === "done";
+  button.textContent = archived ? "↩ Restore plan" : "✓ Mark done & archive";
+  button.classList.toggle("restore", archived);
+}
+
+async function markSelectedOurSpacePlanDone() {
+  const plan = ourSpacePlans.find((item) => item.id === selectedOurSpacePlanId);
+  if (!plan) {
+    showToast("Save the plan first");
+    return;
+  }
+
+  if (plan.status === "done") {
+    const confirmed = window.confirm(
+      `Restore “${plan.title || "this plan"}” from the archive and move it back to Planning?`
+    );
+    if (!confirmed) return;
+
+    $("ourSpaceStatus").value = "planning";
+    updateOurSpaceMemoryVisibility();
+    await saveOurSpacePlanFromEditor();
+    showToast("Plan restored from archive");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Mark “${plan.title || "this plan"}” as done and move it to the Our Space archive?`
+  );
+  if (!confirmed) return;
+
+  $("ourSpaceStatus").value = "done";
+  if (!$("ourSpaceActualDate").value) {
+    $("ourSpaceActualDate").value = $("ourSpaceTargetDate").value || getOurSpaceToday();
+  }
+  updateOurSpaceMemoryVisibility();
+  await saveOurSpacePlanFromEditor();
+
+  // Keep active plans clean after archiving.
+  ourSpaceStatusFilter = "all";
+  renderOurSpaceCenter();
+  showToast("Plan marked done and moved to Archive ♥");
+}
+
+function updateOurSpaceSidebarHeading() {
+  const eyebrow = $("ourSpaceSidebarEyebrow");
+  const title = $("ourSpaceSidebarTitle");
+  if (!eyebrow || !title) return;
+
+  if (ourSpaceStatusFilter === "done") {
+    eyebrow.textContent = "ARCHIVE";
+    title.textContent = "Completed plans";
+  } else {
+    eyebrow.textContent = "OUR PLANS";
+    title.textContent = ourSpaceStatusFilter === "all"
+      ? "Active plans"
+      : `${getOurSpaceStatusLabel(ourSpaceStatusFilter)} plans`;
+  }
+}
+
 function updateOurSpaceMemoryVisibility() {
   const isDone = $("ourSpaceStatus")?.value === "done";
   $("ourSpaceMemorySection")?.classList.toggle("hidden", !isDone);
@@ -5692,6 +5766,9 @@ function resetOurSpaceEditor() {
   $("deleteOurSpacePlanButton").disabled = true;
   $("ourSpaceCreateTaskButton").disabled = true;
   $("ourSpaceAddCalendarButton").disabled = true;
+  $("ourSpaceArchiveButton").disabled = true;
+  $("ourSpaceArchiveButton").textContent = "✓ Mark done & archive";
+  $("ourSpaceArchiveButton").classList.remove("restore");
 
   renderOurSpaceChecklist();
   renderOurSpaceLinks();
@@ -5722,11 +5799,12 @@ function populateOurSpaceEditor(plan) {
   $("ourSpaceRating").value = plan.rating ?? "";
   $("ourSpaceFavoriteMemory").value = plan.favorite_memory;
 
-  $("ourSpaceEditorModeLabel").textContent = plan.status === "done" ? "MEMORY" : "EDIT PLAN";
+  $("ourSpaceEditorModeLabel").textContent = plan.status === "done" ? "ARCHIVED MEMORY" : "EDIT PLAN";
   $("ourSpaceEditorHeading").textContent = plan.title || "Edit plan";
   $("deleteOurSpacePlanButton").disabled = false;
   $("ourSpaceCreateTaskButton").disabled = false;
   $("ourSpaceAddCalendarButton").disabled = !plan.target_date;
+  updateOurSpaceArchiveButton();
 
   renderOurSpaceChecklist();
   renderOurSpaceLinks();
@@ -5750,8 +5828,10 @@ function renderOurSpaceCenter() {
   $("ourSpaceFavoritesOnly").checked = ourSpaceFavoritesOnly;
 
   renderOurSpaceSummary();
+  updateOurSpaceSidebarHeading();
   renderOurSpacePlanList();
   renderOurSpaceDocumentPicker();
+  updateOurSpaceArchiveButton();
 
   if (!selectedOurSpacePlanId && !$("ourSpaceTitle").value && !$("ourSpaceEditorModeLabel").textContent.includes("NEW")) {
     resetOurSpaceEditor();
@@ -5811,7 +5891,7 @@ async function saveOurSpacePlanFromEditor() {
     localStorage.removeItem(STORAGE.ourSpacePendingSync);
   }
 
-  showToast(plan.status === "done" ? "Memory saved ♥" : "Plan saved");
+  showToast(plan.status === "done" ? "Archived memory saved ♥" : "Plan saved");
 }
 
 async function deleteSelectedOurSpacePlan() {
@@ -5850,7 +5930,7 @@ function applyOurSpaceQuickFilter(mode) {
   ourSpaceCategoryFilter = "all";
   ourSpaceFavoritesOnly = false;
 
-  if (mode === "memories") {
+  if (mode === "archive") {
     ourSpaceStatusFilter = "done";
   } else if (mode === "bucket") {
     ourSpaceStatusFilter = "someday";
@@ -6909,7 +6989,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7J.2-Free";
+const BACKUP_APP_VERSION = "7L.2-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -8131,6 +8211,7 @@ $("attachOurSpaceDocumentButton").addEventListener("click", attachSelectedOurSpa
 $("ourSpaceStatus").addEventListener("change", updateOurSpaceMemoryVisibility);
 $("ourSpaceCreateTaskButton").addEventListener("click", createTaskFromOurSpacePlan);
 $("ourSpaceAddCalendarButton").addEventListener("click", addOurSpacePlanToCalendar);
+$("ourSpaceArchiveButton").addEventListener("click", markSelectedOurSpacePlanDone);
 $("ourSpaceSearchInput").addEventListener("input", (event) => {
   ourSpaceSearchTerm = event.target.value.trim();
   renderOurSpacePlanList();
@@ -8141,6 +8222,7 @@ $("ourSpaceCategoryFilter").addEventListener("change", (event) => {
 });
 $("ourSpaceStatusFilter").addEventListener("change", (event) => {
   ourSpaceStatusFilter = event.target.value;
+  updateOurSpaceSidebarHeading();
   renderOurSpacePlanList();
 });
 $("ourSpaceFavoritesOnly").addEventListener("change", (event) => {

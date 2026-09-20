@@ -28,7 +28,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7j2">
+  <link rel="stylesheet" href="style.css?v=7l2">
 </head>
 <body>
   <div class="desktop-shell">
@@ -958,10 +958,10 @@
                 <strong id="ourSpacePlanningCount">0</strong>
                 <small>Being worked on</small>
               </button>
-              <button class="our-space-summary-card memory-card" type="button" data-our-space-quick-filter="memories">
-                <span>Memories</span>
+              <button class="our-space-summary-card memory-card archive-card" type="button" data-our-space-quick-filter="archive">
+                <span>Archive</span>
                 <strong id="ourSpaceMemoryCount">0</strong>
-                <small>Plans we completed</small>
+                <small>Completed plans &amp; memories</small>
               </button>
             </section>
 
@@ -989,12 +989,12 @@
               <label>
                 <span>Status</span>
                 <select id="ourSpaceStatusFilter">
-                  <option value="all">All statuses</option>
+                  <option value="all">Active plans</option>
                   <option value="idea">Idea</option>
                   <option value="planning">Planning</option>
                   <option value="scheduled">Scheduled</option>
                   <option value="someday">Someday</option>
-                  <option value="done">Memories / Done</option>
+                  <option value="done">Archive / Done</option>
                 </select>
               </label>
               <label class="our-space-favorites-filter">
@@ -1008,8 +1008,8 @@
               <aside class="our-space-sidebar">
                 <div class="our-space-sidebar-heading">
                   <div>
-                    <small>OUR PLANS</small>
-                    <h3>Plan list</h3>
+                    <small id="ourSpaceSidebarEyebrow">OUR PLANS</small>
+                    <h3 id="ourSpaceSidebarTitle">Active plans</h3>
                   </div>
                   <span id="ourSpacePlanCount" class="our-space-count-badge">0</span>
                 </div>
@@ -1056,7 +1056,7 @@
                       <option value="planning">Planning</option>
                       <option value="scheduled">Scheduled</option>
                       <option value="someday">Someday</option>
-                      <option value="done">Done / Memory</option>
+                      <option value="done">Done / Archived</option>
                     </select>
                   </label>
                   <label>
@@ -1130,7 +1130,7 @@
                 <section id="ourSpaceMemorySection" class="our-space-memory-section hidden">
                   <div class="our-space-memory-heading">
                     <div>
-                      <small>MEMORY</small>
+                      <small>ARCHIVED MEMORY</small>
                       <h3>We did it ♥</h3>
                     </div>
                     <span>Save what made this plan special.</span>
@@ -1168,6 +1168,7 @@
                   <button id="deleteOurSpacePlanButton" class="template-danger-button" type="button" disabled>Delete</button>
                   <button id="ourSpaceCreateTaskButton" class="secondary-button" type="button" disabled>Create task</button>
                   <button id="ourSpaceAddCalendarButton" class="secondary-button" type="button" disabled>Add to calendar</button>
+                  <button id="ourSpaceArchiveButton" class="our-space-archive-button" type="button" disabled>✓ Mark done &amp; archive</button>
                   <button id="saveOurSpacePlanButton" class="primary-button" type="button">Save plan</button>
                 </div>
               </section>
