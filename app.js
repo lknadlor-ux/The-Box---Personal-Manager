@@ -306,6 +306,8 @@ let ourSpaceFavoritesOnly = false;
 let ourSpaceDraftChecklist = [];
 let ourSpaceDraftLinks = [];
 let ourSpaceDraftAttachments = [];
+const ourSpaceAttachmentPreviewCache = new Map();
+
 
 
 let activeFilter = "all";
@@ -813,7 +815,8 @@ function normalizeOurSpaceAttachments(value) {
       name: String(item?.name || "Attached file").trim().slice(0, 240),
       folder: String(item?.folder || "Documents").trim().slice(0, 100),
       mimeType: String(item?.mimeType || item?.mime_type || "").slice(0, 160),
-      sizeBytes: Math.max(0, Number(item?.sizeBytes ?? item?.size_bytes) || 0)
+      sizeBytes: Math.max(0, Number(item?.sizeBytes ?? item?.size_bytes) || 0),
+      storagePath: String(item?.storagePath || item?.storage_path || "").slice(0, 600)
     });
   });
   return Array.from(map.values()).slice(0, 30);
@@ -5748,35 +5751,177 @@ function renderOurSpaceDocumentPicker() {
   if (activeDocuments.some((item) => String(item.id) === current)) select.value = current;
 }
 
+function isOurSpaceImageAttachment(attachment = {}) {
+  const mime = String(attachment.mimeType || "").toLowerCase();
+  const name = String(attachment.name || "").toLowerCase();
+  return (
+    mime.startsWith("image/") ||
+    /\.(png|jpe?g|gif|webp|bmp|svg|heic|heif|avif)$/.test(name)
+  );
+}
+
+function getOurSpaceAttachmentDocument(attachment = {}) {
+  return documents.find(
+    (item) => String(item.id) === String(attachment.documentId)
+  ) || null;
+}
+
+function getOurSpaceAttachmentStoragePath(attachment = {}) {
+  const documentItem = getOurSpaceAttachmentDocument(attachment);
+  return String(
+    documentItem?.storage_path ||
+    attachment.storagePath ||
+    ""
+  );
+}
+
+function setOurSpaceImagePreview(image, signedUrl) {
+  if (!image?.isConnected || !signedUrl) return;
+  const shell = image.closest(".our-space-media-canvas");
+  image.onload = () => {
+    image.hidden = false;
+    shell?.classList.add("loaded");
+  };
+  image.onerror = () => {
+    image.hidden = true;
+    shell?.classList.add("error");
+    const message = shell?.querySelector(".our-space-media-loading");
+    if (message) message.textContent = "Preview unavailable";
+  };
+  image.src = signedUrl;
+}
+
+async function hydrateOurSpaceAttachmentPreviews() {
+  const list = $("ourSpaceAttachmentList");
+  if (!list) return;
+
+  const images = Array.from(
+    list.querySelectorAll("img[data-our-space-image-document-id]")
+  );
+  if (!images.length) return;
+
+  if (!window.BoxCloud?.isReady()) {
+    images.forEach((image) => {
+      const shell = image.closest(".our-space-media-canvas");
+      const message = shell?.querySelector(".our-space-media-loading");
+      if (message) message.textContent = "Sign in to show photo";
+    });
+    return;
+  }
+
+  await Promise.all(images.map(async (image) => {
+    const documentId = image.dataset.ourSpaceImageDocumentId;
+    const attachment = ourSpaceDraftAttachments.find(
+      (item) => item.documentId === documentId
+    );
+    if (!attachment || !image.isConnected) return;
+
+    const cached = ourSpaceAttachmentPreviewCache.get(documentId);
+    if (cached?.url && cached.expiresAt > Date.now() + 60_000) {
+      setOurSpaceImagePreview(image, cached.url);
+      return;
+    }
+
+    const storagePath = getOurSpaceAttachmentStoragePath(attachment);
+    if (!storagePath) {
+      const shell = image.closest(".our-space-media-canvas");
+      const message = shell?.querySelector(".our-space-media-loading");
+      if (message) message.textContent = "Photo is loading from Vault…";
+      return;
+    }
+
+    const result = await window.BoxCloud.createDocumentUrl(storagePath, 1800);
+    const signedUrl = result.data?.signedUrl || result.data?.signedURL || "";
+    if (result.error || !signedUrl || !image.isConnected) {
+      const shell = image.closest(".our-space-media-canvas");
+      const message = shell?.querySelector(".our-space-media-loading");
+      if (message) message.textContent = "Preview unavailable";
+      return;
+    }
+
+    ourSpaceAttachmentPreviewCache.set(documentId, {
+      url: signedUrl,
+      expiresAt: Date.now() + 28 * 60 * 1000
+    });
+    setOurSpaceImagePreview(image, signedUrl);
+  }));
+}
+
 function renderOurSpaceAttachments() {
   const list = $("ourSpaceAttachmentList");
   if (!list) return;
+
   $("ourSpaceAttachmentEmpty").hidden = ourSpaceDraftAttachments.length > 0;
-  list.innerHTML = ourSpaceDraftAttachments.map((attachment) => `
-    <div class="our-space-attachment-item" data-attachment-id="${escapeHtml(attachment.documentId)}">
-      <span>▣</span>
-      <div>
-        <strong>${escapeHtml(attachment.name)}</strong>
-        <small>${escapeHtml(attachment.folder || "Documents")}</small>
-      </div>
-      <button class="secondary-button" type="button" data-attachment-open="${escapeHtml(attachment.documentId)}">Open</button>
-      <button class="our-space-small-danger" type="button" data-attachment-remove="${escapeHtml(attachment.documentId)}">Remove</button>
-    </div>
-  `).join("");
+  list.classList.toggle(
+    "has-images",
+    ourSpaceDraftAttachments.some(isOurSpaceImageAttachment)
+  );
+
+  list.innerHTML = ourSpaceDraftAttachments.map((attachment) => {
+    const documentId = escapeHtml(attachment.documentId);
+    const name = escapeHtml(attachment.name);
+    const folder = escapeHtml(attachment.folder || "Documents");
+    const size = attachment.sizeBytes ? escapeHtml(formatBytes(attachment.sizeBytes)) : "";
+
+    if (isOurSpaceImageAttachment(attachment)) {
+      return `
+        <article class="our-space-media-card our-space-media-card-image" data-attachment-id="${documentId}">
+          <button class="our-space-media-open" type="button" data-attachment-open="${documentId}" aria-label="Open ${name}">
+            <span class="our-space-media-canvas">
+              <span class="our-space-media-loading">Loading private photo…</span>
+              <img
+                data-our-space-image-document-id="${documentId}"
+                alt="${name}"
+                loading="lazy"
+                hidden
+              >
+            </span>
+          </button>
+          <div class="our-space-media-caption">
+            <div>
+              <strong title="${name}">${name}</strong>
+              <small>${folder}${size ? ` · ${size}` : ""}</small>
+            </div>
+            <button class="our-space-media-remove" type="button" data-attachment-remove="${documentId}" aria-label="Remove ${name}">✕</button>
+          </div>
+        </article>
+      `;
+    }
+
+    return `
+      <article class="our-space-media-card our-space-media-card-file" data-attachment-id="${documentId}">
+        <button class="our-space-file-open" type="button" data-attachment-open="${documentId}">
+          <span class="our-space-file-icon">▣</span>
+          <span class="our-space-file-copy">
+            <strong>${name}</strong>
+            <small>${folder}${size ? ` · ${size}` : ""}</small>
+          </span>
+          <span class="our-space-file-action">Open</span>
+        </button>
+        <button class="our-space-media-remove our-space-file-remove" type="button" data-attachment-remove="${documentId}">Remove</button>
+      </article>
+    `;
+  }).join("");
 
   list.querySelectorAll("[data-attachment-open]").forEach((button) => {
-    button.addEventListener("click", () => openOurSpaceAttachment(button.dataset.attachmentOpen));
+    button.addEventListener("click", () => {
+      openOurSpaceAttachment(button.dataset.attachmentOpen);
+    });
   });
+
   list.querySelectorAll("[data-attachment-remove]").forEach((button) => {
     button.addEventListener("click", () => {
+      const documentId = button.dataset.attachmentRemove;
       ourSpaceDraftAttachments = ourSpaceDraftAttachments.filter(
-        (item) => item.documentId !== button.dataset.attachmentRemove
+        (item) => item.documentId !== documentId
       );
+      ourSpaceAttachmentPreviewCache.delete(documentId);
       renderOurSpaceAttachments();
     });
   });
-}
 
+  hydrateOurSpaceAttachmentPreviews();
+}
 
 function setOurSpaceDirectUploadStatus(message = "", type = "") {
   const element = $("ourSpaceDirectUploadStatus");
@@ -5846,7 +5991,8 @@ async function uploadOurSpaceFilesFromDevice() {
       name: result.data.name || file.name || "Attached file",
       folder: result.data.folder || "Personal",
       mimeType: result.data.mime_type || file.type || "",
-      sizeBytes: Number(result.data.size_bytes) || file.size || 0
+      sizeBytes: Number(result.data.size_bytes) || file.size || 0,
+      storagePath: result.data.storage_path || ""
     };
 
     if (!ourSpaceDraftAttachments.some(
@@ -5896,7 +6042,8 @@ function attachSelectedOurSpaceDocument() {
     name: documentItem.name || "Attached file",
     folder: documentItem.folder || "Documents",
     mimeType: documentItem.mime_type || "",
-    sizeBytes: Number(documentItem.size_bytes) || 0
+    sizeBytes: Number(documentItem.size_bytes) || 0,
+    storagePath: documentItem.storage_path || ""
   });
   renderOurSpaceAttachments();
   $("ourSpaceDocumentPicker").value = "";
@@ -6019,7 +6166,7 @@ function resetOurSpaceEditor() {
   $("ourSpaceFavoriteMemory").value = "";
   $("ourSpaceDeviceFileInput").value = "";
   setOurSpaceDirectUploadStatus(
-    "Photos and files are uploaded privately to your Vault and attached here automatically."
+    "Photos appear here as a private visual gallery. Other files remain available as file cards."
   );
 
   $("ourSpaceEditorModeLabel").textContent = "NEW PLAN";
@@ -7250,7 +7397,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7M.3-Free";
+const BACKUP_APP_VERSION = "7M.4-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {

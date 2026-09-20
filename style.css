@@ -9065,3 +9065,626 @@ html.phone-ui .our-space-attachment-picker {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Phase 7M.4 — Mobile Popup Repair + Our Space Visual Gallery */
+
+/* --------------------------------------------------------------------------
+   OUR SPACE: private Instagram-style photo gallery
+   Photos show as real visual cards. object-fit: contain intentionally keeps
+   the entire photo visible instead of cropping portrait or landscape images.
+   -------------------------------------------------------------------------- */
+.our-space-attachment-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: start;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.our-space-media-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface-soft);
+}
+
+.our-space-media-card-image {
+  display: flex;
+  flex-direction: column;
+}
+
+.our-space-media-open {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #080a0f;
+  color: inherit;
+}
+
+.our-space-media-canvas {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at center, rgba(255,255,255,.055), transparent 58%),
+    #07090d;
+}
+
+.our-space-media-canvas img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  background: #07090d;
+}
+
+.our-space-media-canvas.loaded .our-space-media-loading {
+  display: none;
+}
+
+.our-space-media-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  color: rgba(255,255,255,.58);
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.our-space-media-canvas.error .our-space-media-loading {
+  color: var(--text-muted);
+}
+
+.our-space-media-caption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+}
+
+.our-space-media-caption > div {
+  min-width: 0;
+}
+
+.our-space-media-caption strong,
+.our-space-media-caption small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.our-space-media-caption strong {
+  font-size: 10px;
+}
+
+.our-space-media-caption small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+.our-space-media-remove {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid rgba(255, 133, 133, .25);
+  border-radius: 10px;
+  background: rgba(255, 133, 133, .06);
+  color: var(--danger);
+}
+
+.our-space-media-card-file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  grid-column: 1 / -1;
+  gap: 0;
+}
+
+.our-space-file-open {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 58px;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.our-space-file-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.our-space-file-copy {
+  min-width: 0;
+}
+
+.our-space-file-copy strong,
+.our-space-file-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.our-space-file-copy small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.our-space-file-action {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.our-space-file-remove {
+  width: auto;
+  height: auto;
+  min-height: 58px;
+  padding: 0 11px;
+  border-width: 0 0 0 1px;
+  border-radius: 0;
+}
+
+/* --------------------------------------------------------------------------
+   MOBILE POPUPS
+   One predictable model for iPhone-sized screens:
+   - overlay fills visual viewport
+   - modal card fills the overlay
+   - header stays visible
+   - body scrolls
+   - save/cancel actions remain reachable
+   - keyboard-resized visual viewport is respected
+   -------------------------------------------------------------------------- */
+html.phone-ui .task-modal-overlay,
+html.phone-ui .vault-modal-overlay {
+  display: flex !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  width: 100%;
+  height: var(--box-viewport-height, 100dvh);
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: var(--surface-solid);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html.phone-ui .task-modal-card,
+html.phone-ui .vault-modal-card,
+html.phone-ui .vault-modal-card-small,
+html.phone-ui .document-preview-card,
+html.phone-ui .document-smart-card,
+html.phone-ui .document-version-card,
+html.phone-ui .task-checklist-file-card {
+  display: block !important;
+  width: 100% !important;
+  height: var(--box-viewport-height, 100dvh) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.phone-ui .task-modal-overlay.open .task-modal-card,
+html.phone-ui .vault-modal-overlay.open .vault-modal-card {
+  transform: none !important;
+}
+
+/* Sticky modal headers */
+html.phone-ui .task-modal-header,
+html.phone-ui .vault-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  min-height: calc(58px + env(safe-area-inset-top));
+  margin: 0 !important;
+  padding:
+    max(10px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    10px
+    max(12px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-solid);
+}
+
+html.phone-ui .task-modal-header > div,
+html.phone-ui .vault-modal-header > div {
+  min-width: 0;
+}
+
+html.phone-ui .task-modal-header h2,
+html.phone-ui .vault-modal-header h2 {
+  margin-top: 3px;
+  font-size: 17px;
+  line-height: 1.15;
+}
+
+html.phone-ui .vault-modal-header p {
+  max-width: min(68vw, 290px);
+  margin-top: 4px;
+  font-size: 9px;
+}
+
+html.phone-ui .task-modal-header .window-button,
+html.phone-ui .vault-modal-header .window-button {
+  flex: 0 0 44px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin-top: -2px;
+}
+
+/* Task composer: one clean scrolling column. */
+html.phone-ui .task-modal-form {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 11px;
+  min-height: 0;
+  padding:
+    12px
+    max(12px, env(safe-area-inset-right))
+    max(88px, calc(72px + env(safe-area-inset-bottom)))
+    max(12px, env(safe-area-inset-left));
+}
+
+html.phone-ui .task-field,
+html.phone-ui .task-field-wide {
+  grid-column: 1 !important;
+  min-width: 0;
+}
+
+html.phone-ui .task-modal-actions {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 25;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin:
+    4px
+    calc(-1 * max(12px, env(safe-area-inset-right)))
+    calc(-1 * max(88px, calc(72px + env(safe-area-inset-bottom))))
+    calc(-1 * max(12px, env(safe-area-inset-left))) !important;
+  padding:
+    10px
+    max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left)) !important;
+  border-top: 1px solid var(--border);
+  background: var(--surface-solid) !important;
+  box-shadow: 0 -10px 25px rgba(0,0,0,.22);
+}
+
+html.phone-ui .task-modal-actions button {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Generic Vault forms get a usable body and sticky action bar. */
+html.phone-ui .vault-modal-form {
+  display: grid !important;
+  gap: 11px;
+  min-height: 0;
+  padding:
+    12px
+    max(12px, env(safe-area-inset-right))
+    max(84px, calc(68px + env(safe-area-inset-bottom)))
+    max(12px, env(safe-area-inset-left));
+}
+
+html.phone-ui .vault-modal-actions {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 25;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin:
+    4px
+    calc(-1 * max(12px, env(safe-area-inset-right)))
+    calc(-1 * max(84px, calc(68px + env(safe-area-inset-bottom))))
+    calc(-1 * max(12px, env(safe-area-inset-left))) !important;
+  padding:
+    10px
+    max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left)) !important;
+  border-top: 1px solid var(--border);
+  background: var(--surface-solid);
+  box-shadow: 0 -10px 25px rgba(0,0,0,.2);
+}
+
+html.phone-ui .vault-modal-actions button {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Details modal fields */
+html.phone-ui .vault-compliance-grid,
+html.phone-ui .vault-related-grid {
+  grid-template-columns: 1fr !important;
+}
+
+html.phone-ui .vault-field textarea {
+  min-height: 130px;
+}
+
+/* Document preview: vertical image/PDF first, information after it. */
+html.phone-ui .document-preview-layout {
+  display: flex !important;
+  flex-direction: column;
+  width: 100%;
+  height: auto !important;
+  min-height: 0;
+  gap: 10px;
+  padding:
+    10px
+    max(10px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
+  overflow: visible !important;
+}
+
+html.phone-ui .document-preview-stage {
+  flex: none;
+  width: 100%;
+  min-height: min(56vh, 480px) !important;
+  height: min(56vh, 480px);
+  overflow: auto;
+  border-radius: 13px;
+}
+
+html.phone-ui .document-preview-image {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+html.phone-ui .document-preview-frame {
+  width: 100%;
+  min-height: min(56vh, 480px);
+  height: min(56vh, 480px);
+}
+
+html.phone-ui .document-preview-info {
+  width: 100%;
+  min-height: 0;
+  padding: 12px;
+  overflow: visible !important;
+  border-radius: 13px;
+}
+
+html.phone-ui .document-preview-info dl > div {
+  grid-template-columns: 92px minmax(0, 1fr);
+}
+
+html.phone-ui .document-preview-actions {
+  grid-template-columns: 1fr 1fr;
+}
+
+html.phone-ui .document-preview-actions button {
+  width: 100%;
+}
+
+/* Smart tools no longer overflow sideways. */
+html.phone-ui .document-smart-intro,
+html.phone-ui .document-smart-layout,
+html.phone-ui .document-smart-searchbar,
+html.phone-ui .document-smart-text-footer {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+}
+
+html.phone-ui .document-smart-intro,
+html.phone-ui .document-smart-status,
+html.phone-ui .document-smart-layout {
+  margin-right: max(10px, env(safe-area-inset-right));
+  margin-left: max(10px, env(safe-area-inset-left));
+}
+
+html.phone-ui .document-smart-intro {
+  margin-top: 10px;
+}
+
+html.phone-ui .document-smart-top-actions,
+html.phone-ui .document-smart-search-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+html.phone-ui .document-smart-top-actions button {
+  width: 100%;
+}
+
+html.phone-ui .document-smart-top-actions button:first-child {
+  grid-column: 1 / -1;
+}
+
+html.phone-ui .document-smart-text {
+  min-height: 44vh;
+  max-height: none;
+}
+
+html.phone-ui .document-smart-actions-panel {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+/* Version history is now normal-flow and scrollable on phones. */
+html.phone-ui .document-current-version,
+html.phone-ui .document-version-upload-form,
+html.phone-ui .document-version-heading-row,
+html.phone-ui .document-version-list,
+html.phone-ui .document-version-card > .empty-state {
+  margin-right: max(12px, env(safe-area-inset-right));
+  margin-left: max(12px, env(safe-area-inset-left));
+}
+
+html.phone-ui .document-current-version {
+  margin-top: 12px;
+}
+
+html.phone-ui .document-version-upload-form {
+  grid-template-columns: 1fr !important;
+}
+
+html.phone-ui .document-version-upload-form button,
+html.phone-ui .document-current-version button {
+  width: 100%;
+}
+
+html.phone-ui .document-version-heading-row {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+/* Checklist file picker gets a predictable vertical sheet. */
+html.phone-ui .task-checklist-file-card > #taskChecklistFileStatus,
+html.phone-ui .task-checklist-existing-files,
+html.phone-ui .task-checklist-upload-new,
+html.phone-ui .task-checklist-file-footer {
+  margin-right: max(12px, env(safe-area-inset-right));
+  margin-left: max(12px, env(safe-area-inset-left));
+}
+
+html.phone-ui .task-checklist-file-card > #taskChecklistFileStatus {
+  margin-top: 12px;
+}
+
+html.phone-ui .task-checklist-document-list {
+  max-height: 42vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.phone-ui .task-checklist-file-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin-top: 12px;
+  padding:
+    10px
+    0
+    max(10px, env(safe-area-inset-bottom));
+  background: var(--surface-solid);
+}
+
+html.phone-ui .task-checklist-file-footer button {
+  width: 100%;
+}
+
+/* Auth popup remains a centered sheet, but is constrained to the real visual
+   viewport so Safari's bars and keyboard cannot push controls off screen. */
+html.phone-ui .auth-overlay {
+  align-items: center !important;
+  width: 100%;
+  height: var(--box-viewport-height, 100dvh);
+  padding:
+    max(10px, env(safe-area-inset-top))
+    max(10px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left)) !important;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.phone-ui .auth-card {
+  width: 100% !important;
+  max-width: 460px !important;
+  max-height: calc(var(--box-viewport-height, 100dvh) - 20px) !important;
+  padding: 18px !important;
+  overflow-y: auto !important;
+  border-radius: 20px !important;
+}
+
+/* Smaller screens: one full-width photo at a time, like a feed. */
+html.phone-ui .our-space-attachment-list {
+  grid-template-columns: 1fr !important;
+}
+
+html.phone-ui .our-space-media-card {
+  width: 100%;
+}
+
+html.phone-ui .our-space-media-canvas {
+  aspect-ratio: 4 / 5;
+  max-height: 68vh;
+}
+
+html.phone-ui .our-space-media-caption {
+  padding: 10px 11px;
+}
+
+html.phone-ui .our-space-media-remove {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+}
+
+html.phone-ui .our-space-media-card-file {
+  grid-template-columns: 1fr;
+}
+
+html.phone-ui .our-space-file-remove {
+  width: 100%;
+  min-height: 44px;
+  border-width: 1px 0 0;
+}
+
+html.tablet-ui .our-space-attachment-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+html.safe-render-ui .our-space-media-card,
+html.safe-render-ui .our-space-media-canvas,
+html.safe-render-ui .task-modal-card,
+html.safe-render-ui .vault-modal-card {
+  background-image: none !important;
+}

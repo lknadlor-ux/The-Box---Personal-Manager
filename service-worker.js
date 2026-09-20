@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7m3-mobile-vault-direct-attachments";
+const CACHE_NAME = "the-box-os-phase-7m4-mobile-popups-gallery";
 
 const APP_FILES = [
   "./",
