@@ -7787,3 +7787,150 @@ html.safe-render-ui .our-space-memory-section {
     min-width: 0;
   }
 }
+
+
+/* Phase 7J.2 — Journal Focus Writing Mode */
+.journal-filter-bar {
+  grid-template-columns: minmax(220px, 1.7fr) repeat(2, minmax(130px, .8fr)) auto auto auto;
+}
+
+.journal-meta-grid-simple {
+  grid-template-columns: minmax(180px, 0.7fr) auto;
+  justify-content: start;
+}
+
+.journal-focus-button {
+  min-width: 92px !important;
+}
+
+.app-window.journal-focus-mode .journal-window {
+  height: 100%;
+  min-height: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.app-window.journal-focus-mode .journal-hero,
+.app-window.journal-focus-mode .journal-filter-bar,
+.app-window.journal-focus-mode .journal-sidebar,
+.app-window.journal-focus-mode .journal-meta-grid,
+.app-window.journal-focus-mode .journal-tags-field {
+  display: none !important;
+}
+
+.app-window.journal-focus-mode .journal-workspace {
+  display: block !important;
+  height: 100%;
+  min-height: 0 !important;
+}
+
+.app-window.journal-focus-mode .journal-editor-panel {
+  display: flex !important;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.app-window.journal-focus-mode .journal-editor-heading {
+  flex: 0 0 auto;
+}
+
+.app-window.journal-focus-mode .journal-title-field {
+  flex: 0 0 auto;
+  margin-top: 13px;
+}
+
+.app-window.journal-focus-mode .journal-title-field input {
+  min-height: 46px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.app-window.journal-focus-mode .journal-content-field {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 12px;
+}
+
+.app-window.journal-focus-mode #journalEntryContent {
+  width: 100%;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: clamp(16px, 2vw, 24px);
+  resize: none !important;
+  font-size: clamp(15px, 1.35vw, 18px);
+  line-height: 1.75;
+}
+
+.app-window.journal-focus-mode .journal-writing-meta {
+  flex: 0 0 auto;
+  margin-top: 8px;
+}
+
+.app-window.journal-focus-mode .journal-editor-actions {
+  flex: 0 0 auto;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.app-window.journal-focus-mode .journal-entry-navigation {
+  flex-wrap: wrap;
+}
+
+html.safe-render-ui .app-window.journal-focus-mode .journal-editor-panel,
+html.safe-render-ui .app-window.journal-focus-mode #journalEntryContent {
+  background-image: none !important;
+}
+
+@media (max-width: 920px) {
+  .journal-filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .journal-search-field {
+    grid-column: 1 / -1;
+  }
+
+  .journal-meta-grid-simple {
+    grid-template-columns: 1fr auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .journal-meta-grid-simple {
+    grid-template-columns: 1fr;
+  }
+
+  .journal-meta-grid-simple .journal-favorite-field {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .app-window.journal-focus-mode .journal-editor-panel {
+    padding: 12px;
+  }
+
+  .app-window.journal-focus-mode .journal-entry-navigation {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .app-window.journal-focus-mode .journal-focus-button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .app-window.journal-focus-mode .journal-editor-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .app-window.journal-focus-mode .journal-editor-actions .primary-button {
+    grid-column: 1 / -1;
+  }
+}

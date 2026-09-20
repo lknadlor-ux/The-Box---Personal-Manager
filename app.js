@@ -147,6 +147,8 @@ let journalDateFrom = "";
 let journalDateTo = "";
 let journalEditorInitialized = false;
 let journalEditorDirty = false;
+let journalFocusMode = false;
+let journalFocusAutoMaximized = false;
 
 let ourSpacePlans = normalizeOurSpacePlans(loadJSON(STORAGE.ourSpace, []));
 let selectedOurSpacePlanId = null;
@@ -4900,10 +4902,10 @@ function getJournalEditorSnapshot() {
   return {
     selectedId: selectedJournalEntryId,
     entry_date: $('journalEntryDate').value || new Date().toISOString().slice(0, 10),
-    entry_time: $('journalEntryTime').value || "",
+    entry_time: "",
     title: $('journalEntryTitle').value || "",
     content: $('journalEntryContent').value || "",
-    mood: $('journalEntryMood').value || "",
+    mood: "",
     tags: normalizeJournalTags($('journalEntryTags').value || ""),
     favorite: $('journalEntryFavorite').checked,
     savedAt: new Date().toISOString()
@@ -4913,7 +4915,7 @@ function getJournalEditorSnapshot() {
 function saveJournalDraft() {
   const draft = getJournalEditorSnapshot();
   if (!draft) return;
-  const hasWriting = draft.title.trim() || draft.content.trim() || draft.tags.length || draft.mood || draft.favorite;
+  const hasWriting = draft.title.trim() || draft.content.trim() || draft.tags.length || draft.favorite;
   if (!hasWriting && !draft.selectedId) {
     localStorage.removeItem(STORAGE.journalDraft);
   } else {
@@ -4985,8 +4987,6 @@ function getJournalMoodIcon(mood) {
 function compareJournalEntries(a, b) {
   const dateCompare = String(b.entry_date).localeCompare(String(a.entry_date));
   if (dateCompare) return dateCompare;
-  const timeCompare = String(b.entry_time || '').localeCompare(String(a.entry_time || ''));
-  if (timeCompare) return timeCompare;
   return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
 }
 
@@ -4994,16 +4994,11 @@ function getFilteredJournalEntries() {
   const query = journalSearchTerm.toLocaleLowerCase();
   return journalEntries
     .filter((entry) => {
-      if (journalMoodFilter !== 'all') {
-        if (journalMoodFilter === 'Unspecified') {
-          if (entry.mood) return false;
-        } else if (entry.mood !== journalMoodFilter) return false;
-      }
       if (journalFavoritesOnly && !entry.favorite) return false;
       if (journalDateFrom && entry.entry_date < journalDateFrom) return false;
       if (journalDateTo && entry.entry_date > journalDateTo) return false;
       if (!query) return true;
-      const haystack = [entry.title, entry.content, entry.mood, ...entry.tags].join(' ').toLocaleLowerCase();
+      const haystack = [entry.title, entry.content, ...entry.tags].join(' ').toLocaleLowerCase();
       return haystack.includes(query);
     })
     .sort(compareJournalEntries);
@@ -5018,11 +5013,9 @@ function populateJournalEditor(values = {}, { mode = 'new', draftRestored = fals
   if (!$('journalEntryDate')) return;
   selectedJournalEntryId = values.id || values.selectedId || null;
   $('journalEntryDate').value = normalizeJournalDate(values.entry_date || getJournalToday());
-  $('journalEntryTime').value = normalizeJournalTime(values.entry_time || (mode === 'new' ? getJournalCurrentTime() : ''));
-  $('journalEntryTitle').value = values.title || '';
+    $('journalEntryTitle').value = values.title || '';
   $('journalEntryContent').value = values.content || '';
-  $('journalEntryMood').value = values.mood || '';
-  $('journalEntryTags').value = normalizeJournalTags(values.tags).join(', ');
+    $('journalEntryTags').value = normalizeJournalTags(values.tags).join(', ');
   $('journalEntryFavorite').checked = Boolean(values.favorite);
 
   journalEditorInitialized = true;
@@ -5044,14 +5037,14 @@ function initializeJournalEditor() {
     populateJournalEditor(draft, { mode: draft.selectedId ? 'edit' : 'new', draftRestored: true });
     return;
   }
-  populateJournalEditor({ entry_date: getJournalToday(), entry_time: getJournalCurrentTime() }, { mode: 'new' });
+  populateJournalEditor({ entry_date: getJournalToday() }, { mode: 'new' });
 }
 
 function newJournalEntry() {
   if (!canLeaveJournalEditor()) return;
   selectedJournalEntryId = null;
   localStorage.removeItem(STORAGE.journalDraft);
-  populateJournalEditor({ entry_date: getJournalToday(), entry_time: getJournalCurrentTime() }, { mode: 'new' });
+  populateJournalEditor({ entry_date: getJournalToday() }, { mode: 'new' });
   renderJournalCenter();
   $('journalEntryTitle').focus();
 }
@@ -5078,13 +5071,12 @@ function renderJournalEntryList() {
       <button class="journal-entry-card ${entry.id === selectedJournalEntryId ? 'active' : ''}"
         type="button" data-journal-entry-id="${escapeHtml(entry.id)}">
         <div class="journal-entry-card-top">
-          <span>${escapeHtml(formatJournalDate(entry.entry_date))}${entry.entry_time ? ` · ${escapeHtml(formatJournalTime(entry.entry_time))}` : ''}</span>
-          <span class="journal-entry-card-icons">${entry.favorite ? '★' : ''} ${escapeHtml(getJournalMoodIcon(entry.mood))}</span>
+          <span>${escapeHtml(formatJournalDate(entry.entry_date))}</span>
+          <span class="journal-entry-card-icons">${entry.favorite ? '★' : ''}</span>
         </div>
         <strong>${escapeHtml(entry.title || 'Untitled entry')}</strong>
         <p>${escapeHtml(preview || 'No entry text yet.')}</p>
         <div class="journal-entry-card-tags">
-          ${entry.mood ? `<span>${escapeHtml(entry.mood)}</span>` : ''}
           ${entry.tags.slice(0, 3).map((tag) => `<span>#${escapeHtml(tag)}</span>`).join('')}
         </div>
       </button>`;
@@ -5107,7 +5099,6 @@ function renderJournalCenter() {
   if (!$('journalEntryList')) return;
   initializeJournalEditor();
   $('journalSearchInput').value = journalSearchTerm;
-  $('journalMoodFilter').value = journalMoodFilter;
   $('journalFavoritesOnly').checked = journalFavoritesOnly;
   $('journalDateFrom').value = journalDateFrom;
   $('journalDateTo').value = journalDateTo;
@@ -5202,13 +5193,12 @@ async function deleteSelectedJournalEntry() {
 function journalEntryToText(entry) {
   const lines = [
     entry.title || 'Untitled entry',
-    `${formatJournalDate(entry.entry_date)}${entry.entry_time ? ` · ${formatJournalTime(entry.entry_time)}` : ''}`,
-    entry.mood ? `Mood: ${entry.mood}` : '',
+    formatJournalDate(entry.entry_date),
     entry.tags.length ? `Tags: ${entry.tags.join(', ')}` : '',
     entry.favorite ? 'Favorite: Yes' : '',
     '',
     entry.content || ''
-  ].filter((line, index) => line || index >= 5);
+  ].filter((line, index) => line || index >= 4);
   return lines.join('\n');
 }
 
@@ -5245,7 +5235,6 @@ function showJournalToday() {
 
 function clearJournalFilters() {
   journalSearchTerm = '';
-  journalMoodFilter = 'all';
   journalFavoritesOnly = false;
   journalDateFrom = '';
   journalDateTo = '';
@@ -5259,6 +5248,39 @@ function navigateJournalEntry(direction) {
   const targetIndex = direction === 'previous' ? index + 1 : index - 1;
   const target = entries[targetIndex];
   if (target) selectJournalEntry(target.id, { bypassDirtyCheck: true });
+}
+
+
+function setJournalFocusMode(enabled) {
+  const journalWindow = document.querySelector('[data-app-window="journal"]');
+  const button = $('journalFocusModeButton');
+  if (!journalWindow || !button) return;
+
+  journalFocusMode = Boolean(enabled);
+  journalWindow.classList.toggle('journal-focus-mode', journalFocusMode);
+
+  if (journalFocusMode) {
+    journalFocusAutoMaximized = !journalWindow.classList.contains('maximized');
+    if (journalFocusAutoMaximized) toggleMaximize(journalWindow);
+    button.textContent = '✕ Exit focus';
+    button.title = 'Exit focus writing mode';
+    requestAnimationFrame(() => $('journalEntryContent')?.focus());
+  } else {
+    if (journalFocusAutoMaximized && journalWindow.classList.contains('maximized')) {
+      toggleMaximize(journalWindow);
+    }
+    journalFocusAutoMaximized = false;
+    button.textContent = '⛶ Focus';
+    button.title = 'Maximize writing area';
+  }
+}
+
+function toggleJournalFocusMode() {
+  setJournalFocusMode(!journalFocusMode);
+}
+
+function exitJournalFocusMode() {
+  if (journalFocusMode) setJournalFocusMode(false);
 }
 
 function markJournalEditorDirty() {
@@ -6887,7 +6909,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7L.1-Free";
+const BACKUP_APP_VERSION = "7J.2-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -8139,13 +8161,15 @@ $('deleteJournalEntryButton').addEventListener('click', deleteSelectedJournalEnt
 $('exportJournalEntryButton').addEventListener('click', exportSelectedJournalEntry);
 $('previousJournalEntryButton').addEventListener('click', () => navigateJournalEntry('previous'));
 $('nextJournalEntryButton').addEventListener('click', () => navigateJournalEntry('next'));
+$('journalFocusModeButton').addEventListener('click', toggleJournalFocusMode);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && journalFocusMode) {
+    event.preventDefault();
+    exitJournalFocusMode();
+  }
+});
 $('journalSearchInput').addEventListener('input', (event) => {
   journalSearchTerm = event.target.value.trim();
-  renderJournalEntryList();
-  updateJournalNavigation();
-});
-$('journalMoodFilter').addEventListener('change', (event) => {
-  journalMoodFilter = event.target.value;
   renderJournalEntryList();
   updateJournalNavigation();
 });
@@ -8164,9 +8188,12 @@ $('journalDateTo').addEventListener('change', (event) => {
   renderJournalEntryList();
   updateJournalNavigation();
 });
-['journalEntryDate', 'journalEntryTime', 'journalEntryTitle', 'journalEntryContent', 'journalEntryMood', 'journalEntryTags']
+['journalEntryDate', 'journalEntryTitle', 'journalEntryContent', 'journalEntryTags']
   .forEach((id) => $(id).addEventListener('input', markJournalEditorDirty));
 $('journalEntryFavorite').addEventListener('change', markJournalEditorDirty);
+document.querySelector('[data-app-window="journal"] .close-button')
+  ?.addEventListener('click', exitJournalFocusMode);
+
 
 $("newTemplateButton").addEventListener("click", createNewCustomTemplate);
 $("templateSearch").addEventListener("input", (event) => {

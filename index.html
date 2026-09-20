@@ -28,7 +28,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7l1">
+  <link rel="stylesheet" href="style.css?v=7j2">
 </head>
 <body>
   <div class="desktop-shell">
@@ -825,7 +825,7 @@
               <div>
                 <small>PERSONAL JOURNAL</small>
                 <h2>Your private writing space</h2>
-                <p>Capture reflections, moods, notes, and meaningful moments. Entries sync privately through your Supabase account.</p>
+                <p>Capture reflections, notes, and meaningful moments in a distraction-free private writing space. Entries sync privately through your Supabase account.</p>
               </div>
               <div class="journal-hero-actions">
                 <button id="journalTodayButton" class="secondary-button" type="button">Today</button>
@@ -837,18 +837,6 @@
               <label class="journal-search-field">
                 <span>Search</span>
                 <input id="journalSearchInput" type="search" placeholder="Search title, entry, or tags">
-              </label>
-              <label>
-                <span>Mood</span>
-                <select id="journalMoodFilter">
-                  <option value="all">All moods</option>
-                  <option value="Great">Great</option>
-                  <option value="Good">Good</option>
-                  <option value="Okay">Okay</option>
-                  <option value="Low">Low</option>
-                  <option value="Stressed">Stressed</option>
-                  <option value="Unspecified">Unspecified</option>
-                </select>
               </label>
               <label>
                 <span>From</span>
@@ -888,28 +876,14 @@
                   <div class="journal-entry-navigation">
                     <button id="previousJournalEntryButton" class="secondary-button" type="button" title="Previous entry">←</button>
                     <button id="nextJournalEntryButton" class="secondary-button" type="button" title="Next entry">→</button>
+                    <button id="journalFocusModeButton" class="secondary-button journal-focus-button" type="button" title="Maximize writing area">⛶ Focus</button>
                   </div>
                 </div>
 
-                <div class="journal-meta-grid">
+                <div class="journal-meta-grid journal-meta-grid-simple">
                   <label>
                     Date
                     <input id="journalEntryDate" type="date" required>
-                  </label>
-                  <label>
-                    Time <small>Optional</small>
-                    <input id="journalEntryTime" type="time">
-                  </label>
-                  <label>
-                    Mood
-                    <select id="journalEntryMood">
-                      <option value="">Not specified</option>
-                      <option value="Great">Great</option>
-                      <option value="Good">Good</option>
-                      <option value="Okay">Okay</option>
-                      <option value="Low">Low</option>
-                      <option value="Stressed">Stressed</option>
-                    </select>
                   </label>
                   <label class="journal-favorite-field">
                     <input id="journalEntryFavorite" type="checkbox">
