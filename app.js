@@ -128,6 +128,12 @@ function setViewModePreference(mode, { notify = true } = {}) {
   updateDeviceUiClasses();
   updateAppViewportHeight();
 
+  if (nextMode === "mobile") {
+    document.querySelectorAll(".app-window .window-content").forEach((content) => {
+      content.scrollTop = 0;
+    });
+  }
+
   document.querySelectorAll(".app-window").forEach((windowElement) => {
     if (!isCompactWindowMode()) {
       applyTabletDefaultWindowLayout(windowElement);
@@ -7397,7 +7403,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7M.4-Free";
+const BACKUP_APP_VERSION = "7M.5-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {

@@ -9688,3 +9688,477 @@ html.safe-render-ui .task-modal-card,
 html.safe-render-ui .vault-modal-card {
   background-image: none !important;
 }
+
+
+/* Phase 7M.5 — Mobile Layout Repair
+   Fixes based on iPhone 13 screenshots:
+   - Our Space plan cards overlapping editor fields
+   - action bars floating over form content
+   - oversized iOS checkboxes
+   - Journal favorite/action layout
+   - Document Vault not scrolling on phone
+*/
+
+/* --------------------------------------------------------------------------
+   BASE PHONE SCROLLER
+   Use the app's window-content as the only vertical page scroller on Mobile.
+   This prevents nested height/overflow bugs and leaves room above the dock.
+   -------------------------------------------------------------------------- */
+html.phone-ui .app-window > .window-content {
+  display: block !important;
+  height: calc(100% - 52px) !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding:
+    12px
+    max(12px, env(safe-area-inset-right))
+    calc(92px + env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left)) !important;
+  overflow-x: hidden !important;
+  overflow-y: scroll !important;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* iOS checkbox/radio controls should not inherit the 44px button target box.
+   The surrounding labels remain large enough to tap. */
+html.phone-ui input[type="checkbox"],
+html.phone-ui input[type="radio"] {
+  width: 20px !important;
+  min-width: 20px !important;
+  max-width: 20px !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  flex: 0 0 20px !important;
+  accent-color: var(--accent);
+}
+
+/* --------------------------------------------------------------------------
+   OUR SPACE
+   The sidebar and editor now participate in normal document flow.
+   The list itself may scroll, but it can no longer visually spill over the
+   editor fields below it.
+   -------------------------------------------------------------------------- */
+html.phone-ui .our-space-window {
+  display: block !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .our-space-hero {
+  margin-bottom: 10px;
+}
+
+html.phone-ui .our-space-summary-grid,
+html.phone-ui .our-space-filter-bar {
+  margin-bottom: 10px;
+}
+
+html.phone-ui .our-space-workspace {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  width: 100%;
+  min-width: 0;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .our-space-sidebar {
+  display: block !important;
+  flex: none !important;
+  width: 100%;
+  max-height: none !important;
+  min-height: 0 !important;
+  padding: 12px;
+  overflow: visible !important;
+}
+
+html.phone-ui .our-space-sidebar-heading {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  margin-bottom: 8px;
+}
+
+html.phone-ui .our-space-plan-list {
+  display: flex !important;
+  flex: none !important;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  min-height: 0 !important;
+  max-height: 225px !important;
+  margin: 0;
+  padding: 0 2px 2px 0;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.phone-ui .our-space-plan-card,
+html.phone-ui .our-space-plan-card.memory {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: 48px minmax(0, 1fr) !important;
+  grid-template-rows: auto !important;
+  gap: 9px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 82px !important;
+  margin: 0 !important;
+  padding: 11px !important;
+  overflow: hidden !important;
+}
+
+html.phone-ui .our-space-plan-card.memory::after {
+  position: absolute !important;
+  top: 7px;
+  right: 8px;
+  grid-column: auto !important;
+  justify-self: auto !important;
+  padding: 3px 6px;
+  font-size: 7px;
+}
+
+html.phone-ui .our-space-plan-card.memory .our-space-plan-card-body {
+  padding-right: 54px;
+}
+
+html.phone-ui .our-space-plan-icon {
+  width: 46px;
+  height: 46px;
+}
+
+html.phone-ui .our-space-plan-card-top {
+  min-width: 0;
+}
+
+html.phone-ui .our-space-plan-card-top strong {
+  display: block;
+  max-width: 100%;
+  font-size: 14px;
+  line-height: 1.25;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+
+html.phone-ui .our-space-plan-card-meta {
+  gap: 4px;
+}
+
+html.phone-ui .our-space-editor-panel {
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 11px !important;
+  width: 100%;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 12px !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .our-space-editor-heading {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 9px;
+}
+
+html.phone-ui .our-space-favorite-field {
+  width: 100%;
+  min-height: 48px;
+  justify-content: flex-start;
+  padding: 0 12px;
+}
+
+html.phone-ui .our-space-meta-grid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+}
+
+html.phone-ui .our-space-meta-grid label,
+html.phone-ui .our-space-memory-grid label,
+html.phone-ui .our-space-notes-field {
+  width: 100%;
+  min-width: 0;
+}
+
+html.phone-ui .our-space-meta-grid input,
+html.phone-ui .our-space-meta-grid select,
+html.phone-ui .our-space-memory-grid input,
+html.phone-ui .our-space-memory-grid select,
+html.phone-ui .our-space-notes-field textarea {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+
+html.phone-ui .our-space-notes-field textarea {
+  min-height: 150px;
+  max-height: none;
+}
+
+html.phone-ui .our-space-memory-section,
+html.phone-ui .our-space-subsection {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+html.phone-ui .our-space-memory-grid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+}
+
+/* The previous sticky action bar caused the large floating panel seen in the
+   screenshots. On phones, actions are normal-flow content at the end. */
+html.phone-ui .our-space-editor-actions {
+  position: static !important;
+  bottom: auto !important;
+  z-index: auto !important;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px !important;
+  width: 100%;
+  margin: 4px 0 0 !important;
+  padding: 12px 0 0 !important;
+  border-top: 1px solid var(--border);
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.phone-ui .our-space-editor-actions > button {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 48px !important;
+}
+
+html.phone-ui .our-space-editor-actions .our-space-archive-button,
+html.phone-ui .our-space-editor-actions #saveOurSpacePlanButton {
+  grid-column: 1 / -1 !important;
+}
+
+/* --------------------------------------------------------------------------
+   JOURNAL
+   Prevent action controls from covering the editor and correct the giant
+   favorite checkbox visible in the screenshot.
+   -------------------------------------------------------------------------- */
+html.phone-ui .journal-window {
+  display: block !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .journal-workspace {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .journal-sidebar {
+  flex: none !important;
+  width: 100%;
+  max-height: none !important;
+  padding: 12px;
+  overflow: visible !important;
+}
+
+html.phone-ui .journal-entry-list {
+  flex: none !important;
+  width: 100%;
+  min-height: 0 !important;
+  max-height: 210px !important;
+  overflow-y: auto !important;
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.phone-ui .journal-editor-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100%;
+  min-width: 0;
+  min-height: 0 !important;
+  padding: 12px !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .journal-editor-heading {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 10px;
+}
+
+html.phone-ui .journal-entry-navigation {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px;
+  width: 100%;
+}
+
+html.phone-ui .journal-entry-navigation button {
+  width: 100%;
+  min-width: 0 !important;
+  min-height: 48px;
+}
+
+html.phone-ui .journal-entry-navigation .journal-focus-button {
+  grid-column: 1 / -1;
+}
+
+html.phone-ui .journal-meta-grid-simple {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 9px !important;
+  width: 100%;
+}
+
+html.phone-ui .journal-favorite-field {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 9px;
+  width: 100%;
+  min-height: 48px !important;
+  padding: 0 12px !important;
+}
+
+html.phone-ui .journal-title-field input,
+html.phone-ui .journal-tags-field input,
+html.phone-ui #journalEntryContent {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+
+html.phone-ui #journalEntryContent {
+  height: auto !important;
+  min-height: 340px !important;
+  max-height: none !important;
+  resize: vertical;
+}
+
+html.phone-ui .journal-writing-meta {
+  position: static !important;
+  margin-top: 7px;
+}
+
+/* Keep the Journal buttons below the writing field instead of floating across
+   the text area. */
+html.phone-ui .journal-editor-actions {
+  position: static !important;
+  bottom: auto !important;
+  z-index: auto !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px !important;
+  width: 100%;
+  margin: 12px 0 0 !important;
+  padding: 12px 0 0 !important;
+  border-top: 1px solid var(--border);
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.phone-ui .journal-editor-actions button {
+  width: 100% !important;
+  min-height: 48px !important;
+}
+
+/* Focus mode still fills the phone viewport, but its actions remain inside the
+   focus editor rather than overlaying the writing surface. */
+html.phone-ui .app-window.journal-focus-mode .journal-editor-panel {
+  height: auto !important;
+  min-height: calc(var(--box-viewport-height, 100dvh) - 110px) !important;
+}
+
+html.phone-ui .app-window.journal-focus-mode .journal-content-field {
+  min-height: 52vh !important;
+}
+
+html.phone-ui .app-window.journal-focus-mode #journalEntryContent {
+  min-height: 52vh !important;
+}
+
+/* --------------------------------------------------------------------------
+   DOCUMENT VAULT SCROLL
+   The iPhone screenshot showed the Vault content but gestures could not reach
+   content below the folder section. Force the Documents app to use the parent
+   window-content as its vertical scroller and remove competing nested scroll.
+   -------------------------------------------------------------------------- */
+html.phone-ui .app-window[data-app-window="documents"] > .window-content {
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  touch-action: pan-y !important;
+  overscroll-behavior-y: auto !important;
+  padding-bottom: calc(110px + env(safe-area-inset-bottom)) !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.phone-ui .documents-window,
+html.phone-ui .documents-layout,
+html.phone-ui .document-sidebar,
+html.phone-ui .document-workspace,
+html.phone-ui .document-list {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  touch-action: auto !important;
+}
+
+html.phone-ui .documents-window {
+  min-height: max-content !important;
+  padding-bottom: 24px;
+}
+
+html.phone-ui .document-sidebar {
+  flex: none !important;
+}
+
+html.phone-ui .document-list {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  min-height: 120px !important;
+  padding-bottom: 18px;
+}
+
+html.phone-ui .document-card {
+  touch-action: manipulation;
+}
+
+/* If the dock is visible, nothing important should end underneath it. */
+html.phone-ui .our-space-window,
+html.phone-ui .journal-window,
+html.phone-ui .documents-window {
+  padding-bottom: 18px;
+}
+
+/* Landscape: retain the same fixed behavior with a little less vertical space. */
+@media (orientation: landscape) {
+  html.phone-ui .our-space-plan-list,
+  html.phone-ui .journal-entry-list {
+    max-height: 160px !important;
+  }
+
+  html.phone-ui #journalEntryContent {
+    min-height: 260px !important;
+  }
+}
