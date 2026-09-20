@@ -7934,3 +7934,94 @@ html.safe-render-ui .app-window.journal-focus-mode #journalEntryContent {
     grid-column: 1 / -1;
   }
 }
+
+
+/* Phase 7L.2 — Our Space Done + Accessible Archive */
+.our-space-summary-card.archive-card {
+  border-color: rgba(246, 155, 177, 0.28);
+}
+
+.our-space-summary-card.archive-card strong {
+  color: #f69bb1;
+}
+
+.our-space-plan-card.memory::after {
+  align-self: start;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(246, 155, 177, 0.12);
+  color: #f69bb1;
+  content: "ARCHIVED";
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .5px;
+}
+
+.our-space-plan-card.memory {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.our-space-archive-button {
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid rgba(114, 213, 161, 0.34);
+  border-radius: 12px;
+  background: rgba(114, 213, 161, 0.09);
+  color: var(--success);
+  font-weight: 800;
+}
+
+.our-space-archive-button:hover {
+  border-color: rgba(114, 213, 161, 0.62);
+  background: rgba(114, 213, 161, 0.14);
+}
+
+.our-space-archive-button.restore {
+  border-color: rgba(246, 155, 177, 0.34);
+  background: rgba(246, 155, 177, 0.08);
+  color: #f69bb1;
+}
+
+.our-space-archive-button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.our-space-editor-actions {
+  flex-wrap: wrap;
+}
+
+.our-space-editor-actions > button {
+  flex: 0 1 auto;
+}
+
+html.safe-render-ui .our-space-archive-button,
+html.safe-render-ui .our-space-plan-card.memory::after {
+  background-image: none !important;
+}
+
+@media (max-width: 900px) {
+  .our-space-editor-actions > button {
+    flex: 1 1 150px;
+  }
+}
+
+@media (max-width: 680px) {
+  .our-space-plan-card.memory {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .our-space-plan-card.memory::after {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .our-space-editor-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .our-space-archive-button,
+  #saveOurSpacePlanButton {
+    grid-column: 1 / -1;
+  }
+}

@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7j2-journal-focus";
+const CACHE_NAME = "the-box-os-phase-7l2-our-space-archive";
 
 const APP_FILES = [
   "./",
