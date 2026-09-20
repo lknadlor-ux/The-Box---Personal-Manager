@@ -10162,3 +10162,25 @@ html.phone-ui .documents-window {
     min-height: 260px !important;
   }
 }
+
+
+/* Phase 7M.6 — Our Space photo gallery moved near plan details */
+.our-space-media-section {
+  margin-top: 2px;
+}
+
+.our-space-media-section .our-space-attachment-list {
+  margin-top: 11px;
+}
+
+html.phone-ui .our-space-media-section {
+  overflow: visible !important;
+}
+
+html.phone-ui .our-space-media-section .our-space-attachment-list {
+  margin-top: 10px;
+}
+
+html.phone-ui .our-space-media-section + .our-space-notes-field {
+  margin-top: 2px;
+}

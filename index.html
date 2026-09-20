@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7m5">
+  <link rel="stylesheet" href="style.css?v=7m6">
 </head>
 <body>
   <div class="desktop-shell">
@@ -1156,36 +1156,9 @@
                   </label>
                 </div>
 
-                <label class="our-space-notes-field">
-                  Notes / details
-                  <textarea id="ourSpaceNotes" maxlength="20000" spellcheck="true" placeholder="Ideas, details, things to remember, what we want to do..."></textarea>
-                </label>
 
-                <section class="our-space-subsection">
-                  <div class="our-space-subsection-heading">
-                    <div>
-                      <strong>Checklist</strong>
-                      <small>Things to prepare, book, buy, or remember</small>
-                    </div>
-                    <button id="addOurSpaceChecklistButton" class="secondary-button" type="button">＋ Add item</button>
-                  </div>
-                  <div id="ourSpaceChecklistList" class="our-space-checklist-list"></div>
-                  <p id="ourSpaceChecklistEmpty" class="empty-state">No checklist items yet.</p>
-                </section>
 
-                <section class="our-space-subsection">
-                  <div class="our-space-subsection-heading">
-                    <div>
-                      <strong>Links</strong>
-                      <small>Reservations, maps, posts, wish lists, or references</small>
-                    </div>
-                    <button id="addOurSpaceLinkButton" class="secondary-button" type="button">＋ Add link</button>
-                  </div>
-                  <div id="ourSpaceLinkList" class="our-space-link-list"></div>
-                  <p id="ourSpaceLinkEmpty" class="empty-state">No links added yet.</p>
-                </section>
-
-                <section class="our-space-subsection">
+                <section class="our-space-subsection our-space-media-section">
                   <div class="our-space-subsection-heading">
                     <div>
                       <strong>Photos &amp; files</strong>
@@ -1221,6 +1194,35 @@
 
                   <div id="ourSpaceAttachmentList" class="our-space-attachment-list"></div>
                   <p id="ourSpaceAttachmentEmpty" class="empty-state">No files attached yet.</p>
+                </section>
+
+                <label class="our-space-notes-field">
+                  Notes / details
+                  <textarea id="ourSpaceNotes" maxlength="20000" spellcheck="true" placeholder="Ideas, details, things to remember, what we want to do..."></textarea>
+                </label>
+
+                <section class="our-space-subsection">
+                  <div class="our-space-subsection-heading">
+                    <div>
+                      <strong>Checklist</strong>
+                      <small>Things to prepare, book, buy, or remember</small>
+                    </div>
+                    <button id="addOurSpaceChecklistButton" class="secondary-button" type="button">＋ Add item</button>
+                  </div>
+                  <div id="ourSpaceChecklistList" class="our-space-checklist-list"></div>
+                  <p id="ourSpaceChecklistEmpty" class="empty-state">No checklist items yet.</p>
+                </section>
+
+                <section class="our-space-subsection">
+                  <div class="our-space-subsection-heading">
+                    <div>
+                      <strong>Links</strong>
+                      <small>Reservations, maps, posts, wish lists, or references</small>
+                    </div>
+                    <button id="addOurSpaceLinkButton" class="secondary-button" type="button">＋ Add link</button>
+                  </div>
+                  <div id="ourSpaceLinkList" class="our-space-link-list"></div>
+                  <p id="ourSpaceLinkEmpty" class="empty-state">No links added yet.</p>
                 </section>
 
                 <section id="ourSpaceMemorySection" class="our-space-memory-section hidden">

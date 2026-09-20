@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7m5-mobile-layout-repair";
+const CACHE_NAME = "the-box-os-phase-7m6-our-space-photo-position";
 
 const APP_FILES = [
   "./",
