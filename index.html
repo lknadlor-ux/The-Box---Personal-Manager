@@ -16,6 +16,18 @@
   <script>
     (function () {
       var root = document.documentElement;
+      var key = "theBoxOSViewMode";
+      var savedMode = "auto";
+
+      try {
+        var candidate = localStorage.getItem(key) || "auto";
+        if (["auto", "mobile", "tablet", "windows"].indexOf(candidate) >= 0) {
+          savedMode = candidate;
+        }
+      } catch (error) {
+        savedMode = "auto";
+      }
+
       var ua = navigator.userAgent || "";
       var android = /Android/i.test(ua);
       var ios =
@@ -27,22 +39,42 @@
         navigator.maxTouchPoints > 0 ||
         "ontouchstart" in window ||
         (window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
-      var phone =
+
+      var detectedPhone =
         touch &&
         Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 680;
-      var safeRenderer = android || (touch && !phone && window.innerWidth > 680);
-      var tablet = safeRenderer && !phone && window.innerWidth > 680;
+      var detectedSafeRenderer =
+        android || (touch && !detectedPhone && window.innerWidth > 680);
+      var detectedTablet =
+        detectedSafeRenderer && !detectedPhone && window.innerWidth > 680;
 
+      var phone = savedMode === "mobile" || (savedMode === "auto" && detectedPhone);
+      var tablet = savedMode === "tablet" || (savedMode === "auto" && detectedTablet);
+      var safeRenderer =
+        savedMode === "tablet" ||
+        (savedMode === "auto" && detectedSafeRenderer);
+
+      if (savedMode === "windows") {
+        phone = false;
+        tablet = false;
+        safeRenderer = false;
+      }
+
+      root.dataset.viewMode = savedMode;
       root.classList.toggle("touch-ui", touch);
       root.classList.toggle("ios-ui", ios);
       root.classList.toggle("phone-ui", phone);
       root.classList.toggle("safe-render-ui", safeRenderer);
       root.classList.toggle("tablet-ui", tablet);
+      root.classList.toggle("view-mode-auto", savedMode === "auto");
+      root.classList.toggle("view-mode-mobile", savedMode === "mobile");
+      root.classList.toggle("view-mode-tablet", savedMode === "tablet");
+      root.classList.toggle("view-mode-windows", savedMode === "windows");
     })();
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7m1">
+  <link rel="stylesheet" href="style.css?v=7m2">
 </head>
 <body>
   <div class="desktop-shell">
@@ -89,6 +121,35 @@
         </div>
         <button id="closeLauncherButton" class="window-button">✕</button>
       </div>
+
+      <section class="view-mode-panel" aria-labelledby="viewModePanelTitle">
+        <div class="view-mode-panel-heading">
+          <div>
+            <small>DISPLAY MODE</small>
+            <strong id="viewModePanelTitle">Choose your layout</strong>
+          </div>
+          <span id="viewModeCurrentLabel" class="view-mode-current">Auto</span>
+        </div>
+
+        <div class="view-mode-options" role="group" aria-label="Display mode">
+          <button type="button" data-view-mode-option="auto" aria-pressed="false">
+            <span>◎</span><strong>Auto</strong><small>Detect device</small>
+          </button>
+          <button type="button" data-view-mode-option="mobile" aria-pressed="false">
+            <span>▯</span><strong>Mobile</strong><small>iPhone / phone</small>
+          </button>
+          <button type="button" data-view-mode-option="tablet" aria-pressed="false">
+            <span>▭</span><strong>Tablet</strong><small>Honor Pad</small>
+          </button>
+          <button type="button" data-view-mode-option="windows" aria-pressed="false">
+            <span>▣</span><strong>Windows</strong><small>PC / desktop</small>
+          </button>
+        </div>
+
+        <p id="viewModeHelp" class="view-mode-help">
+          Auto detects the device. Your manual choice is saved only on this device.
+        </p>
+      </section>
 
       <div class="launcher-grid">
         <button class="app-tile" data-open-app="dashboard">

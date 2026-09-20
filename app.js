@@ -1,7 +1,14 @@
 "use strict";
 
-function updateDeviceUiClasses() {
-  const root = document.documentElement;
+const VIEW_MODE_STORAGE_KEY = "theBoxOSViewMode";
+const VALID_VIEW_MODES = new Set(["auto", "mobile", "tablet", "windows"]);
+
+function getViewModePreference() {
+  const saved = localStorage.getItem(VIEW_MODE_STORAGE_KEY) || "auto";
+  return VALID_VIEW_MODES.has(saved) ? saved : "auto";
+}
+
+function getDetectedDeviceLayout() {
   const userAgent = navigator.userAgent || "";
   const androidDevice = /Android/i.test(userAgent);
   const iosDevice =
@@ -15,26 +22,131 @@ function updateDeviceUiClasses() {
     "ontouchstart" in window ||
     window.matchMedia("(pointer: coarse)").matches;
 
-  // A phone stays in phone mode even in landscape. This prevents an iPhone
-  // from accidentally switching to the tablet/desktop window layout.
-  const phoneMode =
+  const phone =
     touchCapable &&
     Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 680;
 
-  // Honor Pad desktop-site mode may report a desktop-style user agent while
-  // still exposing touch input. Keep the safe renderer on Android, but do not
-  // treat phones in landscape as tablets.
-  const safeRendererMode =
-    androidDevice || (touchCapable && !phoneMode && window.innerWidth > 680);
+  const safeRenderer =
+    androidDevice || (touchCapable && !phone && window.innerWidth > 680);
 
-  const tabletMode =
-    safeRendererMode && !phoneMode && window.innerWidth > 680;
+  const tablet =
+    safeRenderer && !phone && window.innerWidth > 680;
 
-  root.classList.toggle("touch-ui", touchCapable);
-  root.classList.toggle("ios-ui", iosDevice);
+  return {
+    androidDevice,
+    iosDevice,
+    touchCapable,
+    phone,
+    tablet,
+    safeRenderer
+  };
+}
+
+function getEffectiveViewMode() {
+  if (document.documentElement.classList.contains("phone-ui")) return "mobile";
+  if (document.documentElement.classList.contains("tablet-ui")) return "tablet";
+  return "windows";
+}
+
+function updateViewModeControls() {
+  const selected = getViewModePreference();
+  const effective = getEffectiveViewMode();
+  const labels = {
+    auto: "Auto",
+    mobile: "Mobile",
+    tablet: "Tablet",
+    windows: "Windows"
+  };
+
+  const currentLabel = document.getElementById("viewModeCurrentLabel");
+  if (currentLabel) {
+    currentLabel.textContent =
+      selected === "auto"
+        ? `Auto · ${labels[effective]}`
+        : labels[selected];
+  }
+
+  const help = document.getElementById("viewModeHelp");
+  if (help) {
+    help.textContent = {
+      auto: `Auto is currently using ${labels[effective]} view.`,
+      mobile: "Mobile view is locked on this device. Recommended for iPhone 13 and other phones.",
+      tablet: "Tablet view is locked on this device. Recommended for Honor Pad.",
+      windows: "Windows view is locked on this device. Recommended for PC and large desktop screens."
+    }[selected];
+  }
+
+  document.querySelectorAll("[data-view-mode-option]").forEach((button) => {
+    const active = button.dataset.viewModeOption === selected;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function updateDeviceUiClasses() {
+  const root = document.documentElement;
+  const detected = getDetectedDeviceLayout();
+  const selectedMode = getViewModePreference();
+
+  let phoneMode = detected.phone;
+  let tabletMode = detected.tablet;
+  let safeRendererMode = detected.safeRenderer;
+
+  if (selectedMode === "mobile") {
+    phoneMode = true;
+    tabletMode = false;
+    safeRendererMode = false;
+  } else if (selectedMode === "tablet") {
+    phoneMode = false;
+    tabletMode = true;
+    safeRendererMode = true;
+  } else if (selectedMode === "windows") {
+    phoneMode = false;
+    tabletMode = false;
+    safeRendererMode = false;
+  }
+
+  root.dataset.viewMode = selectedMode;
+  root.classList.toggle("touch-ui", detected.touchCapable);
+  root.classList.toggle("ios-ui", detected.iosDevice);
   root.classList.toggle("phone-ui", phoneMode);
   root.classList.toggle("safe-render-ui", safeRendererMode);
   root.classList.toggle("tablet-ui", tabletMode);
+  root.classList.toggle("view-mode-auto", selectedMode === "auto");
+  root.classList.toggle("view-mode-mobile", selectedMode === "mobile");
+  root.classList.toggle("view-mode-tablet", selectedMode === "tablet");
+  root.classList.toggle("view-mode-windows", selectedMode === "windows");
+
+  updateViewModeControls();
+}
+
+function setViewModePreference(mode, { notify = true } = {}) {
+  const nextMode = VALID_VIEW_MODES.has(mode) ? mode : "auto";
+  localStorage.setItem(VIEW_MODE_STORAGE_KEY, nextMode);
+  document.documentElement.classList.remove("mobile-input-active");
+
+  updateDeviceUiClasses();
+  updateAppViewportHeight();
+
+  document.querySelectorAll(".app-window").forEach((windowElement) => {
+    if (!isCompactWindowMode()) {
+      applyTabletDefaultWindowLayout(windowElement);
+      clampWindowToDesktop(windowElement);
+    }
+    updateWindowResponsiveState(windowElement);
+  });
+
+  updateViewModeControls();
+
+  if (notify && typeof showToast === "function") {
+    const labels = {
+      auto: "Auto display mode",
+      mobile: "Mobile view",
+      tablet: "Tablet view",
+      windows: "Windows view"
+    };
+    showToast(`${labels[nextMode]} enabled`);
+  }
 }
 
 updateDeviceUiClasses();
@@ -1026,6 +1138,10 @@ function focusWindow(windowElement) {
 }
 
 function isCompactWindowMode() {
+  const selectedMode = getViewModePreference();
+  if (selectedMode === "mobile") return true;
+  if (selectedMode === "tablet" || selectedMode === "windows") return false;
+
   return (
     document.documentElement.classList.contains("phone-ui") ||
     window.matchMedia("(max-width: 680px)").matches
@@ -7028,7 +7144,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7M.1-Free";
+const BACKUP_APP_VERSION = "7M.2-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -7719,6 +7835,12 @@ $("launcherButton").addEventListener("click", () => {
 });
 
 $("closeLauncherButton").addEventListener("click", closeLauncher);
+
+document.querySelectorAll("[data-view-mode-option]").forEach((button) => {
+  button.addEventListener("click", () => {
+    setViewModePreference(button.dataset.viewModeOption);
+  });
+});
 
 $("themeButton").addEventListener("click", () => {
   document.body.classList.toggle("light-theme");

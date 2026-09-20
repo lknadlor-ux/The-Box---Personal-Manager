@@ -8541,3 +8541,226 @@ html.phone-ui.mobile-input-active #toast {
     bottom: calc(58px + env(safe-area-inset-bottom) + 4px);
   }
 }
+
+
+/* Phase 7M.2 — Manual Mobile / Tablet / Windows Display Modes */
+.view-mode-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 13px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface-soft);
+}
+
+.view-mode-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.view-mode-panel-heading > div {
+  min-width: 0;
+}
+
+.view-mode-panel-heading small,
+.view-mode-panel-heading strong {
+  display: block;
+}
+
+.view-mode-panel-heading small {
+  margin-bottom: 3px;
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .8px;
+}
+
+.view-mode-panel-heading strong {
+  font-size: 12px;
+}
+
+.view-mode-current {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-solid);
+  color: var(--text-soft);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.view-mode-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.view-mode-options button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 1px 7px;
+  align-items: center;
+  min-width: 0;
+  min-height: 50px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-solid);
+  color: var(--text);
+  text-align: left;
+}
+
+.view-mode-options button > span {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: 15px;
+}
+
+.view-mode-options button strong,
+.view-mode-options button small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-mode-options button strong {
+  font-size: 10px;
+}
+
+.view-mode-options button small {
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+.view-mode-options button:hover {
+  border-color: rgba(143, 174, 255, .45);
+}
+
+.view-mode-options button.active {
+  border-color: rgba(143, 174, 255, .72);
+  background: rgba(143, 174, 255, .1);
+  box-shadow: inset 0 0 0 1px rgba(143, 174, 255, .14);
+}
+
+.view-mode-options button.active > span {
+  background: rgba(143, 174, 255, .16);
+  color: var(--accent);
+}
+
+.view-mode-help {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+/* Manual mode wins over device detection. These selectors deliberately come
+   after the normal tablet/mobile rules so a chosen mode stays stable. */
+html.view-mode-mobile .launcher {
+  --manual-view-mode: mobile;
+}
+
+html.view-mode-tablet .launcher {
+  --manual-view-mode: tablet;
+}
+
+html.view-mode-windows .launcher {
+  --manual-view-mode: windows;
+}
+
+/* Tablet mode: preserve tablet shell even if the browser width temporarily
+   changes because of orientation, split screen, or browser chrome. */
+html.view-mode-tablet .topbar {
+  min-height: 58px;
+}
+
+html.view-mode-tablet .app-window:not(.maximized) {
+  min-width: min(360px, calc(100vw - 18px));
+  min-height: min(280px, calc(var(--box-viewport-height, 100dvh) - 90px));
+}
+
+html.view-mode-tablet .window-button,
+html.view-mode-tablet button {
+  touch-action: manipulation;
+}
+
+/* Windows mode removes phone-only shell behaviors even on a touch-capable
+   Windows device. */
+html.view-mode-windows .desktop-shell,
+html.view-mode-windows body {
+  min-width: 0;
+}
+
+html.view-mode-windows .desktop-icons {
+  display: grid;
+}
+
+html.view-mode-windows .window-resize-handle {
+  pointer-events: auto;
+}
+
+/* The selector itself stays usable in phone mode. */
+html.phone-ui .view-mode-panel {
+  position: relative;
+  z-index: 2;
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+html.phone-ui .view-mode-options {
+  grid-template-columns: 1fr 1fr;
+}
+
+html.phone-ui .view-mode-options button {
+  min-height: 58px;
+  font-size: 16px !important;
+}
+
+html.phone-ui .view-mode-options button strong {
+  font-size: 11px;
+}
+
+html.phone-ui .view-mode-options button small {
+  font-size: 8px;
+}
+
+html.phone-ui .view-mode-help {
+  font-size: 9px;
+}
+
+/* On narrow windows, a manually selected Tablet or Windows layout should not
+   be silently re-labelled as Mobile. Internal app panels may still wrap to
+   remain readable, but the shell/window behavior stays in the chosen mode. */
+@media (max-width: 680px) {
+  html.view-mode-tablet:not(.phone-ui) .launcher,
+  html.view-mode-windows:not(.phone-ui) .launcher {
+    max-width: calc(100vw - 12px);
+  }
+
+  html.view-mode-tablet:not(.phone-ui) .window-titlebar,
+  html.view-mode-windows:not(.phone-ui) .window-titlebar {
+    min-height: 46px;
+  }
+
+  html.view-mode-tablet:not(.phone-ui) .window-content,
+  html.view-mode-windows:not(.phone-ui) .window-content {
+    overflow: auto;
+  }
+}
+
+html.safe-render-ui .view-mode-panel,
+html.safe-render-ui .view-mode-options button {
+  background-image: none !important;
+}
