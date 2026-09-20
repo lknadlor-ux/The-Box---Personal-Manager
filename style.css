@@ -8025,3 +8025,519 @@ html.safe-render-ui .our-space-plan-card.memory::after {
     grid-column: 1 / -1;
   }
 }
+
+
+/* Phase 7M.1 — iPhone 13 / Mobile Phone Optimization
+   Phone mode is class-based so portrait and landscape use the same mobile UI. */
+html.phone-ui,
+html.phone-ui body {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+html.phone-ui body {
+  padding: 0;
+  touch-action: manipulation;
+}
+
+/* Prevent iOS Safari from zooming the page when a form control receives focus. */
+html.phone-ui input,
+html.phone-ui select,
+html.phone-ui textarea {
+  font-size: 16px !important;
+}
+
+/* Comfortable minimum touch targets. */
+html.phone-ui button,
+html.phone-ui [role="button"],
+html.phone-ui input[type="checkbox"],
+html.phone-ui input[type="radio"] {
+  min-height: 44px;
+}
+
+html.phone-ui .desktop-shell {
+  width: 100%;
+  height: var(--box-viewport-height, 100dvh);
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* iPhone notch / Dynamic Island aware top bar. */
+html.phone-ui .topbar {
+  top: 0;
+  right: 0;
+  left: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  height: calc(56px + env(safe-area-inset-top));
+  padding:
+    env(safe-area-inset-top)
+    max(8px, env(safe-area-inset-right))
+    0
+    max(8px, env(safe-area-inset-left));
+}
+
+html.phone-ui .topbar-left {
+  min-width: 0;
+  gap: 8px;
+}
+
+html.phone-ui .topbar-brand {
+  display: flex !important;
+  min-width: 0;
+}
+
+html.phone-ui .topbar-brand strong {
+  display: none;
+}
+
+html.phone-ui .topbar-brand span {
+  display: block !important;
+  max-width: 125px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.phone-ui .topbar-center {
+  display: none;
+}
+
+html.phone-ui .topbar-right {
+  gap: 6px;
+}
+
+html.phone-ui .topbar-right .cloud-status,
+html.phone-ui .topbar-right .system-time,
+html.phone-ui .topbar-right .profile {
+  display: none;
+}
+
+html.phone-ui .topbar-button {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  border-radius: 13px;
+}
+
+/* The desktop becomes the safe space between top bar and dock. */
+html.phone-ui .desktop {
+  inset:
+    calc(56px + env(safe-area-inset-top))
+    0
+    calc(72px + env(safe-area-inset-bottom))
+    0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background-size: 28px 28px;
+}
+
+html.phone-ui.mobile-input-active .desktop {
+  bottom: env(safe-area-inset-bottom);
+}
+
+html.phone-ui .desktop-icons {
+  display: none !important;
+}
+
+html.phone-ui .desktop-welcome {
+  top: 18px;
+  right: max(16px, env(safe-area-inset-right));
+  left: max(16px, env(safe-area-inset-left));
+  width: auto;
+  max-width: none;
+}
+
+html.phone-ui .desktop-welcome h1 {
+  margin: 5px 0 7px;
+  font-size: clamp(28px, 9.5vw, 40px);
+  line-height: 1.04;
+  letter-spacing: -1.4px;
+}
+
+html.phone-ui .desktop-welcome p {
+  max-width: 34rem;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+html.phone-ui .desktop-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+html.phone-ui .desktop-summary div,
+html.phone-ui .desktop-summary .next-event-summary {
+  min-width: 0;
+  max-width: none;
+  padding: 11px;
+}
+
+/* Phone launcher: large, scrollable, and reachable with one hand. */
+html.phone-ui .launcher {
+  top: calc(56px + env(safe-area-inset-top) + 6px);
+  right: max(6px, env(safe-area-inset-right));
+  bottom: calc(72px + env(safe-area-inset-bottom) + 6px);
+  left: max(6px, env(safe-area-inset-left));
+  width: auto;
+  max-height: none;
+  padding: 14px;
+  border-radius: 18px;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.phone-ui.mobile-input-active .launcher {
+  bottom: max(6px, env(safe-area-inset-bottom));
+}
+
+html.phone-ui .launcher-header {
+  position: sticky;
+  top: -14px;
+  z-index: 3;
+  align-items: center;
+  margin: -14px -14px 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-solid);
+}
+
+html.phone-ui .launcher-header h2 {
+  font-size: 18px;
+}
+
+html.phone-ui .launcher-grid {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+html.phone-ui .app-tile {
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 3px 9px;
+  min-width: 0;
+  padding: 11px;
+  border-radius: 14px;
+}
+
+html.phone-ui .app-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  font-size: 18px;
+}
+
+html.phone-ui .app-tile strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.phone-ui .app-tile small {
+  display: none;
+}
+
+/* Every app opens as a true phone screen instead of a floating desktop window. */
+html.phone-ui .window-layer {
+  inset: 0;
+}
+
+html.phone-ui .app-window,
+html.phone-ui .app-window.maximized {
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  border-right: 0;
+  border-left: 0;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none !important;
+}
+
+html.phone-ui .app-window.open {
+  transform: none !important;
+}
+
+html.phone-ui .window-titlebar {
+  height: 52px;
+  min-height: 52px;
+  padding:
+    0
+    max(8px, env(safe-area-inset-right))
+    0
+    max(12px, env(safe-area-inset-left));
+  cursor: default;
+  touch-action: manipulation !important;
+}
+
+html.phone-ui .window-title {
+  min-width: 0;
+}
+
+html.phone-ui .window-title strong {
+  max-width: 175px;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.phone-ui .window-controls {
+  gap: 5px;
+}
+
+html.phone-ui .window-button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 11px;
+}
+
+html.phone-ui .window-size-button,
+html.phone-ui .maximize-button,
+html.phone-ui .window-resize-handle {
+  display: none !important;
+}
+
+html.phone-ui .window-content {
+  height: calc(100% - 52px);
+  min-width: 0;
+  min-height: 0;
+  padding:
+    12px
+    max(12px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide the dock while typing, otherwise keep it horizontally scrollable. */
+html.phone-ui .dock {
+  right: max(4px, env(safe-area-inset-right));
+  bottom: max(4px, env(safe-area-inset-bottom));
+  left: max(4px, env(safe-area-inset-left));
+  width: auto;
+  max-width: none;
+  height: 64px;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: 5px 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 17px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  transform: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.phone-ui .dock::-webkit-scrollbar {
+  display: none;
+}
+
+html.phone-ui.mobile-input-active .dock {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(110%);
+}
+
+html.phone-ui .dock-item {
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  min-height: 52px;
+  padding: 4px 3px;
+  scroll-snap-align: center;
+}
+
+html.phone-ui .dock-icon {
+  min-height: 22px;
+  font-size: 19px;
+}
+
+html.phone-ui .dock-label {
+  font-size: 8px;
+}
+
+/* Generic mobile content protections. */
+html.phone-ui .dashboard-grid,
+html.phone-ui .workspace-cards,
+html.phone-ui .finance-summary,
+html.phone-ui .finance-form,
+html.phone-ui .full-form,
+html.phone-ui .quick-capture form,
+html.phone-ui .our-space-summary-grid,
+html.phone-ui .our-space-filter-bar,
+html.phone-ui .our-space-workspace,
+html.phone-ui .our-space-meta-grid,
+html.phone-ui .our-space-memory-grid,
+html.phone-ui .journal-workspace,
+html.phone-ui .journal-filter-bar {
+  grid-template-columns: 1fr !important;
+}
+
+html.phone-ui .dashboard-hero,
+html.phone-ui .workspace-hero,
+html.phone-ui .our-space-hero,
+html.phone-ui .our-space-sidebar-heading,
+html.phone-ui .our-space-editor-heading,
+html.phone-ui .our-space-subsection-heading,
+html.phone-ui .our-space-memory-heading {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+html.phone-ui .our-space-sidebar,
+html.phone-ui .journal-sidebar {
+  max-height: 250px;
+}
+
+html.phone-ui .our-space-attachment-picker,
+html.phone-ui .our-space-link-item,
+html.phone-ui .our-space-attachment-item {
+  grid-template-columns: 1fr !important;
+}
+
+html.phone-ui .our-space-editor-actions,
+html.phone-ui .journal-editor-actions {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+html.phone-ui .our-space-editor-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+html.phone-ui .our-space-editor-actions .our-space-archive-button,
+html.phone-ui .our-space-editor-actions #saveOurSpacePlanButton {
+  grid-column: 1 / -1;
+}
+
+html.phone-ui .journal-entry-navigation {
+  flex-wrap: wrap;
+}
+
+html.phone-ui .journal-focus-button {
+  min-width: 100px !important;
+}
+
+/* Calendar remains usable by allowing horizontal day-grid scrolling when needed. */
+html.phone-ui .calendar-layout,
+html.phone-ui .calendar-main,
+html.phone-ui .calendar-grid-wrap,
+html.phone-ui .calendar-month {
+  min-width: 0;
+  max-width: 100%;
+}
+
+html.phone-ui .calendar-grid,
+html.phone-ui .calendar-weekdays {
+  min-width: 560px;
+}
+
+html.phone-ui .calendar-grid-wrap,
+html.phone-ui .calendar-month {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Modals become phone sheets and account for the notch + home indicator. */
+html.phone-ui .auth-overlay,
+html.phone-ui .task-modal-overlay,
+html.phone-ui .vault-modal-overlay {
+  padding:
+    max(8px, env(safe-area-inset-top))
+    max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+}
+
+html.phone-ui .auth-card,
+html.phone-ui .task-modal-card,
+html.phone-ui .vault-modal-card,
+html.phone-ui .document-smart-card,
+html.phone-ui .document-preview-card,
+html.phone-ui .document-version-card,
+html.phone-ui .task-checklist-file-card {
+  width: 100% !important;
+  max-width: none !important;
+  max-height: 100% !important;
+  border-radius: 18px;
+}
+
+html.phone-ui .task-modal-form,
+html.phone-ui .vault-modal-form {
+  -webkit-overflow-scrolling: touch;
+}
+
+html.phone-ui .task-modal-actions,
+html.phone-ui .vault-modal-actions {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+html.phone-ui #toast {
+  right: max(10px, env(safe-area-inset-right));
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  left: max(10px, env(safe-area-inset-left));
+  max-width: none;
+  text-align: center;
+}
+
+html.phone-ui.mobile-input-active #toast {
+  bottom: max(10px, env(safe-area-inset-bottom));
+}
+
+/* Landscape iPhone: save vertical space without switching to tablet windows. */
+@media (orientation: landscape) {
+  html.phone-ui .topbar {
+    height: calc(50px + env(safe-area-inset-top));
+  }
+
+  html.phone-ui .desktop {
+    inset:
+      calc(50px + env(safe-area-inset-top))
+      0
+      calc(58px + env(safe-area-inset-bottom))
+      0;
+  }
+
+  html.phone-ui .dock {
+    height: 52px;
+  }
+
+  html.phone-ui .dock-item {
+    flex-basis: 46px;
+    width: 46px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  html.phone-ui .dock-label {
+    display: none;
+  }
+
+  html.phone-ui .launcher {
+    top: calc(50px + env(safe-area-inset-top) + 4px);
+    bottom: calc(58px + env(safe-area-inset-bottom) + 4px);
+  }
+}

@@ -4,21 +4,35 @@ function updateDeviceUiClasses() {
   const root = document.documentElement;
   const userAgent = navigator.userAgent || "";
   const androidDevice = /Android/i.test(userAgent);
+  const iosDevice =
+    /iPad|iPhone|iPod/i.test(userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
   const touchCapable =
     androidDevice ||
+    iosDevice ||
     navigator.maxTouchPoints > 0 ||
     "ontouchstart" in window ||
     window.matchMedia("(pointer: coarse)").matches;
 
-  // Honor Pad desktop-site mode may report a desktop-style user agent while
-  // still exposing touch input. Use safe rendering on any large touch screen.
-  const safeRendererMode =
-    androidDevice || (touchCapable && window.innerWidth > 680);
+  // A phone stays in phone mode even in landscape. This prevents an iPhone
+  // from accidentally switching to the tablet/desktop window layout.
+  const phoneMode =
+    touchCapable &&
+    Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 680;
 
-  const tabletMode = safeRendererMode && window.innerWidth > 680;
+  // Honor Pad desktop-site mode may report a desktop-style user agent while
+  // still exposing touch input. Keep the safe renderer on Android, but do not
+  // treat phones in landscape as tablets.
+  const safeRendererMode =
+    androidDevice || (touchCapable && !phoneMode && window.innerWidth > 680);
+
+  const tabletMode =
+    safeRendererMode && !phoneMode && window.innerWidth > 680;
 
   root.classList.toggle("touch-ui", touchCapable);
+  root.classList.toggle("ios-ui", iosDevice);
+  root.classList.toggle("phone-ui", phoneMode);
   root.classList.toggle("safe-render-ui", safeRendererMode);
   root.classList.toggle("tablet-ui", tabletMode);
 }
@@ -39,6 +53,27 @@ function updateAppViewportHeight() {
 }
 
 updateAppViewportHeight();
+
+function setMobileInputState(active) {
+  if (!document.documentElement.classList.contains("phone-ui")) {
+    document.documentElement.classList.remove("mobile-input-active");
+    return;
+  }
+  document.documentElement.classList.toggle("mobile-input-active", Boolean(active));
+}
+
+document.addEventListener("focusin", (event) => {
+  if (!event.target?.matches?.("input, textarea, select, [contenteditable='true']")) return;
+  setMobileInputState(true);
+});
+
+document.addEventListener("focusout", () => {
+  window.setTimeout(() => {
+    const active = document.activeElement;
+    const editing = active?.matches?.("input, textarea, select, [contenteditable='true']");
+    setMobileInputState(Boolean(editing));
+  }, 80);
+});
 
 const STORAGE = {
   tasks: "theBoxOS4Tasks",
@@ -991,7 +1026,10 @@ function focusWindow(windowElement) {
 }
 
 function isCompactWindowMode() {
-  return window.matchMedia("(max-width: 680px)").matches;
+  return (
+    document.documentElement.classList.contains("phone-ui") ||
+    window.matchMedia("(max-width: 680px)").matches
+  );
 }
 
 function isTabletUiMode() {
@@ -5260,7 +5298,8 @@ function setJournalFocusMode(enabled) {
   journalWindow.classList.toggle('journal-focus-mode', journalFocusMode);
 
   if (journalFocusMode) {
-    journalFocusAutoMaximized = !journalWindow.classList.contains('maximized');
+    journalFocusAutoMaximized =
+      !isCompactWindowMode() && !journalWindow.classList.contains('maximized');
     if (journalFocusAutoMaximized) toggleMaximize(journalWindow);
     button.textContent = '✕ Exit focus';
     button.title = 'Exit focus writing mode';
@@ -6989,7 +7028,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7L.2-Free";
+const BACKUP_APP_VERSION = "7M.1-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {

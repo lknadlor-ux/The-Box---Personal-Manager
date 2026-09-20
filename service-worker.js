@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7l2-our-space-archive";
+const CACHE_NAME = "the-box-os-phase-7m1-iphone-mobile";
 
 const APP_FILES = [
   "./",
