@@ -697,6 +697,99 @@ window.BoxCloud = (() => {
     return { error };
   }
 
+
+  const OUR_SPACE_SELECT = "id,title,category,status,target_date,place,estimated_budget,notes,checklist,links,attachments,favorite,priority,actual_date,favorite_memory,actual_budget,rating,created_at,updated_at";
+
+  function toOurSpaceRow(plan = {}) {
+    const now = new Date().toISOString();
+    const numberOrNull = (value) => {
+      if (value === null || value === undefined || value === "") return null;
+      const number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    };
+
+    return {
+      id: String(plan.id || createUuid()),
+      user_id: session.user.id,
+      title: String(plan.title || "").trim().slice(0, 180),
+      category: String(plan.category || "Other").slice(0, 60),
+      status: String(plan.status || "idea").slice(0, 30),
+      target_date: /^\d{4}-\d{2}-\d{2}$/.test(plan.target_date || plan.targetDate || "")
+        ? String(plan.target_date || plan.targetDate).slice(0, 10)
+        : null,
+      place: String(plan.place || "").trim().slice(0, 180),
+      estimated_budget: numberOrNull(plan.estimated_budget ?? plan.estimatedBudget),
+      notes: String(plan.notes || "").slice(0, 20000),
+      checklist: Array.isArray(plan.checklist) ? plan.checklist.slice(0, 80) : [],
+      links: Array.isArray(plan.links) ? plan.links.slice(0, 30) : [],
+      attachments: Array.isArray(plan.attachments) ? plan.attachments.slice(0, 30) : [],
+      favorite: Boolean(plan.favorite),
+      priority: String(plan.priority || "medium").slice(0, 20),
+      actual_date: /^\d{4}-\d{2}-\d{2}$/.test(plan.actual_date || plan.actualDate || "")
+        ? String(plan.actual_date || plan.actualDate).slice(0, 10)
+        : null,
+      favorite_memory: String(plan.favorite_memory || plan.favoriteMemory || "").slice(0, 12000),
+      actual_budget: numberOrNull(plan.actual_budget ?? plan.actualBudget),
+      rating: (() => {
+        const value = Number(plan.rating);
+        return value >= 1 && value <= 5 ? Math.round(value) : null;
+      })(),
+      created_at: plan.created_at || plan.createdAt || now,
+      updated_at: plan.updated_at || plan.updatedAt || now
+    };
+  }
+
+  async function listOurSpacePlans() {
+    if (!isReady()) return { data: [], error: new Error("Sign in to access Our Space.") };
+    const { data, error } = await client
+      .from("our_space_plans")
+      .select(OUR_SPACE_SELECT)
+      .eq("user_id", session.user.id)
+      .order("target_date", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false });
+    return { data: data || [], error };
+  }
+
+  async function saveOurSpacePlan(plan = {}) {
+    if (!isReady()) return { data: null, error: new Error("Sign in to sync Our Space.") };
+    const row = toOurSpaceRow(plan);
+    row.updated_at = new Date().toISOString();
+    const { data, error } = await client
+      .from("our_space_plans")
+      .upsert(row, { onConflict: "id" })
+      .select(OUR_SPACE_SELECT)
+      .single();
+    emit(error ? "error" : "online", error ? "Our Space sync error" : "Synced");
+    return { data, error };
+  }
+
+  async function deleteOurSpacePlan(planId) {
+    if (!isReady()) return { error: new Error("Sign in to sync Our Space.") };
+    const { error } = await client
+      .from("our_space_plans")
+      .delete()
+      .eq("id", String(planId))
+      .eq("user_id", session.user.id);
+    emit(error ? "error" : "online", error ? "Our Space delete error" : "Synced");
+    return { error };
+  }
+
+  async function replaceOurSpacePlans(plans = []) {
+    if (!isReady()) return { error: null };
+    const { error: deleteError } = await client
+      .from("our_space_plans")
+      .delete()
+      .eq("user_id", session.user.id);
+    if (deleteError) return { error: deleteError };
+
+    const rows = (Array.isArray(plans) ? plans : []).map(toOurSpaceRow);
+    if (!rows.length) return { error: null };
+
+    const { error } = await client.from("our_space_plans").insert(rows);
+    emit(error ? "error" : "online", error ? "Our Space sync error" : "Synced");
+    return { error };
+  }
+
   async function createBackupSnapshot() {
     if (!isReady()) {
       return {
@@ -707,7 +800,7 @@ window.BoxCloud = (() => {
 
     emit("syncing", "Preparing backup");
 
-    const [documentsResult, foldersResult, versionsResult, templatesResult, journalResult] = await Promise.all([
+    const [documentsResult, foldersResult, versionsResult, templatesResult, journalResult, ourSpaceResult] = await Promise.all([
       client
         .from("documents")
         .select(DOCUMENT_SELECT)
@@ -732,10 +825,15 @@ window.BoxCloud = (() => {
         .from("journal_entries")
         .select(JOURNAL_SELECT)
         .eq("user_id", session.user.id)
-        .order("entry_date", { ascending: false })
+        .order("entry_date", { ascending: false }),
+      client
+        .from("our_space_plans")
+        .select(OUR_SPACE_SELECT)
+        .eq("user_id", session.user.id)
+        .order("target_date", { ascending: true, nullsFirst: false })
     ]);
 
-    const error = documentsResult.error || foldersResult.error || versionsResult.error || templatesResult.error || journalResult.error;
+    const error = documentsResult.error || foldersResult.error || versionsResult.error || templatesResult.error || journalResult.error || ourSpaceResult.error;
     if (error) {
       emit("error", "Backup error");
       return { data: null, error };
@@ -750,6 +848,7 @@ window.BoxCloud = (() => {
         documentVersions: versionsResult.data || [],
         customTemplates: templatesResult.data || [],
         journalEntries: journalResult.data || [],
+        ourSpacePlans: ourSpaceResult.data || [],
         includesFileContents: false
       },
       error: null
@@ -774,7 +873,7 @@ window.BoxCloud = (() => {
 
     emit("syncing", "Loading");
 
-    const [tasksResult, eventsResult, financeResult, noteResult, templatesResult, journalResult] =
+    const [tasksResult, eventsResult, financeResult, noteResult, templatesResult, journalResult, ourSpaceResult] =
       await Promise.all([
         fetchCollection("tasks"),
         fetchCollection("events"),
@@ -789,7 +888,12 @@ window.BoxCloud = (() => {
           .from("journal_entries")
           .select(JOURNAL_SELECT)
           .eq("user_id", session.user.id)
-          .order("entry_date", { ascending: false })
+          .order("entry_date", { ascending: false }),
+        client
+          .from("our_space_plans")
+          .select(OUR_SPACE_SELECT)
+          .eq("user_id", session.user.id)
+          .order("target_date", { ascending: true, nullsFirst: false })
       ]);
 
     const firstError =
@@ -798,7 +902,8 @@ window.BoxCloud = (() => {
       financeResult.error ||
       noteResult.error ||
       templatesResult.error ||
-      journalResult.error;
+      journalResult.error ||
+      ourSpaceResult.error;
 
     if (firstError) {
       emit("error", "Cloud error");
@@ -811,7 +916,8 @@ window.BoxCloud = (() => {
       financeResult.data.length ||
       typeof noteResult.data?.content === "string" ||
       templatesResult.data?.length ||
-      journalResult.data?.length;
+      journalResult.data?.length ||
+      ourSpaceResult.data?.length;
 
     if (cloudHasData && typeof window.BoxOSCloudHydrate === "function") {
       window.BoxOSCloudHydrate({
@@ -820,7 +926,8 @@ window.BoxCloud = (() => {
         finance_entries: financeResult.data,
         notes: noteResult.data?.content,
         custom_templates: templatesResult.data || [],
-        journal_entries: journalResult.data || []
+        journal_entries: journalResult.data || [],
+        our_space_plans: ourSpaceResult.data || []
       });
     } else {
       await syncNow();
@@ -843,6 +950,7 @@ window.BoxCloud = (() => {
       const localNotes = localStorage.getItem("theBoxOS4Notes") || "";
       const localTemplates = JSON.parse(localStorage.getItem("theBoxOSCustomTemplates") || "[]");
       const localJournal = JSON.parse(localStorage.getItem("theBoxOSJournalEntries") || "[]");
+      const localOurSpace = JSON.parse(localStorage.getItem("theBoxOSOurSpacePlans") || "[]");
 
       const results = await Promise.all([
         replaceCollection("tasks", localTasks),
@@ -850,7 +958,8 @@ window.BoxCloud = (() => {
         replaceCollection("finance_entries", localFinance),
         saveNote(localNotes),
         replaceCustomTemplates(localTemplates),
-        replaceJournalEntries(localJournal)
+        replaceJournalEntries(localJournal),
+        replaceOurSpacePlans(localOurSpace)
       ]);
 
       const failure = results.find((result) => result.error);
@@ -919,6 +1028,10 @@ window.BoxCloud = (() => {
     listJournalEntries,
     saveJournalEntry,
     deleteJournalEntry,
-    replaceJournalEntries
+    replaceJournalEntries,
+    listOurSpacePlans,
+    saveOurSpacePlan,
+    deleteOurSpacePlan,
+    replaceOurSpacePlans
   };
 })();

@@ -61,7 +61,9 @@ const STORAGE = {
   taskView: "theBoxOSTaskView",
   journal: "theBoxOSJournalEntries",
   journalDraft: "theBoxOSJournalDraft",
-  journalPendingSync: "theBoxOSJournalPendingSync"
+  journalPendingSync: "theBoxOSJournalPendingSync",
+  ourSpace: "theBoxOSOurSpacePlans",
+  ourSpacePendingSync: "theBoxOSOurSpacePendingSync"
 };
 
 const DAVAO = {
@@ -145,6 +147,17 @@ let journalDateFrom = "";
 let journalDateTo = "";
 let journalEditorInitialized = false;
 let journalEditorDirty = false;
+
+let ourSpacePlans = normalizeOurSpacePlans(loadJSON(STORAGE.ourSpace, []));
+let selectedOurSpacePlanId = null;
+let ourSpaceSearchTerm = "";
+let ourSpaceCategoryFilter = "all";
+let ourSpaceStatusFilter = "all";
+let ourSpaceFavoritesOnly = false;
+let ourSpaceDraftChecklist = [];
+let ourSpaceDraftLinks = [];
+let ourSpaceDraftAttachments = [];
+
 
 let activeFilter = "all";
 let activeWorkspaceFilter = "all";
@@ -607,6 +620,114 @@ function persistJournalEntries({ pendingCloudSync = false } = {}) {
   if (pendingCloudSync) localStorage.setItem(STORAGE.journalPendingSync, "1");
 }
 
+
+function createOurSpaceId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `our-space-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeOurSpaceChecklist(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => ({
+      id: String(item?.id || createOurSpaceId()),
+      text: String(item?.text || item || "").trim().slice(0, 240),
+      completed: Boolean(item?.completed)
+    }))
+    .filter((item) => item.text)
+    .slice(0, 80);
+}
+
+function normalizeOurSpaceLinks(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return { id: createOurSpaceId(), label: "", url: item.trim() };
+      return {
+        id: String(item?.id || createOurSpaceId()),
+        label: String(item?.label || "").trim().slice(0, 120),
+        url: String(item?.url || "").trim().slice(0, 2000)
+      };
+    })
+    .filter((item) => item.url)
+    .slice(0, 30);
+}
+
+function normalizeOurSpaceAttachments(value) {
+  if (!Array.isArray(value)) return [];
+  const map = new Map();
+  value.forEach((item) => {
+    const documentId = String(item?.documentId || item?.document_id || item?.id || "");
+    if (!documentId || map.has(documentId)) return;
+    map.set(documentId, {
+      documentId,
+      name: String(item?.name || "Attached file").trim().slice(0, 240),
+      folder: String(item?.folder || "Documents").trim().slice(0, 100),
+      mimeType: String(item?.mimeType || item?.mime_type || "").slice(0, 160),
+      sizeBytes: Math.max(0, Number(item?.sizeBytes ?? item?.size_bytes) || 0)
+    });
+  });
+  return Array.from(map.values()).slice(0, 30);
+}
+
+function normalizeOurSpacePlan(plan = {}) {
+  const now = new Date().toISOString();
+  const categories = [
+    "Date", "Travel", "Food / Café", "Movie / Series", "Activity",
+    "Gift idea", "Future purchase", "Milestone", "Bucket list", "Other"
+  ];
+  const statuses = ["idea", "planning", "scheduled", "done", "someday"];
+  const priorities = ["low", "medium", "high"];
+  const estimatedBudget = Number(plan.estimated_budget ?? plan.estimatedBudget);
+  const actualBudget = Number(plan.actual_budget ?? plan.actualBudget);
+  const rating = Number(plan.rating);
+
+  return {
+    id: String(plan.id || createOurSpaceId()),
+    title: String(plan.title || "").trim().slice(0, 180),
+    category: categories.includes(plan.category) ? plan.category : "Other",
+    status: statuses.includes(plan.status) ? plan.status : "idea",
+    target_date: /^\d{4}-\d{2}-\d{2}$/.test(plan.target_date || plan.targetDate || "")
+      ? String(plan.target_date || plan.targetDate).slice(0, 10)
+      : "",
+    place: String(plan.place || "").trim().slice(0, 180),
+    estimated_budget: Number.isFinite(estimatedBudget) && estimatedBudget >= 0 ? estimatedBudget : null,
+    notes: String(plan.notes || "").slice(0, 20000),
+    checklist: normalizeOurSpaceChecklist(plan.checklist),
+    links: normalizeOurSpaceLinks(plan.links),
+    attachments: normalizeOurSpaceAttachments(plan.attachments),
+    favorite: Boolean(plan.favorite),
+    priority: priorities.includes(plan.priority) ? plan.priority : "medium",
+    actual_date: /^\d{4}-\d{2}-\d{2}$/.test(plan.actual_date || plan.actualDate || "")
+      ? String(plan.actual_date || plan.actualDate).slice(0, 10)
+      : "",
+    favorite_memory: String(plan.favorite_memory || plan.favoriteMemory || "").slice(0, 12000),
+    actual_budget: Number.isFinite(actualBudget) && actualBudget >= 0 ? actualBudget : null,
+    rating: rating >= 1 && rating <= 5 ? Math.round(rating) : null,
+    created_at: plan.created_at || plan.createdAt || now,
+    updated_at: plan.updated_at || plan.updatedAt || plan.created_at || plan.createdAt || now
+  };
+}
+
+function normalizeOurSpacePlans(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value
+    .map(normalizeOurSpacePlan)
+    .filter((plan) => {
+      if (!plan.id || seen.has(plan.id)) return false;
+      seen.add(plan.id);
+      return true;
+    })
+    .slice(0, 3000);
+}
+
+function persistOurSpacePlans({ pendingCloudSync = false } = {}) {
+  ourSpacePlans = normalizeOurSpacePlans(ourSpacePlans);
+  localStorage.setItem(STORAGE.ourSpace, JSON.stringify(ourSpacePlans));
+  if (pendingCloudSync) localStorage.setItem(STORAGE.ourSpacePendingSync, "1");
+}
+
 function createLocalTemplateId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
   return `template-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -832,6 +953,14 @@ function openApp(appName) {
 
   if (appName === "journal") {
     renderJournalCenter();
+  }
+
+  if (appName === "ourspace") {
+    renderOurSpaceCenter();
+    if (window.BoxCloud?.isReady() && !documents.length) {
+      loadDocuments({ silent: true }).then(() => renderOurSpaceCenter());
+    }
+    syncPendingOurSpaceIfNeeded();
   }
 
   if (appName === "templates") {
@@ -5149,6 +5278,652 @@ async function syncPendingJournalIfNeeded() {
   }
 }
 
+
+function getOurSpaceToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatOurSpaceDate(value) {
+  if (!value) return "No date yet";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+}
+
+function formatOurSpaceMoney(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "";
+  return amount.toLocaleString("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 2
+  });
+}
+
+function getOurSpaceStatusLabel(status) {
+  return {
+    idea: "Idea",
+    planning: "Planning",
+    scheduled: "Scheduled",
+    someday: "Someday",
+    done: "Memory"
+  }[status] || "Idea";
+}
+
+function getOurSpaceCategoryIcon(category) {
+  return {
+    "Date": "♥",
+    "Travel": "✈",
+    "Food / Café": "☕",
+    "Movie / Series": "▶",
+    "Activity": "✦",
+    "Gift idea": "🎁",
+    "Future purchase": "◇",
+    "Milestone": "★",
+    "Bucket list": "✓",
+    "Other": "•"
+  }[category] || "•";
+}
+
+function sortOurSpacePlans(plans) {
+  const statusRank = { scheduled: 0, planning: 1, idea: 2, someday: 3, done: 4 };
+  return [...plans].sort((a, b) => {
+    if (a.status === "done" && b.status === "done") {
+      const aDone = a.actual_date || a.target_date || "0000-00-00";
+      const bDone = b.actual_date || b.target_date || "0000-00-00";
+      return bDone.localeCompare(aDone);
+    }
+    if (a.status === "done") return 1;
+    if (b.status === "done") return -1;
+
+    const aDate = a.target_date || "9999-12-31";
+    const bDate = b.target_date || "9999-12-31";
+    if (aDate !== bDate) return aDate.localeCompare(bDate);
+
+    const statusDiff = (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9);
+    if (statusDiff) return statusDiff;
+    if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+    return String(b.created_at).localeCompare(String(a.created_at));
+  });
+}
+
+function getFilteredOurSpacePlans() {
+  const query = ourSpaceSearchTerm.toLocaleLowerCase();
+  return sortOurSpacePlans(ourSpacePlans.filter((plan) => {
+    if (ourSpaceCategoryFilter !== "all" && plan.category !== ourSpaceCategoryFilter) return false;
+    if (ourSpaceStatusFilter !== "all" && plan.status !== ourSpaceStatusFilter) return false;
+    if (ourSpaceFavoritesOnly && !plan.favorite) return false;
+
+    if (!query) return true;
+    const haystack = [
+      plan.title,
+      plan.category,
+      getOurSpaceStatusLabel(plan.status),
+      plan.place,
+      plan.notes,
+      plan.favorite_memory,
+      ...plan.checklist.map((item) => item.text),
+      ...plan.links.flatMap((item) => [item.label, item.url]),
+      ...plan.attachments.map((item) => item.name)
+    ].join(" ").toLocaleLowerCase();
+    return haystack.includes(query);
+  }));
+}
+
+function getOurSpaceSummary() {
+  const today = getOurSpaceToday();
+  return {
+    upcoming: ourSpacePlans.filter((plan) => plan.status !== "done" && plan.target_date && plan.target_date >= today).length,
+    bucket: ourSpacePlans.filter((plan) => ["idea", "someday"].includes(plan.status)).length,
+    planning: ourSpacePlans.filter((plan) => ["planning", "scheduled"].includes(plan.status)).length,
+    memories: ourSpacePlans.filter((plan) => plan.status === "done").length
+  };
+}
+
+function renderOurSpaceSummary() {
+  if (!$("ourSpaceUpcomingCount")) return;
+  const summary = getOurSpaceSummary();
+  $("ourSpaceUpcomingCount").textContent = String(summary.upcoming);
+  $("ourSpaceBucketCount").textContent = String(summary.bucket);
+  $("ourSpacePlanningCount").textContent = String(summary.planning);
+  $("ourSpaceMemoryCount").textContent = String(summary.memories);
+}
+
+function renderOurSpacePlanList() {
+  const list = $("ourSpacePlanList");
+  if (!list) return;
+  const plans = getFilteredOurSpacePlans();
+  $("ourSpacePlanCount").textContent = String(plans.length);
+  $("ourSpaceEmptyState").hidden = plans.length > 0;
+
+  list.innerHTML = plans.map((plan) => {
+    const checklistDone = plan.checklist.filter((item) => item.completed).length;
+    const budget = formatOurSpaceMoney(plan.estimated_budget);
+    const date = plan.status === "done"
+      ? (plan.actual_date || plan.target_date)
+      : plan.target_date;
+    return `
+      <button class="our-space-plan-card ${plan.id === selectedOurSpacePlanId ? "active" : ""} ${plan.status === "done" ? "memory" : ""}"
+        type="button" data-our-space-plan-id="${escapeHtml(plan.id)}">
+        <span class="our-space-plan-icon">${escapeHtml(getOurSpaceCategoryIcon(plan.category))}</span>
+        <span class="our-space-plan-card-body">
+          <span class="our-space-plan-card-top">
+            <strong>${escapeHtml(plan.title || "Untitled plan")}</strong>
+            <span>${plan.favorite ? "♥" : ""}</span>
+          </span>
+          <small>${escapeHtml(plan.category)} · ${escapeHtml(getOurSpaceStatusLabel(plan.status))}</small>
+          <span class="our-space-plan-card-meta">
+            ${date ? `<em>${escapeHtml(formatOurSpaceDate(date))}</em>` : ""}
+            ${plan.place ? `<em>${escapeHtml(plan.place)}</em>` : ""}
+            ${budget ? `<em>${escapeHtml(budget)}</em>` : ""}
+            ${plan.checklist.length ? `<em>${checklistDone}/${plan.checklist.length} checklist</em>` : ""}
+          </span>
+        </span>
+      </button>
+    `;
+  }).join("");
+
+  list.querySelectorAll("[data-our-space-plan-id]").forEach((button) => {
+    button.addEventListener("click", () => selectOurSpacePlan(button.dataset.ourSpacePlanId));
+  });
+}
+
+function renderOurSpaceChecklist() {
+  const list = $("ourSpaceChecklistList");
+  if (!list) return;
+  $("ourSpaceChecklistEmpty").hidden = ourSpaceDraftChecklist.length > 0;
+  list.innerHTML = "";
+
+  ourSpaceDraftChecklist.forEach((item, index) => {
+    const row = document.createElement("div");
+    row.className = "our-space-checklist-item";
+    row.dataset.itemId = item.id;
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = item.completed;
+    checkbox.addEventListener("change", () => {
+      item.completed = checkbox.checked;
+    });
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 240;
+    input.placeholder = "Checklist item";
+    input.value = item.text;
+    input.addEventListener("input", () => { item.text = input.value; });
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      addOurSpaceChecklistItem(index + 1);
+    });
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "our-space-small-danger";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+      ourSpaceDraftChecklist = ourSpaceDraftChecklist.filter((entry) => entry.id !== item.id);
+      renderOurSpaceChecklist();
+    });
+
+    row.append(checkbox, input, remove);
+    list.appendChild(row);
+  });
+}
+
+function addOurSpaceChecklistItem(insertAt = ourSpaceDraftChecklist.length) {
+  const item = { id: createOurSpaceId(), text: "", completed: false };
+  ourSpaceDraftChecklist.splice(insertAt, 0, item);
+  renderOurSpaceChecklist();
+  setTimeout(() => {
+    const input = $("ourSpaceChecklistList")
+      ?.querySelector(`[data-item-id="${item.id}"] input[type="text"]`);
+    input?.focus();
+  }, 0);
+}
+
+function renderOurSpaceLinks() {
+  const list = $("ourSpaceLinkList");
+  if (!list) return;
+  $("ourSpaceLinkEmpty").hidden = ourSpaceDraftLinks.length > 0;
+  list.innerHTML = "";
+
+  ourSpaceDraftLinks.forEach((link) => {
+    const row = document.createElement("div");
+    row.className = "our-space-link-item";
+    row.dataset.linkId = link.id;
+
+    const label = document.createElement("input");
+    label.type = "text";
+    label.maxLength = 120;
+    label.placeholder = "Label";
+    label.value = link.label;
+    label.addEventListener("input", () => { link.label = label.value; });
+
+    const url = document.createElement("input");
+    url.type = "url";
+    url.maxLength = 2000;
+    url.placeholder = "https://...";
+    url.value = link.url;
+    url.addEventListener("input", () => { link.url = url.value; });
+
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "secondary-button";
+    open.textContent = "Open";
+    open.disabled = !link.url;
+    open.addEventListener("click", () => {
+      const value = link.url.trim();
+      if (!value) return;
+      const href = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+      window.open(href, "_blank", "noopener,noreferrer");
+    });
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "our-space-small-danger";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+      ourSpaceDraftLinks = ourSpaceDraftLinks.filter((entry) => entry.id !== link.id);
+      renderOurSpaceLinks();
+    });
+
+    row.append(label, url, open, remove);
+    list.appendChild(row);
+  });
+}
+
+function addOurSpaceLink() {
+  const link = { id: createOurSpaceId(), label: "", url: "" };
+  ourSpaceDraftLinks.push(link);
+  renderOurSpaceLinks();
+  setTimeout(() => {
+    $("ourSpaceLinkList")
+      ?.querySelector(`[data-link-id="${link.id}"] input`)
+      ?.focus();
+  }, 0);
+}
+
+function renderOurSpaceDocumentPicker() {
+  const select = $("ourSpaceDocumentPicker");
+  if (!select) return;
+  const activeDocuments = documents
+    .filter((item) => !item.deleted_at)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+  const current = select.value;
+  select.innerHTML = '<option value="">Choose a Vault file</option>' +
+    activeDocuments.map((item) => `
+      <option value="${escapeHtml(item.id)}">${escapeHtml(item.name)} · ${escapeHtml(item.folder || "Documents")}</option>
+    `).join("");
+
+  if (activeDocuments.some((item) => String(item.id) === current)) select.value = current;
+}
+
+function renderOurSpaceAttachments() {
+  const list = $("ourSpaceAttachmentList");
+  if (!list) return;
+  $("ourSpaceAttachmentEmpty").hidden = ourSpaceDraftAttachments.length > 0;
+  list.innerHTML = ourSpaceDraftAttachments.map((attachment) => `
+    <div class="our-space-attachment-item" data-attachment-id="${escapeHtml(attachment.documentId)}">
+      <span>▣</span>
+      <div>
+        <strong>${escapeHtml(attachment.name)}</strong>
+        <small>${escapeHtml(attachment.folder || "Documents")}</small>
+      </div>
+      <button class="secondary-button" type="button" data-attachment-open="${escapeHtml(attachment.documentId)}">Open</button>
+      <button class="our-space-small-danger" type="button" data-attachment-remove="${escapeHtml(attachment.documentId)}">Remove</button>
+    </div>
+  `).join("");
+
+  list.querySelectorAll("[data-attachment-open]").forEach((button) => {
+    button.addEventListener("click", () => openOurSpaceAttachment(button.dataset.attachmentOpen));
+  });
+  list.querySelectorAll("[data-attachment-remove]").forEach((button) => {
+    button.addEventListener("click", () => {
+      ourSpaceDraftAttachments = ourSpaceDraftAttachments.filter(
+        (item) => item.documentId !== button.dataset.attachmentRemove
+      );
+      renderOurSpaceAttachments();
+    });
+  });
+}
+
+function attachSelectedOurSpaceDocument() {
+  const documentId = $("ourSpaceDocumentPicker").value;
+  if (!documentId) {
+    showToast("Choose a Document Vault file first");
+    return;
+  }
+  const documentItem = documents.find((item) => String(item.id) === String(documentId));
+  if (!documentItem) {
+    showToast("That Vault file is not currently available");
+    return;
+  }
+  if (ourSpaceDraftAttachments.some((item) => item.documentId === String(documentId))) {
+    showToast("That file is already attached");
+    return;
+  }
+
+  ourSpaceDraftAttachments.push({
+    documentId: String(documentItem.id),
+    name: documentItem.name || "Attached file",
+    folder: documentItem.folder || "Documents",
+    mimeType: documentItem.mime_type || "",
+    sizeBytes: Number(documentItem.size_bytes) || 0
+  });
+  renderOurSpaceAttachments();
+  $("ourSpaceDocumentPicker").value = "";
+  showToast("Vault file attached");
+}
+
+async function openOurSpaceAttachment(documentId) {
+  const documentItem = documents.find((item) => String(item.id) === String(documentId));
+  if (!documentItem) {
+    showToast("Open Documents to find this file");
+    openApp("documents");
+    return;
+  }
+  if (typeof openDocumentPreview === "function") {
+    openDocumentPreview(documentItem);
+    return;
+  }
+  openApp("documents");
+}
+
+function updateOurSpaceMemoryVisibility() {
+  const isDone = $("ourSpaceStatus")?.value === "done";
+  $("ourSpaceMemorySection")?.classList.toggle("hidden", !isDone);
+  if (isDone && !$("ourSpaceActualDate").value) {
+    $("ourSpaceActualDate").value = $("ourSpaceTargetDate").value || getOurSpaceToday();
+  }
+}
+
+function resetOurSpaceEditor() {
+  selectedOurSpacePlanId = null;
+  ourSpaceDraftChecklist = [];
+  ourSpaceDraftLinks = [];
+  ourSpaceDraftAttachments = [];
+
+  $("ourSpaceTitle").value = "";
+  $("ourSpaceCategory").value = "Date";
+  $("ourSpaceStatus").value = "idea";
+  $("ourSpacePriority").value = "medium";
+  $("ourSpaceTargetDate").value = "";
+  $("ourSpacePlace").value = "";
+  $("ourSpaceEstimatedBudget").value = "";
+  $("ourSpaceNotes").value = "";
+  $("ourSpaceFavorite").checked = false;
+  $("ourSpaceActualDate").value = "";
+  $("ourSpaceActualBudget").value = "";
+  $("ourSpaceRating").value = "";
+  $("ourSpaceFavoriteMemory").value = "";
+
+  $("ourSpaceEditorModeLabel").textContent = "NEW PLAN";
+  $("ourSpaceEditorHeading").textContent = "Plan something together";
+  $("deleteOurSpacePlanButton").disabled = true;
+  $("ourSpaceCreateTaskButton").disabled = true;
+  $("ourSpaceAddCalendarButton").disabled = true;
+
+  renderOurSpaceChecklist();
+  renderOurSpaceLinks();
+  renderOurSpaceAttachments();
+  renderOurSpaceDocumentPicker();
+  updateOurSpaceMemoryVisibility();
+}
+
+function populateOurSpaceEditor(plan) {
+  if (!plan) return resetOurSpaceEditor();
+
+  selectedOurSpacePlanId = plan.id;
+  ourSpaceDraftChecklist = normalizeOurSpaceChecklist(plan.checklist);
+  ourSpaceDraftLinks = normalizeOurSpaceLinks(plan.links);
+  ourSpaceDraftAttachments = normalizeOurSpaceAttachments(plan.attachments);
+
+  $("ourSpaceTitle").value = plan.title;
+  $("ourSpaceCategory").value = plan.category;
+  $("ourSpaceStatus").value = plan.status;
+  $("ourSpacePriority").value = plan.priority;
+  $("ourSpaceTargetDate").value = plan.target_date;
+  $("ourSpacePlace").value = plan.place;
+  $("ourSpaceEstimatedBudget").value = plan.estimated_budget ?? "";
+  $("ourSpaceNotes").value = plan.notes;
+  $("ourSpaceFavorite").checked = plan.favorite;
+  $("ourSpaceActualDate").value = plan.actual_date;
+  $("ourSpaceActualBudget").value = plan.actual_budget ?? "";
+  $("ourSpaceRating").value = plan.rating ?? "";
+  $("ourSpaceFavoriteMemory").value = plan.favorite_memory;
+
+  $("ourSpaceEditorModeLabel").textContent = plan.status === "done" ? "MEMORY" : "EDIT PLAN";
+  $("ourSpaceEditorHeading").textContent = plan.title || "Edit plan";
+  $("deleteOurSpacePlanButton").disabled = false;
+  $("ourSpaceCreateTaskButton").disabled = false;
+  $("ourSpaceAddCalendarButton").disabled = !plan.target_date;
+
+  renderOurSpaceChecklist();
+  renderOurSpaceLinks();
+  renderOurSpaceAttachments();
+  renderOurSpaceDocumentPicker();
+  updateOurSpaceMemoryVisibility();
+}
+
+function selectOurSpacePlan(planId) {
+  const plan = ourSpacePlans.find((item) => item.id === planId);
+  if (!plan) return;
+  populateOurSpaceEditor(plan);
+  renderOurSpacePlanList();
+}
+
+function renderOurSpaceCenter() {
+  if (!$("ourSpacePlanList")) return;
+  $("ourSpaceSearchInput").value = ourSpaceSearchTerm;
+  $("ourSpaceCategoryFilter").value = ourSpaceCategoryFilter;
+  $("ourSpaceStatusFilter").value = ourSpaceStatusFilter;
+  $("ourSpaceFavoritesOnly").checked = ourSpaceFavoritesOnly;
+
+  renderOurSpaceSummary();
+  renderOurSpacePlanList();
+  renderOurSpaceDocumentPicker();
+
+  if (!selectedOurSpacePlanId && !$("ourSpaceTitle").value && !$("ourSpaceEditorModeLabel").textContent.includes("NEW")) {
+    resetOurSpaceEditor();
+  }
+}
+
+function collectOurSpaceEditorPlan() {
+  const estimated = $("ourSpaceEstimatedBudget").value;
+  const actual = $("ourSpaceActualBudget").value;
+  return normalizeOurSpacePlan({
+    id: selectedOurSpacePlanId || createOurSpaceId(),
+    title: $("ourSpaceTitle").value,
+    category: $("ourSpaceCategory").value,
+    status: $("ourSpaceStatus").value,
+    priority: $("ourSpacePriority").value,
+    target_date: $("ourSpaceTargetDate").value,
+    place: $("ourSpacePlace").value,
+    estimated_budget: estimated === "" ? null : Number(estimated),
+    notes: $("ourSpaceNotes").value,
+    checklist: ourSpaceDraftChecklist.filter((item) => item.text.trim()),
+    links: ourSpaceDraftLinks.filter((item) => item.url.trim()),
+    attachments: ourSpaceDraftAttachments,
+    favorite: $("ourSpaceFavorite").checked,
+    actual_date: $("ourSpaceActualDate").value,
+    actual_budget: actual === "" ? null : Number(actual),
+    rating: $("ourSpaceRating").value ? Number($("ourSpaceRating").value) : null,
+    favorite_memory: $("ourSpaceFavoriteMemory").value,
+    created_at: ourSpacePlans.find((item) => item.id === selectedOurSpacePlanId)?.created_at,
+    updated_at: new Date().toISOString()
+  });
+}
+
+async function saveOurSpacePlanFromEditor() {
+  const plan = collectOurSpaceEditorPlan();
+  if (!plan.title.trim()) {
+    showToast("Give this plan a title first");
+    $("ourSpaceTitle").focus();
+    return;
+  }
+
+  const existingIndex = ourSpacePlans.findIndex((item) => item.id === plan.id);
+  if (existingIndex >= 0) ourSpacePlans[existingIndex] = plan;
+  else ourSpacePlans.unshift(plan);
+
+  persistOurSpacePlans({ pendingCloudSync: !window.BoxCloud?.isReady() });
+  selectedOurSpacePlanId = plan.id;
+  populateOurSpaceEditor(plan);
+  renderOurSpaceCenter();
+
+  if (window.BoxCloud?.isReady() && window.BoxCloud.saveOurSpacePlan) {
+    const result = await window.BoxCloud.saveOurSpacePlan(plan);
+    if (result.error) {
+      localStorage.setItem(STORAGE.ourSpacePendingSync, "1");
+      showToast("Plan saved locally; cloud sync pending");
+      return;
+    }
+    localStorage.removeItem(STORAGE.ourSpacePendingSync);
+  }
+
+  showToast(plan.status === "done" ? "Memory saved ♥" : "Plan saved");
+}
+
+async function deleteSelectedOurSpacePlan() {
+  if (!selectedOurSpacePlanId) return;
+  const plan = ourSpacePlans.find((item) => item.id === selectedOurSpacePlanId);
+  if (!plan) return;
+  if (!window.confirm(`Delete “${plan.title || "this plan"}”?`)) return;
+
+  const planId = plan.id;
+  ourSpacePlans = ourSpacePlans.filter((item) => item.id !== planId);
+  persistOurSpacePlans({ pendingCloudSync: !window.BoxCloud?.isReady() });
+
+  if (window.BoxCloud?.isReady() && window.BoxCloud.deleteOurSpacePlan) {
+    const result = await window.BoxCloud.deleteOurSpacePlan(planId);
+    if (result.error) {
+      localStorage.setItem(STORAGE.ourSpacePendingSync, "1");
+      showToast("Deleted locally; cloud delete pending");
+    }
+  }
+
+  resetOurSpaceEditor();
+  renderOurSpaceCenter();
+  showToast("Plan deleted");
+}
+
+function clearOurSpaceFilters() {
+  ourSpaceSearchTerm = "";
+  ourSpaceCategoryFilter = "all";
+  ourSpaceStatusFilter = "all";
+  ourSpaceFavoritesOnly = false;
+  renderOurSpaceCenter();
+}
+
+function applyOurSpaceQuickFilter(mode) {
+  ourSpaceSearchTerm = "";
+  ourSpaceCategoryFilter = "all";
+  ourSpaceFavoritesOnly = false;
+
+  if (mode === "memories") {
+    ourSpaceStatusFilter = "done";
+  } else if (mode === "bucket") {
+    ourSpaceStatusFilter = "someday";
+  } else if (mode === "active") {
+    ourSpaceStatusFilter = "planning";
+  } else {
+    ourSpaceStatusFilter = "all";
+  }
+
+  renderOurSpaceCenter();
+
+  if (mode === "upcoming") {
+    const today = getOurSpaceToday();
+    const upcoming = sortOurSpacePlans(
+      ourSpacePlans.filter((plan) => plan.status !== "done" && plan.target_date && plan.target_date >= today)
+    );
+    $("ourSpacePlanList").innerHTML = upcoming.map((plan) => `
+      <button class="our-space-plan-card ${plan.id === selectedOurSpacePlanId ? "active" : ""}"
+        type="button" data-our-space-plan-id="${escapeHtml(plan.id)}">
+        <span class="our-space-plan-icon">${escapeHtml(getOurSpaceCategoryIcon(plan.category))}</span>
+        <span class="our-space-plan-card-body">
+          <span class="our-space-plan-card-top"><strong>${escapeHtml(plan.title)}</strong><span>${plan.favorite ? "♥" : ""}</span></span>
+          <small>${escapeHtml(plan.category)} · ${escapeHtml(formatOurSpaceDate(plan.target_date))}</small>
+        </span>
+      </button>
+    `).join("");
+    $("ourSpacePlanCount").textContent = String(upcoming.length);
+    $("ourSpaceEmptyState").hidden = upcoming.length > 0;
+    $("ourSpacePlanList").querySelectorAll("[data-our-space-plan-id]").forEach((button) => {
+      button.addEventListener("click", () => selectOurSpacePlan(button.dataset.ourSpacePlanId));
+    });
+  }
+}
+
+function createTaskFromOurSpacePlan() {
+  const plan = ourSpacePlans.find((item) => item.id === selectedOurSpacePlanId);
+  if (!plan) return;
+  const now = new Date().toISOString();
+  const task = normalizeTask({
+    id: Date.now() + Math.random(),
+    text: plan.title,
+    details: [
+      "Our Space plan",
+      plan.place ? `Place: ${plan.place}` : "",
+      plan.notes || ""
+    ].filter(Boolean).join("\n"),
+    dueDate: plan.target_date || "",
+    workspace: "personal",
+    priority: plan.priority === "high" ? "high" : "normal",
+    status: "todo",
+    tags: ["our-space", plan.category],
+    subtasks: plan.checklist.map((item) => ({
+      id: `our-space-${item.id}`,
+      text: item.text,
+      details: "",
+      completed: item.completed,
+      attachments: []
+    })),
+    recurrence: { type: "none", days: [] },
+    createdAt: now,
+    updatedAt: now
+  });
+  tasks.unshift(task);
+  saveJSON(STORAGE.tasks, tasks);
+  renderAll();
+  showToast("Task created from Our Space");
+}
+
+function addOurSpacePlanToCalendar() {
+  const plan = ourSpacePlans.find((item) => item.id === selectedOurSpacePlanId);
+  if (!plan) return;
+  if (!plan.target_date) {
+    showToast("Add a target date first");
+    return;
+  }
+
+  const event = {
+    id: Date.now() + Math.random(),
+    title: `♥ ${plan.title}`,
+    date: plan.target_date,
+    workspace: "personal"
+  };
+  events.unshift(event);
+  saveJSON(STORAGE.events, events);
+  renderAll();
+  showToast("Added to Calendar");
+}
+
+async function syncPendingOurSpaceIfNeeded() {
+  if (!window.BoxCloud?.isReady() || !window.BoxCloud.replaceOurSpacePlans) return;
+  if (localStorage.getItem(STORAGE.ourSpacePendingSync) !== "1") return;
+  const result = await window.BoxCloud.replaceOurSpacePlans(ourSpacePlans);
+  if (!result.error) localStorage.removeItem(STORAGE.ourSpacePendingSync);
+}
+
 function getAllTemplates() {
   return [
     ...BUILT_IN_TEMPLATES.map((template) => ({ ...template, builtIn: true })),
@@ -6105,12 +6880,14 @@ function updateReminderSettingFromControls() {
   reminderSettings.eventLeadDays = Number($("eventReminderLeadDays").value) || 3;
   saveReminderSettings();
   renderReminderCenter();
+  renderJournalCenter();
+  renderOurSpaceCenter();
 }
 
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7J.1-Free";
+const BACKUP_APP_VERSION = "7L.1-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -6155,6 +6932,12 @@ function buildLocalBackupData() {
     tasks: tasks.map((task) => ({ ...task })),
     events: events.map((event) => ({ ...event })),
     journalEntries: journalEntries.map((entry) => ({ ...entry, tags: [...entry.tags] })),
+    ourSpacePlans: ourSpacePlans.map((plan) => ({
+      ...plan,
+      checklist: plan.checklist.map((item) => ({ ...item })),
+      links: plan.links.map((item) => ({ ...item })),
+      attachments: plan.attachments.map((item) => ({ ...item }))
+    })),
     financeEntries: financeEntries.map((entry) => ({ ...entry })),
     notes: $("quickNotes")?.value ?? localStorage.getItem(STORAGE.notes) ?? "",
     customTemplates: customTemplates.map((template) => ({ ...template })),
@@ -6268,6 +7051,7 @@ function renderBackupCenter() {
   $("backupTaskCount").textContent = String(tasks.length);
   $("backupEventCount").textContent = String(events.length);
   $("backupJournalCount").textContent = String(journalEntries.length);
+  $("backupOurSpaceCount").textContent = String(ourSpacePlans.length);
   $("backupDocumentCount").textContent = String(documents.filter((item) => !item.deleted_at).length);
   $("backupLastExport").textContent = formatBackupTime(localStorage.getItem(STORAGE.lastBackupAt));
 
@@ -6374,6 +7158,7 @@ function renderBackupImportPreview(backup, integrityResult) {
       <small>${backup.data.tasks.length} tasks</small>
       <small>${backup.data.events.length} events</small>
       <small>${backup.data.journalEntries?.length || 0} journal entries</small>
+      <small>${backup.data.ourSpacePlans?.length || 0} Our Space plans</small>
       <small>${backup.data.financeEntries.length} finance entries</small>
       <small>${inventory?.documents?.length || 0} document records</small>
       <small>${backup.data.customTemplates?.length || 0} custom templates</small>
@@ -6468,6 +7253,7 @@ async function restoreSelectedBackup() {
     tasks: $("restoreBackupTasks").checked,
     events: $("restoreBackupEvents").checked,
     journal: $("restoreBackupJournal").checked,
+    ourSpace: $("restoreBackupOurSpace").checked,
     finance: $("restoreBackupFinance").checked,
     notes: $("restoreBackupNotes").checked,
     preferences: $("restoreBackupPreferences").checked,
@@ -6511,6 +7297,12 @@ async function restoreSelectedBackup() {
       journalEditorInitialized = false;
       localStorage.removeItem(STORAGE.journalDraft);
     }
+    if (selected.ourSpace) {
+      ourSpacePlans = normalizeOurSpacePlans(data.ourSpacePlans || []);
+      persistOurSpacePlans({ pendingCloudSync: shouldSync });
+      selectedOurSpacePlanId = null;
+      resetOurSpaceEditor();
+    }
     if (selected.finance) {
       financeEntries = normalizeBackupFinance(data.financeEntries);
       localStorage.setItem(STORAGE.finance, JSON.stringify(financeEntries));
@@ -6537,6 +7329,10 @@ async function restoreSelectedBackup() {
       if (selected.templates && window.BoxCloud?.replaceCustomTemplates) {
         const templateSyncResult = await window.BoxCloud.replaceCustomTemplates(customTemplates);
         if (templateSyncResult.error) throw templateSyncResult.error;
+      }
+      if (selected.ourSpace && window.BoxCloud?.replaceOurSpacePlans) {
+        const ourSpaceSyncResult = await window.BoxCloud.replaceOurSpacePlans(ourSpacePlans);
+        if (ourSpaceSyncResult.error) throw ourSpaceSyncResult.error;
       }
       const syncResult = await window.BoxCloud.syncNow();
       if (syncResult.error) throw syncResult.error;
@@ -7300,6 +8096,40 @@ document.addEventListener("keydown", (event) => {
 
 
 
+
+$("newOurSpacePlanButton").addEventListener("click", () => {
+  resetOurSpaceEditor();
+  $("ourSpaceTitle").focus();
+});
+$("saveOurSpacePlanButton").addEventListener("click", saveOurSpacePlanFromEditor);
+$("deleteOurSpacePlanButton").addEventListener("click", deleteSelectedOurSpacePlan);
+$("addOurSpaceChecklistButton").addEventListener("click", () => addOurSpaceChecklistItem());
+$("addOurSpaceLinkButton").addEventListener("click", addOurSpaceLink);
+$("attachOurSpaceDocumentButton").addEventListener("click", attachSelectedOurSpaceDocument);
+$("ourSpaceStatus").addEventListener("change", updateOurSpaceMemoryVisibility);
+$("ourSpaceCreateTaskButton").addEventListener("click", createTaskFromOurSpacePlan);
+$("ourSpaceAddCalendarButton").addEventListener("click", addOurSpacePlanToCalendar);
+$("ourSpaceSearchInput").addEventListener("input", (event) => {
+  ourSpaceSearchTerm = event.target.value.trim();
+  renderOurSpacePlanList();
+});
+$("ourSpaceCategoryFilter").addEventListener("change", (event) => {
+  ourSpaceCategoryFilter = event.target.value;
+  renderOurSpacePlanList();
+});
+$("ourSpaceStatusFilter").addEventListener("change", (event) => {
+  ourSpaceStatusFilter = event.target.value;
+  renderOurSpacePlanList();
+});
+$("ourSpaceFavoritesOnly").addEventListener("change", (event) => {
+  ourSpaceFavoritesOnly = event.target.checked;
+  renderOurSpacePlanList();
+});
+$("clearOurSpaceFiltersButton").addEventListener("click", clearOurSpaceFilters);
+document.querySelectorAll("[data-our-space-quick-filter]").forEach((button) => {
+  button.addEventListener("click", () => applyOurSpaceQuickFilter(button.dataset.ourSpaceQuickFilter));
+});
+
 $('newJournalEntryButton').addEventListener('click', newJournalEntry);
 $('journalTodayButton').addEventListener('click', showJournalToday);
 $('clearJournalFiltersButton').addEventListener('click', clearJournalFilters);
@@ -7469,6 +8299,29 @@ window.BoxOSCloudHydrate = function cloudHydrate(data) {
     }
     selectedJournalEntryId = null;
     journalEditorInitialized = false;
+  }
+
+  if (Array.isArray(data.our_space_plans)) {
+    const cloudPlans = normalizeOurSpacePlans(data.our_space_plans);
+    const hasPendingLocalPlans = localStorage.getItem(STORAGE.ourSpacePendingSync) === "1";
+
+    if (hasPendingLocalPlans && ourSpacePlans.length && window.BoxCloud?.replaceOurSpacePlans) {
+      const merged = new Map(cloudPlans.map((plan) => [plan.id, plan]));
+      ourSpacePlans.forEach((plan) => {
+        const remote = merged.get(plan.id);
+        if (!remote || String(plan.updated_at) > String(remote.updated_at)) merged.set(plan.id, plan);
+      });
+      ourSpacePlans = normalizeOurSpacePlans(Array.from(merged.values()));
+      persistOurSpacePlans({ pendingCloudSync: true });
+      window.BoxCloud.replaceOurSpacePlans(ourSpacePlans).then((result) => {
+        if (!result.error) localStorage.removeItem(STORAGE.ourSpacePendingSync);
+      });
+    } else {
+      ourSpacePlans = cloudPlans;
+      persistOurSpacePlans();
+    }
+    selectedOurSpacePlanId = null;
+    if ($("ourSpaceTitle")) resetOurSpaceEditor();
   }
 
   localStorage.setItem(STORAGE.tasks, JSON.stringify(tasks));

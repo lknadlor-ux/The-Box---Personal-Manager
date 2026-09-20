@@ -28,7 +28,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7j1">
+  <link rel="stylesheet" href="style.css?v=7l1">
 </head>
 <body>
   <div class="desktop-shell">
@@ -105,6 +105,12 @@
           <span class="app-icon">☷</span>
           <strong>Journal</strong>
           <small>Daily entries, moods, and reflections</small>
+        </button>
+
+        <button class="app-tile our-space-app-tile" data-open-app="ourspace">
+          <span class="app-icon">♥</span>
+          <strong>Our Space</strong>
+          <small>Plans, bucket list, and memories</small>
         </button>
 
         <button class="app-tile" data-open-app="documents">
@@ -228,6 +234,11 @@
         <button class="desktop-icon" data-open-app="journal">
           <span>☷</span>
           <strong>Journal</strong>
+        </button>
+
+        <button class="desktop-icon our-space-desktop-icon" data-open-app="ourspace">
+          <span>♥</span>
+          <strong>Our Space</strong>
         </button>
 
         <button class="desktop-icon" data-open-app="calendar">
@@ -936,6 +947,260 @@
           </div>
         </article>
 
+
+        <article class="app-window our-space-app-window" data-app-window="ourspace" style="--x: 8%; --y: 5%; --w: 82%; --h: 84%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>♥</span><strong>Our Space</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content our-space-window">
+            <section class="our-space-hero">
+              <div>
+                <small>OUR LIFE TOGETHER</small>
+                <h2>Things we want to do, places we want to go, and memories we want to make.</h2>
+                <p>Keep date ideas, trips, food spots, milestones, purchases, and future plans together in one private space.</p>
+              </div>
+              <button id="newOurSpacePlanButton" class="primary-button" type="button">＋ New plan</button>
+            </section>
+
+            <section class="our-space-summary-grid">
+              <button class="our-space-summary-card" type="button" data-our-space-quick-filter="upcoming">
+                <span>Coming up</span>
+                <strong id="ourSpaceUpcomingCount">0</strong>
+                <small>Dated plans ahead</small>
+              </button>
+              <button class="our-space-summary-card" type="button" data-our-space-quick-filter="bucket">
+                <span>Bucket list</span>
+                <strong id="ourSpaceBucketCount">0</strong>
+                <small>Ideas &amp; someday</small>
+              </button>
+              <button class="our-space-summary-card" type="button" data-our-space-quick-filter="active">
+                <span>Planning</span>
+                <strong id="ourSpacePlanningCount">0</strong>
+                <small>Being worked on</small>
+              </button>
+              <button class="our-space-summary-card memory-card" type="button" data-our-space-quick-filter="memories">
+                <span>Memories</span>
+                <strong id="ourSpaceMemoryCount">0</strong>
+                <small>Plans we completed</small>
+              </button>
+            </section>
+
+            <section class="our-space-filter-bar">
+              <label class="our-space-search-field">
+                <span>Search</span>
+                <input id="ourSpaceSearchInput" type="search" placeholder="Search plans, places, notes, or links">
+              </label>
+              <label>
+                <span>Category</span>
+                <select id="ourSpaceCategoryFilter">
+                  <option value="all">All categories</option>
+                  <option value="Date">Date</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Food / Café">Food / Café</option>
+                  <option value="Movie / Series">Movie / Series</option>
+                  <option value="Activity">Activity</option>
+                  <option value="Gift idea">Gift idea</option>
+                  <option value="Future purchase">Future purchase</option>
+                  <option value="Milestone">Milestone</option>
+                  <option value="Bucket list">Bucket list</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              <label>
+                <span>Status</span>
+                <select id="ourSpaceStatusFilter">
+                  <option value="all">All statuses</option>
+                  <option value="idea">Idea</option>
+                  <option value="planning">Planning</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="someday">Someday</option>
+                  <option value="done">Memories / Done</option>
+                </select>
+              </label>
+              <label class="our-space-favorites-filter">
+                <input id="ourSpaceFavoritesOnly" type="checkbox">
+                <span>Favorites only</span>
+              </label>
+              <button id="clearOurSpaceFiltersButton" class="secondary-button" type="button">Clear</button>
+            </section>
+
+            <section class="our-space-workspace">
+              <aside class="our-space-sidebar">
+                <div class="our-space-sidebar-heading">
+                  <div>
+                    <small>OUR PLANS</small>
+                    <h3>Plan list</h3>
+                  </div>
+                  <span id="ourSpacePlanCount" class="our-space-count-badge">0</span>
+                </div>
+                <div id="ourSpacePlanList" class="our-space-plan-list"></div>
+                <p id="ourSpaceEmptyState" class="empty-state">No plans match the current filters.</p>
+              </aside>
+
+              <section class="our-space-editor-panel">
+                <div class="our-space-editor-heading">
+                  <div>
+                    <small id="ourSpaceEditorModeLabel">NEW PLAN</small>
+                    <h3 id="ourSpaceEditorHeading">Plan something together</h3>
+                  </div>
+                  <label class="our-space-favorite-field">
+                    <input id="ourSpaceFavorite" type="checkbox">
+                    <span>♥ Favorite</span>
+                  </label>
+                </div>
+
+                <div class="our-space-meta-grid">
+                  <label>
+                    Plan title
+                    <input id="ourSpaceTitle" type="text" maxlength="180" placeholder="Example: Weekend in Samal">
+                  </label>
+                  <label>
+                    Category
+                    <select id="ourSpaceCategory">
+                      <option value="Date">Date</option>
+                      <option value="Travel">Travel</option>
+                      <option value="Food / Café">Food / Café</option>
+                      <option value="Movie / Series">Movie / Series</option>
+                      <option value="Activity">Activity</option>
+                      <option value="Gift idea">Gift idea</option>
+                      <option value="Future purchase">Future purchase</option>
+                      <option value="Milestone">Milestone</option>
+                      <option value="Bucket list">Bucket list</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </label>
+                  <label>
+                    Status
+                    <select id="ourSpaceStatus">
+                      <option value="idea">Idea</option>
+                      <option value="planning">Planning</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="someday">Someday</option>
+                      <option value="done">Done / Memory</option>
+                    </select>
+                  </label>
+                  <label>
+                    Priority
+                    <select id="ourSpacePriority">
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </label>
+                  <label>
+                    Target date <small>Optional</small>
+                    <input id="ourSpaceTargetDate" type="date">
+                  </label>
+                  <label>
+                    Place / location <small>Optional</small>
+                    <input id="ourSpacePlace" type="text" maxlength="180" placeholder="Where do we want to go?">
+                  </label>
+                  <label>
+                    Estimated budget <small>Optional</small>
+                    <input id="ourSpaceEstimatedBudget" type="number" min="0" step="0.01" placeholder="0.00">
+                  </label>
+                </div>
+
+                <label class="our-space-notes-field">
+                  Notes / details
+                  <textarea id="ourSpaceNotes" maxlength="20000" spellcheck="true" placeholder="Ideas, details, things to remember, what we want to do..."></textarea>
+                </label>
+
+                <section class="our-space-subsection">
+                  <div class="our-space-subsection-heading">
+                    <div>
+                      <strong>Checklist</strong>
+                      <small>Things to prepare, book, buy, or remember</small>
+                    </div>
+                    <button id="addOurSpaceChecklistButton" class="secondary-button" type="button">＋ Add item</button>
+                  </div>
+                  <div id="ourSpaceChecklistList" class="our-space-checklist-list"></div>
+                  <p id="ourSpaceChecklistEmpty" class="empty-state">No checklist items yet.</p>
+                </section>
+
+                <section class="our-space-subsection">
+                  <div class="our-space-subsection-heading">
+                    <div>
+                      <strong>Links</strong>
+                      <small>Reservations, maps, posts, wish lists, or references</small>
+                    </div>
+                    <button id="addOurSpaceLinkButton" class="secondary-button" type="button">＋ Add link</button>
+                  </div>
+                  <div id="ourSpaceLinkList" class="our-space-link-list"></div>
+                  <p id="ourSpaceLinkEmpty" class="empty-state">No links added yet.</p>
+                </section>
+
+                <section class="our-space-subsection">
+                  <div class="our-space-subsection-heading">
+                    <div>
+                      <strong>Photos &amp; files</strong>
+                      <small>Link files already stored privately in the Document Vault</small>
+                    </div>
+                    <div class="our-space-attachment-picker">
+                      <select id="ourSpaceDocumentPicker">
+                        <option value="">Choose a Vault file</option>
+                      </select>
+                      <button id="attachOurSpaceDocumentButton" class="secondary-button" type="button">Attach</button>
+                    </div>
+                  </div>
+                  <div id="ourSpaceAttachmentList" class="our-space-attachment-list"></div>
+                  <p id="ourSpaceAttachmentEmpty" class="empty-state">No files attached yet.</p>
+                </section>
+
+                <section id="ourSpaceMemorySection" class="our-space-memory-section hidden">
+                  <div class="our-space-memory-heading">
+                    <div>
+                      <small>MEMORY</small>
+                      <h3>We did it ♥</h3>
+                    </div>
+                    <span>Save what made this plan special.</span>
+                  </div>
+
+                  <div class="our-space-memory-grid">
+                    <label>
+                      Actual date
+                      <input id="ourSpaceActualDate" type="date">
+                    </label>
+                    <label>
+                      Actual amount spent <small>Optional</small>
+                      <input id="ourSpaceActualBudget" type="number" min="0" step="0.01" placeholder="0.00">
+                    </label>
+                    <label>
+                      Rating
+                      <select id="ourSpaceRating">
+                        <option value="">Not rated</option>
+                        <option value="5">★★★★★</option>
+                        <option value="4">★★★★☆</option>
+                        <option value="3">★★★☆☆</option>
+                        <option value="2">★★☆☆☆</option>
+                        <option value="1">★☆☆☆☆</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label>
+                    Favorite memory
+                    <textarea id="ourSpaceFavoriteMemory" maxlength="12000" spellcheck="true" placeholder="What do we want to remember about this day?"></textarea>
+                  </label>
+                </section>
+
+                <div class="our-space-editor-actions">
+                  <button id="deleteOurSpacePlanButton" class="template-danger-button" type="button" disabled>Delete</button>
+                  <button id="ourSpaceCreateTaskButton" class="secondary-button" type="button" disabled>Create task</button>
+                  <button id="ourSpaceAddCalendarButton" class="secondary-button" type="button" disabled>Add to calendar</button>
+                  <button id="saveOurSpacePlanButton" class="primary-button" type="button">Save plan</button>
+                </div>
+              </section>
+            </section>
+          </div>
+        </article>
+
         <article class="app-window" data-app-window="templates" style="--x: 12%; --y: 7%; --w: 74%; --h: 80%;">
           <div class="window-titlebar">
             <div class="window-title"><span>▤</span><strong>Templates &amp; Reports</strong></div>
@@ -1221,6 +1486,7 @@
               <div><span>Tasks</span><strong id="backupTaskCount">0</strong></div>
               <div><span>Events</span><strong id="backupEventCount">0</strong></div>
               <div><span>Journal</span><strong id="backupJournalCount">0</strong></div>
+              <div><span>Our Space</span><strong id="backupOurSpaceCount">0</strong></div>
               <div><span>Documents</span><strong id="backupDocumentCount">0</strong></div>
               <div><span>Last backup</span><strong id="backupLastExport">Never</strong></div>
             </section>
@@ -1236,7 +1502,7 @@
                   </div>
                   <span class="backup-panel-icon">⇩</span>
                 </div>
-                <p>Creates one JSON file containing tasks, events, journal entries, finance entries, notes, preferences, and—when connected—your Document Vault inventory.</p>
+                <p>Creates one JSON file containing tasks, events, journal entries, Our Space plans, finance entries, notes, preferences, and—when connected—your Document Vault inventory.</p>
 
                 <label class="backup-check">
                   <input id="backupIncludeCloudInventory" type="checkbox" checked>
@@ -1272,6 +1538,7 @@
                   <label class="backup-check compact"><input id="restoreBackupTasks" type="checkbox" checked><span><strong>Tasks</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupEvents" type="checkbox" checked><span><strong>Events</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupJournal" type="checkbox" checked><span><strong>Journal</strong></span></label>
+                  <label class="backup-check compact"><input id="restoreBackupOurSpace" type="checkbox" checked><span><strong>Our Space</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupFinance" type="checkbox" checked><span><strong>Finance</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupNotes" type="checkbox" checked><span><strong>Notes</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupPreferences" type="checkbox" checked><span><strong>Preferences &amp; layouts</strong></span></label>
@@ -1329,6 +1596,10 @@
       <button class="dock-item" data-open-app="journal" title="Journal" aria-label="Journal">
         <span class="dock-icon" aria-hidden="true">☷</span>
         <span class="dock-label">Journal</span>
+      </button>
+      <button class="dock-item our-space-dock-item" data-open-app="ourspace" title="Our Space" aria-label="Our Space">
+        <span class="dock-icon" aria-hidden="true">♥</span>
+        <span class="dock-label">Us</span>
       </button>
       <button class="dock-item" data-open-app="documents" title="Documents" aria-label="Documents">
         <span class="dock-icon" aria-hidden="true">▣</span>
