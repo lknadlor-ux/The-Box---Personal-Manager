@@ -1089,7 +1089,11 @@ function openApp(appName) {
   closeLauncher();
 
   if (appName === "documents" && window.BoxCloud?.isReady()) {
-    loadDocuments({ silent: documents.length > 0 });
+    const forceVisibleMobileRefresh =
+      document.documentElement.classList.contains("phone-ui");
+    loadDocuments({
+      silent: forceVisibleMobileRefresh ? false : documents.length > 0
+    });
   }
 
   if (appName === "backup") {
@@ -5773,6 +5777,104 @@ function renderOurSpaceAttachments() {
   });
 }
 
+
+function setOurSpaceDirectUploadStatus(message = "", type = "") {
+  const element = $("ourSpaceDirectUploadStatus");
+  if (!element) return;
+  element.textContent = message;
+  element.className = `our-space-direct-upload-status ${type}`.trim();
+}
+
+async function uploadOurSpaceFilesFromDevice() {
+  if (!window.BoxCloud?.isReady()) {
+    setOurSpaceDirectUploadStatus("Sign in before attaching private files.", "error");
+    openAuthOverlay();
+    return;
+  }
+
+  const input = $("ourSpaceDeviceFileInput");
+  const files = Array.from(input?.files || []);
+  if (!files.length) {
+    input?.click();
+    return;
+  }
+
+  const oversized = files.find((file) => file.size > 25 * 1024 * 1024);
+  if (oversized) {
+    setOurSpaceDirectUploadStatus(
+      `${oversized.name} is larger than the 25 MB limit.`,
+      "error"
+    );
+    input.value = "";
+    return;
+  }
+
+  const button = $("ourSpaceChooseDeviceFilesButton");
+  button.disabled = true;
+
+  let uploaded = 0;
+  const planTitle = $("ourSpaceTitle")?.value.trim() || "Our Space";
+  const attachmentDetails = `Our Space attachment: ${planTitle}`;
+
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    button.textContent = `Uploading ${index + 1}/${files.length}…`;
+    setOurSpaceDirectUploadStatus(`Uploading ${file.name}…`);
+
+    const result = await window.BoxCloud.uploadDocument(
+      file,
+      "Personal",
+      attachmentDetails,
+      { tags: ["our-space"] }
+    );
+
+    if (result.error) {
+      setOurSpaceDirectUploadStatus(
+        `Upload stopped at ${file.name}: ${result.error.message}`,
+        "error"
+      );
+      break;
+    }
+
+    documents = [
+      result.data,
+      ...documents.filter((item) => String(item.id) !== String(result.data.id))
+    ];
+
+    const attachment = {
+      documentId: String(result.data.id),
+      name: result.data.name || file.name || "Attached file",
+      folder: result.data.folder || "Personal",
+      mimeType: result.data.mime_type || file.type || "",
+      sizeBytes: Number(result.data.size_bytes) || file.size || 0
+    };
+
+    if (!ourSpaceDraftAttachments.some(
+      (item) => item.documentId === attachment.documentId
+    )) {
+      ourSpaceDraftAttachments.push(attachment);
+    }
+
+    uploaded += 1;
+  }
+
+  input.value = "";
+  button.disabled = false;
+  button.textContent = "＋ Add photos / files from device";
+
+  renderOurSpaceAttachments();
+  renderOurSpaceDocumentPicker();
+  renderDocuments();
+
+  if (uploaded) {
+    setOurSpaceDirectUploadStatus(
+      `${uploaded} file${uploaded === 1 ? "" : "s"} uploaded privately and attached.`,
+      "success"
+    );
+    showToast(`${uploaded} file${uploaded === 1 ? "" : "s"} attached to Our Space`);
+  }
+}
+
 function attachSelectedOurSpaceDocument() {
   const documentId = $("ourSpaceDocumentPicker").value;
   if (!documentId) {
@@ -5915,6 +6017,10 @@ function resetOurSpaceEditor() {
   $("ourSpaceActualBudget").value = "";
   $("ourSpaceRating").value = "";
   $("ourSpaceFavoriteMemory").value = "";
+  $("ourSpaceDeviceFileInput").value = "";
+  setOurSpaceDirectUploadStatus(
+    "Photos and files are uploaded privately to your Vault and attached here automatically."
+  );
 
   $("ourSpaceEditorModeLabel").textContent = "NEW PLAN";
   $("ourSpaceEditorHeading").textContent = "Plan something together";
@@ -7144,7 +7250,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7M.2-Free";
+const BACKUP_APP_VERSION = "7M.3-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -8369,6 +8475,15 @@ $("deleteOurSpacePlanButton").addEventListener("click", deleteSelectedOurSpacePl
 $("addOurSpaceChecklistButton").addEventListener("click", () => addOurSpaceChecklistItem());
 $("addOurSpaceLinkButton").addEventListener("click", addOurSpaceLink);
 $("attachOurSpaceDocumentButton").addEventListener("click", attachSelectedOurSpaceDocument);
+$("ourSpaceChooseDeviceFilesButton").addEventListener("click", () => {
+  if (!window.BoxCloud?.isReady()) {
+    setOurSpaceDirectUploadStatus("Sign in before attaching private files.", "error");
+    openAuthOverlay();
+    return;
+  }
+  $("ourSpaceDeviceFileInput").click();
+});
+$("ourSpaceDeviceFileInput").addEventListener("change", uploadOurSpaceFilesFromDevice);
 $("ourSpaceStatus").addEventListener("change", updateOurSpaceMemoryVisibility);
 $("ourSpaceCreateTaskButton").addEventListener("click", createTaskFromOurSpacePlan);
 $("ourSpaceAddCalendarButton").addEventListener("click", addOurSpacePlanToCalendar);

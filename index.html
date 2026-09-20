@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7m2">
+  <link rel="stylesheet" href="style.css?v=7m3">
 </head>
 <body>
   <div class="desktop-shell">
@@ -1189,8 +1189,28 @@
                   <div class="our-space-subsection-heading">
                     <div>
                       <strong>Photos &amp; files</strong>
-                      <small>Link files already stored privately in the Document Vault</small>
+                      <small>Attach from your phone, tablet, PC, or from the private Document Vault</small>
                     </div>
+                  </div>
+
+                  <div class="our-space-direct-upload">
+                    <input
+                      id="ourSpaceDeviceFileInput"
+                      type="file"
+                      multiple
+                      accept="image/*,video/*,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                      hidden
+                    >
+                    <button id="ourSpaceChooseDeviceFilesButton" class="primary-button" type="button">
+                      ＋ Add photos / files from device
+                    </button>
+                    <span id="ourSpaceDirectUploadStatus">
+                      Photos and files are uploaded privately to your Vault and attached here automatically.
+                    </span>
+                  </div>
+
+                  <div class="our-space-vault-picker-block">
+                    <span class="our-space-vault-picker-label">Or attach an existing Vault file</span>
                     <div class="our-space-attachment-picker">
                       <select id="ourSpaceDocumentPicker">
                         <option value="">Choose a Vault file</option>
@@ -1198,6 +1218,7 @@
                       <button id="attachOurSpaceDocumentButton" class="secondary-button" type="button">Attach</button>
                     </div>
                   </div>
+
                   <div id="ourSpaceAttachmentList" class="our-space-attachment-list"></div>
                   <p id="ourSpaceAttachmentEmpty" class="empty-state">No files attached yet.</p>
                 </section>

@@ -8764,3 +8764,304 @@ html.safe-render-ui .view-mode-panel,
 html.safe-render-ui .view-mode-options button {
   background-image: none !important;
 }
+
+
+/* Phase 7M.3 — Direct Our Space Attachments + Mobile Vault Visibility */
+.our-space-direct-upload {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 11px;
+  border: 1px dashed rgba(143, 174, 255, .35);
+  border-radius: 12px;
+  background: rgba(143, 174, 255, .05);
+}
+
+.our-space-direct-upload > span,
+.our-space-direct-upload-status {
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.our-space-direct-upload-status.success {
+  color: var(--success);
+}
+
+.our-space-direct-upload-status.error {
+  color: var(--danger);
+}
+
+.our-space-vault-picker-block {
+  display: grid;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.our-space-vault-picker-label {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+/* A robust, explicit Document Vault layout for Mobile mode.
+   This avoids nested-height/overflow behavior that could leave document cards
+   below a non-scrollable workspace on iPhone-sized screens. */
+html.phone-ui .documents-window {
+  display: block !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .documents-hero {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 12px;
+}
+
+html.phone-ui .documents-hero h2 {
+  font-size: 21px;
+}
+
+html.phone-ui .documents-hero p {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+html.phone-ui .document-stats {
+  width: 100%;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 6px;
+}
+
+html.phone-ui .document-stats div {
+  min-width: 0;
+  padding: 9px 6px;
+}
+
+html.phone-ui .document-stats strong {
+  font-size: 14px;
+}
+
+html.phone-ui .document-compliance-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+html.phone-ui .document-compliance-summary > div {
+  min-width: 0;
+  padding: 9px 6px;
+}
+
+html.phone-ui .document-notice {
+  margin-bottom: 10px;
+}
+
+html.phone-ui .documents-layout {
+  display: flex !important;
+  flex-direction: column;
+  gap: 10px;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .document-sidebar {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 6px;
+  width: 100%;
+  max-height: none !important;
+  padding: 9px;
+  overflow: visible !important;
+}
+
+html.phone-ui .document-sidebar-heading,
+html.phone-ui .document-folder-divider {
+  grid-column: 1 / -1;
+}
+
+html.phone-ui .document-sidebar-heading {
+  padding: 2px 2px 7px;
+}
+
+html.phone-ui .document-folder-list {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+html.phone-ui .document-folder {
+  min-width: 0;
+  min-height: 46px;
+  padding: 6px;
+}
+
+html.phone-ui .document-folder strong {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.phone-ui .document-folder small {
+  font-size: 9px;
+}
+
+html.phone-ui .document-workspace {
+  display: block !important;
+  width: 100%;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 10px;
+  overflow: visible !important;
+}
+
+html.phone-ui .document-toolbar {
+  grid-template-columns: 1fr !important;
+  gap: 7px;
+}
+
+html.phone-ui .document-toolbar > *,
+html.phone-ui .document-upload-panel > * {
+  width: 100%;
+  min-width: 0;
+}
+
+html.phone-ui .document-view-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+html.phone-ui .document-view-toggle button {
+  width: 100%;
+}
+
+html.phone-ui .document-upload-panel {
+  grid-template-columns: 1fr !important;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 10px;
+}
+
+html.phone-ui .document-upload-copy {
+  grid-column: auto !important;
+}
+
+html.phone-ui .document-upload-copy span {
+  white-space: normal;
+}
+
+html.phone-ui .document-upload-details,
+html.phone-ui .document-upload-compliance,
+html.phone-ui .vault-compliance-grid {
+  grid-template-columns: 1fr !important;
+}
+
+html.phone-ui .document-list-heading {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+html.phone-ui .document-list {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 1px;
+  overflow: visible !important;
+}
+
+html.phone-ui .document-card,
+html.phone-ui .document-list-view .document-card {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 11px;
+  overflow: visible;
+}
+
+html.phone-ui .document-card-top,
+html.phone-ui .document-list-view .document-card-top {
+  display: grid !important;
+  grid-template-columns: 38px minmax(0, 1fr) auto !important;
+  gap: 8px;
+}
+
+html.phone-ui .document-card-meta,
+html.phone-ui .document-card-details,
+html.phone-ui .document-card-tags,
+html.phone-ui .document-list-view .document-card-meta,
+html.phone-ui .document-list-view .document-card-details,
+html.phone-ui .document-list-view .document-card-tags {
+  display: flex !important;
+  visibility: visible !important;
+}
+
+html.phone-ui .document-card-details,
+html.phone-ui .document-list-view .document-card-details {
+  display: block !important;
+}
+
+html.phone-ui .document-card-actions,
+html.phone-ui .document-list-view .document-card-actions {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 6px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+html.phone-ui .document-card-actions button,
+html.phone-ui .document-list-view .document-card-actions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+}
+
+html.phone-ui .document-card-actions .document-delete-button,
+html.phone-ui .document-card-actions .document-delete-forever-button {
+  grid-column: 1 / -1;
+}
+
+html.phone-ui #emptyDocuments,
+html.phone-ui .document-loading {
+  width: 100%;
+  min-height: 80px;
+  padding: 22px 10px;
+}
+
+/* Device attachments should also be easy to use on phones/tablets. */
+html.phone-ui .our-space-direct-upload,
+html.tablet-ui .our-space-direct-upload {
+  grid-template-columns: 1fr;
+}
+
+html.phone-ui .our-space-direct-upload button,
+html.tablet-ui .our-space-direct-upload button {
+  width: 100%;
+}
+
+html.phone-ui .our-space-vault-picker-block {
+  width: 100%;
+}
+
+html.phone-ui .our-space-attachment-picker {
+  grid-template-columns: 1fr !important;
+}
+
+@media (max-width: 680px) {
+  .our-space-direct-upload {
+    grid-template-columns: 1fr;
+  }
+}
