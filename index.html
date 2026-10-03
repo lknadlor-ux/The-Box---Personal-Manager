@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7m6">
+  <link rel="stylesheet" href="style.css?v=7m7">
 </head>
 <body>
   <div class="desktop-shell">
@@ -173,7 +173,7 @@
         <button class="app-tile" data-open-app="notes">
           <span class="app-icon">✎</span>
           <strong>Notes</strong>
-          <small>Quick capture</small>
+          <small>Notes &amp; desktop stickies</small>
         </button>
 
         <button class="app-tile" data-open-app="journal">
@@ -274,6 +274,8 @@
           </div>
         </div>
       </section>
+
+      <section id="desktopStickyNotes" class="desktop-sticky-notes" aria-label="Sticky notes"></section>
 
       <section class="desktop-icons">
         <button class="desktop-icon" data-open-app="pharmacy">
@@ -517,11 +519,65 @@
           </div>
 
           <div class="window-content notes-window">
-            <div class="notes-meta">
-              <span>Quick Notes</span>
-              <span id="noteStatus">Saved</span>
-            </div>
-            <textarea id="quickNotes" placeholder="Write anything you need to remember..."></textarea>
+            <section class="notes-toolbar">
+              <button id="newNoteButton" class="primary-button" type="button">＋ New note</button>
+
+              <label class="notes-search-field">
+                <span>Search</span>
+                <input id="notesSearchInput" type="search" placeholder="Search notes">
+              </label>
+            </section>
+
+            <section class="notes-workspace">
+              <aside class="notes-sidebar">
+                <div class="notes-sidebar-heading">
+                  <div>
+                    <small>NOTES</small>
+                    <h3>All notes</h3>
+                  </div>
+                  <span id="notesCount" class="notes-count-badge">0</span>
+                </div>
+
+                <div id="notesList" class="notes-list"></div>
+                <p id="notesEmptyState" class="empty-state">No notes yet. Create one to get started.</p>
+              </aside>
+
+              <section class="notes-editor-panel">
+                <div class="notes-editor-heading">
+                  <div>
+                    <small id="noteEditorMode">NOTE</small>
+                    <h3 id="noteEditorHeading">Select a note</h3>
+                  </div>
+
+                  <div class="notes-editor-state">
+                    <span id="noteStatus">Saved</span>
+                    <label class="note-sticky-field">
+                      <input id="noteSticky" type="checkbox">
+                      <span>▱ Sticky note</span>
+                    </label>
+                  </div>
+                </div>
+
+                <label class="note-title-field">
+                  Title
+                  <input id="noteTitle" type="text" maxlength="180" placeholder="Note title">
+                </label>
+
+                <label class="note-content-field">
+                  Note
+                  <textarea id="noteContent" maxlength="250000" spellcheck="true" placeholder="Start writing..."></textarea>
+                </label>
+
+                <div class="notes-editor-footer">
+                  <div class="notes-editor-meta">
+                    <span id="noteWordCount">0 words</span>
+                    <span id="noteUpdatedAt">—</span>
+                  </div>
+
+                  <button id="deleteNoteButton" class="template-danger-button" type="button" disabled>Delete note</button>
+                </div>
+              </section>
+            </section>
           </div>
         </article>
 

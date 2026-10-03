@@ -693,6 +693,11 @@ let reminderSettings = {
 let currentReminderItems = [];
 let reminderCheckTimer = null;
 
+let noteItems = [];
+let selectedNoteId = null;
+let notesSearchTerm = "";
+let noteSaveTimer = null;
+
 
 
 function loadJSON(key, fallback) {
@@ -933,6 +938,314 @@ function saveJSON(key, value) {
   }
 }
 
+
+function createNoteItemId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeNoteItem(note = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: String(note.id || createNoteItemId()),
+    title: String(note.title || "").trim().slice(0, 180),
+    content: String(note.content || "").slice(0, 250000),
+    sticky: Boolean(note.sticky),
+    createdAt: note.createdAt || note.created_at || now,
+    updatedAt: note.updatedAt || note.updated_at || note.createdAt || note.created_at || now
+  };
+}
+
+function normalizeNoteItems(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value
+    .map(normalizeNoteItem)
+    .filter((note) => {
+      if (!note.id || seen.has(note.id)) return false;
+      seen.add(note.id);
+      return true;
+    })
+    .slice(0, 2000);
+}
+
+function decodeNotesPayload(rawValue) {
+  const raw = String(rawValue || "");
+  if (!raw.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.format === "the-box-notes-v2" && Array.isArray(parsed.items)) {
+      return normalizeNoteItems(parsed.items);
+    }
+  } catch (error) {
+    // The old Notes app stored one plain-text note. Migrate it below.
+  }
+
+  const now = new Date().toISOString();
+  return [
+    normalizeNoteItem({
+      id: createNoteItemId(),
+      title: "Quick Note",
+      content: raw,
+      sticky: false,
+      createdAt: now,
+      updatedAt: now
+    })
+  ];
+}
+
+function serializeNotesPayload(items = noteItems) {
+  return JSON.stringify({
+    format: "the-box-notes-v2",
+    version: 2,
+    items: normalizeNoteItems(items)
+  });
+}
+
+function persistNoteItems({ sync = true } = {}) {
+  noteItems = normalizeNoteItems(noteItems);
+  const payload = serializeNotesPayload(noteItems);
+  localStorage.setItem(STORAGE.notes, payload);
+
+  if (sync && window.BoxCloud?.isReady()) {
+    window.BoxCloud.queueNoteSync(payload);
+  }
+}
+
+function getSortedNoteItems(items = noteItems) {
+  return [...items].sort((a, b) => {
+    if (a.sticky !== b.sticky) return a.sticky ? -1 : 1;
+    return String(b.updatedAt).localeCompare(String(a.updatedAt));
+  });
+}
+
+function initializeNoteItems(rawValue = localStorage.getItem(STORAGE.notes) || "") {
+  noteItems = decodeNotesPayload(rawValue);
+  persistNoteItems({ sync: false });
+
+  if (selectedNoteId && !noteItems.some((note) => note.id === selectedNoteId)) {
+    selectedNoteId = null;
+  }
+
+  if (!selectedNoteId && noteItems.length) {
+    selectedNoteId = getSortedNoteItems(noteItems)[0]?.id || null;
+  }
+}
+
+function getSelectedNoteItem() {
+  return noteItems.find((note) => note.id === selectedNoteId) || null;
+}
+
+function getFilteredNoteItems() {
+  const query = notesSearchTerm.toLocaleLowerCase();
+  return getSortedNoteItems(noteItems.filter((note) => {
+    if (!query) return true;
+    return [note.title, note.content]
+      .join(" ")
+      .toLocaleLowerCase()
+      .includes(query);
+  }));
+}
+
+function getNotePreview(note, limit = 120) {
+  const text = String(note?.content || "").replace(/\s+/g, " ").trim();
+  if (!text) return "Empty note";
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
+}
+
+function formatNoteUpdatedAt(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return `Updated ${date.toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  })}`;
+}
+
+function renderNotesList() {
+  const list = $("notesList");
+  if (!list) return;
+
+  const filtered = getFilteredNoteItems();
+  $("notesCount").textContent = String(filtered.length);
+  $("notesEmptyState").hidden = filtered.length > 0;
+
+  list.innerHTML = filtered.map((note) => `
+    <button
+      class="note-card ${note.id === selectedNoteId ? "active" : ""} ${note.sticky ? "sticky" : ""}"
+      type="button"
+      data-note-id="${escapeHtml(note.id)}"
+    >
+      <span class="note-card-top">
+        <strong>${escapeHtml(note.title || "Untitled note")}</strong>
+        <span>${note.sticky ? "▱" : ""}</span>
+      </span>
+      <p>${escapeHtml(getNotePreview(note))}</p>
+      <span class="note-card-meta">
+        ${note.sticky ? "<em>Sticky</em>" : ""}
+        <em>${escapeHtml(new Date(note.updatedAt).toLocaleDateString("en-PH", { month: "short", day: "numeric" }))}</em>
+      </span>
+    </button>
+  `).join("");
+
+  list.querySelectorAll("[data-note-id]").forEach((button) => {
+    button.addEventListener("click", () => selectNoteItem(button.dataset.noteId));
+  });
+}
+
+function setNotesEditorDisabled(disabled) {
+  ["noteTitle", "noteSticky", "noteContent"].forEach((id) => {
+    const element = $(id);
+    if (element) element.disabled = disabled;
+  });
+  $("deleteNoteButton").disabled = disabled;
+}
+
+function updateNoteEditorMeta(note = getSelectedNoteItem()) {
+  const content = note?.content || "";
+  const words = content.trim() ? content.trim().split(/\s+/).length : 0;
+  $("noteWordCount").textContent = `${words} word${words === 1 ? "" : "s"}`;
+  $("noteUpdatedAt").textContent = note ? formatNoteUpdatedAt(note.updatedAt) : "—";
+}
+
+function renderNotesEditor() {
+  const note = getSelectedNoteItem();
+
+  if (!note) {
+    $("noteEditorMode").textContent = "NOTES";
+    $("noteEditorHeading").textContent = "Select a note";
+    $("noteTitle").value = "";
+    $("noteSticky").checked = false;
+    $("noteContent").value = "";
+    $("noteStatus").textContent = "Saved";
+    setNotesEditorDisabled(true);
+    updateNoteEditorMeta(null);
+    return;
+  }
+
+  setNotesEditorDisabled(false);
+  $("noteEditorMode").textContent = note.sticky ? "STICKY NOTE" : "NOTE";
+  $("noteEditorHeading").textContent = note.title || "Untitled note";
+  $("noteTitle").value = note.title;
+  $("noteSticky").checked = note.sticky;
+  $("noteContent").value = note.content;
+  $("noteStatus").textContent = "Saved";
+  updateNoteEditorMeta(note);
+}
+
+function renderDesktopStickyNotes() {
+  const container = $("desktopStickyNotes");
+  if (!container) return;
+
+  const stickyNotes = getSortedNoteItems(noteItems.filter((note) => note.sticky));
+  container.hidden = stickyNotes.length === 0;
+
+  container.innerHTML = stickyNotes.map((note) => `
+    <button class="desktop-sticky-note" type="button" data-desktop-sticky-note-id="${escapeHtml(note.id)}">
+      <span class="desktop-sticky-note-top">
+        <strong>${escapeHtml(note.title || "Untitled note")}</strong>
+        <span>▱</span>
+      </span>
+      <p>${escapeHtml(getNotePreview(note, 180))}</p>
+      <small>${escapeHtml(formatNoteUpdatedAt(note.updatedAt))}</small>
+    </button>
+  `).join("");
+
+  container.querySelectorAll("[data-desktop-sticky-note-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openApp("notes");
+      selectNoteItem(button.dataset.desktopStickyNoteId);
+    });
+  });
+}
+
+function renderNotesCenter() {
+  if (!$("notesList")) return;
+  $("notesSearchInput").value = notesSearchTerm;
+
+  if (!selectedNoteId && noteItems.length) {
+    selectedNoteId = getSortedNoteItems(noteItems)[0]?.id || null;
+  }
+
+  renderNotesList();
+  renderNotesEditor();
+  renderDesktopStickyNotes();
+}
+
+function selectNoteItem(noteId) {
+  if (!noteItems.some((note) => note.id === noteId)) return;
+  selectedNoteId = noteId;
+  renderNotesList();
+  renderNotesEditor();
+}
+
+function createNewNoteItem() {
+  const now = new Date().toISOString();
+  const note = normalizeNoteItem({
+    id: createNoteItemId(),
+    title: "",
+    content: "",
+    sticky: false,
+    createdAt: now,
+    updatedAt: now
+  });
+
+  noteItems.unshift(note);
+  selectedNoteId = note.id;
+  persistNoteItems();
+  renderNotesCenter();
+  $("noteTitle").focus();
+  showToast("New note created");
+}
+
+function updateSelectedNoteFromEditor() {
+  const note = getSelectedNoteItem();
+  if (!note) return;
+
+  note.title = $("noteTitle").value.slice(0, 180);
+  note.content = $("noteContent").value.slice(0, 250000);
+  note.sticky = $("noteSticky").checked;
+  note.updatedAt = new Date().toISOString();
+
+  $("noteEditorMode").textContent = note.sticky ? "STICKY NOTE" : "NOTE";
+  $("noteEditorHeading").textContent = note.title || "Untitled note";
+  $("noteStatus").textContent = "Saving…";
+  updateNoteEditorMeta(note);
+  renderNotesList();
+  renderDesktopStickyNotes();
+
+  clearTimeout(noteSaveTimer);
+  noteSaveTimer = setTimeout(() => {
+    persistNoteItems();
+    $("noteStatus").textContent = "Saved";
+  }, 450);
+}
+
+function deleteSelectedNoteItem() {
+  const note = getSelectedNoteItem();
+  if (!note) return;
+  if (!window.confirm(`Delete “${note.title || "Untitled note"}”?`)) return;
+
+  noteItems = noteItems.filter((item) => item.id !== note.id);
+  selectedNoteId = getSortedNoteItems(noteItems)[0]?.id || null;
+  persistNoteItems();
+  renderNotesCenter();
+  showToast("Note deleted");
+}
+
+function getSelectedNoteLinesForTasks() {
+  const note = getSelectedNoteItem();
+  if (!note) return [];
+  return note.content
+    .split("\n")
+    .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+    .filter((line) => line.length >= 4)
+    .slice(0, 12);
+}
+
 function showToast(message) {
   const toast = $("toast");
   toast.textContent = message;
@@ -1111,6 +1424,10 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "notes") {
+    renderNotesCenter();
   }
 
   if (appName === "journal") {
@@ -7403,7 +7720,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7M.6-Free";
+const BACKUP_APP_VERSION = "7M.7-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -7455,7 +7772,7 @@ function buildLocalBackupData() {
       attachments: plan.attachments.map((item) => ({ ...item }))
     })),
     financeEntries: financeEntries.map((entry) => ({ ...entry })),
-    notes: $("quickNotes")?.value ?? localStorage.getItem(STORAGE.notes) ?? "",
+    notes: serializeNotesPayload(),
     customTemplates: customTemplates.map((template) => ({ ...template })),
     preferences: {
       theme: localStorage.getItem(STORAGE.theme) || "dark",
@@ -7824,10 +8141,10 @@ async function restoreSelectedBackup() {
       localStorage.setItem(STORAGE.finance, JSON.stringify(financeEntries));
     }
     if (selected.notes) {
-      const notes = String(data.notes || "").slice(0, 1000000);
-      localStorage.setItem(STORAGE.notes, notes);
-      $("quickNotes").value = notes;
-      $("noteStatus").textContent = "Saved";
+      const notesPayload = String(data.notes || "").slice(0, 4000000);
+      localStorage.setItem(STORAGE.notes, notesPayload);
+      initializeNoteItems(notesPayload);
+      renderNotesCenter();
     }
     if (selected.preferences) {
       restoreBackupPreferences(data.preferences || {});
@@ -7920,6 +8237,7 @@ function renderAll() {
   renderBackupCenter();
   renderTemplateCenter();
   renderReminderCenter();
+  renderNotesCenter();
 }
 
 async function loadWeather() {
@@ -8042,14 +8360,10 @@ function runAssistant(action) {
   }
 
   if (action === "notes") {
-    const lines = $("quickNotes").value
-      .split("\n")
-      .map((line) => line.replace(/^[-•*]\s*/, "").trim())
-      .filter((line) => line.length >= 4)
-      .slice(0, 8);
+    const lines = getSelectedNoteLinesForTasks();
 
     if (!lines.length) {
-      response.textContent = "Write one possible task per line in Notes, then try again.";
+      response.textContent = "Open a note and write one possible task per line, then try again.";
       return;
     }
 
@@ -8299,24 +8613,20 @@ $("eventForm").addEventListener("submit", (event) => {
   showToast("Event saved");
 });
 
-let noteTimer = null;
+initializeNoteItems();
 
-$("quickNotes").value = localStorage.getItem(STORAGE.notes) || "";
-
-$("quickNotes").addEventListener("input", () => {
-  $("noteStatus").textContent = "Saving…";
-  clearTimeout(noteTimer);
-
-  noteTimer = setTimeout(() => {
-    localStorage.setItem(STORAGE.notes, $("quickNotes").value);
-
-    if (window.BoxCloud?.isReady()) {
-      window.BoxCloud.queueNoteSync($("quickNotes").value);
-    }
-
-    $("noteStatus").textContent = "Saved";
-  }, 450);
+$("newNoteButton").addEventListener("click", createNewNoteItem);
+$("notesSearchInput").addEventListener("input", (event) => {
+  notesSearchTerm = event.target.value.trim();
+  renderNotesList();
 });
+["noteTitle", "noteContent"].forEach((id) => {
+  $(id).addEventListener("input", updateSelectedNoteFromEditor);
+});
+$("noteSticky").addEventListener("change", updateSelectedNoteFromEditor);
+$("deleteNoteButton").addEventListener("click", deleteSelectedNoteItem);
+
+renderNotesCenter();
 
 $("financeForm").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -8805,8 +9115,9 @@ window.BoxOSCloudHydrate = function cloudHydrate(data) {
   if (Array.isArray(data.finance_entries)) financeEntries = data.finance_entries;
 
   if (typeof data.notes === "string") {
-    $("quickNotes").value = data.notes;
     localStorage.setItem(STORAGE.notes, data.notes);
+    initializeNoteItems(data.notes);
+    renderNotesCenter();
   }
 
   if (Array.isArray(data.custom_templates)) {

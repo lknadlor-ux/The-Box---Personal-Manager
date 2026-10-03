@@ -10184,3 +10184,460 @@ html.phone-ui .our-space-media-section .our-space-attachment-list {
 html.phone-ui .our-space-media-section + .our-space-notes-field {
   margin-top: 2px;
 }
+
+
+/* Phase 7M.7 — Notes App + Desktop Sticky Notes */
+.notes-window {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.notes-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr);
+  align-items: end;
+  gap: 8px;
+}
+
+.notes-toolbar label,
+.note-title-field,
+.note-content-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: 10px;
+}
+
+.notes-toolbar input,
+.note-title-field input {
+  width: 100%;
+  min-width: 0;
+}
+
+.notes-workspace {
+  display: grid;
+  grid-template-columns: minmax(230px, .72fr) minmax(0, 1.8fr);
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.notes-sidebar,
+.notes-editor-panel {
+  min-width: 0;
+  min-height: 0;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface-soft);
+}
+
+.notes-sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.notes-sidebar-heading,
+.notes-editor-heading,
+.notes-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notes-sidebar-heading {
+  margin-bottom: 9px;
+}
+
+.notes-sidebar-heading small,
+.notes-editor-heading small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .8px;
+}
+
+.notes-sidebar-heading h3,
+.notes-editor-heading h3 {
+  margin: 3px 0 0;
+}
+
+.notes-count-badge {
+  display: grid;
+  place-items: center;
+  min-width: 29px;
+  height: 29px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.notes-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.note-card {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-solid);
+  color: var(--text);
+  text-align: left;
+}
+
+.note-card:hover,
+.note-card.active {
+  border-color: rgba(143, 174, 255, .55);
+  background: rgba(143, 174, 255, .07);
+}
+
+.note-card.sticky {
+  border-color: rgba(240, 199, 94, .34);
+}
+
+.note-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.note-card-top strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-card-top > span {
+  flex: 0 0 auto;
+  color: #f0c75e;
+  font-size: 15px;
+}
+
+.note-card p {
+  display: -webkit-box;
+  margin: 6px 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 9px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.note-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.note-card-meta em {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 8px;
+  font-style: normal;
+}
+
+.note-card.sticky .note-card-meta em:first-child {
+  background: rgba(240, 199, 94, .12);
+  color: #f0c75e;
+}
+
+.notes-editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  overflow: hidden;
+}
+
+.notes-editor-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#noteStatus {
+  color: var(--success);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.note-sticky-field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid rgba(240, 199, 94, .32);
+  border-radius: 999px;
+  color: #f0c75e;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.note-sticky-field input {
+  width: 18px;
+  height: 18px;
+  min-height: auto;
+  accent-color: #f0c75e;
+}
+
+.note-content-field {
+  flex: 1;
+  min-height: 0;
+}
+
+#noteContent {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  max-height: none;
+  padding: 15px;
+  resize: none;
+  line-height: 1.7;
+}
+
+.notes-editor-footer {
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+
+.notes-editor-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+/* Desktop sticky notes sit above the dock and behind app windows. */
+.desktop-sticky-notes {
+  position: absolute;
+  right: 235px;
+  bottom: 18px;
+  left: 35px;
+  z-index: 3;
+  display: flex;
+  gap: 10px;
+  max-width: calc(100% - 300px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 8px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.desktop-sticky-notes[hidden] {
+  display: none !important;
+}
+
+.desktop-sticky-notes::-webkit-scrollbar {
+  display: none;
+}
+
+.desktop-sticky-note {
+  flex: 0 0 230px;
+  width: 230px;
+  min-height: 124px;
+  padding: 13px;
+  overflow: hidden;
+  border: 1px solid rgba(240, 199, 94, .32);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(240, 199, 94, .13), rgba(240, 199, 94, .045)),
+    var(--surface-solid);
+  color: var(--text);
+  box-shadow: 0 12px 30px rgba(0,0,0,.16);
+  text-align: left;
+}
+
+.desktop-sticky-note:hover {
+  border-color: rgba(240, 199, 94, .62);
+  transform: translateY(-2px);
+}
+
+.desktop-sticky-note-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.desktop-sticky-note-top strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-sticky-note-top > span {
+  color: #f0c75e;
+  font-size: 16px;
+}
+
+.desktop-sticky-note p {
+  display: -webkit-box;
+  margin: 9px 0 8px;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 10px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.desktop-sticky-note small {
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+.app-window.window-narrow .notes-workspace,
+.app-window.window-compact .notes-workspace {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-narrow .notes-sidebar,
+.app-window.window-compact .notes-sidebar {
+  max-height: 240px;
+}
+
+.app-window.window-narrow .notes-toolbar,
+.app-window.window-compact .notes-toolbar {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 900px) {
+  .desktop-sticky-notes {
+    right: 18px;
+    left: 18px;
+    max-width: none;
+  }
+}
+
+@media (max-width: 700px) {
+  html.phone-ui .notes-window {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  html.phone-ui .notes-toolbar {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  html.phone-ui .notes-toolbar > * {
+    width: 100%;
+  }
+
+  html.phone-ui .notes-workspace {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 11px;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  html.phone-ui .notes-sidebar {
+    flex: none !important;
+    width: 100%;
+    max-height: none !important;
+    padding: 11px;
+    overflow: visible !important;
+  }
+
+  html.phone-ui .notes-list {
+    flex: none !important;
+    max-height: 230px;
+    overflow-y: auto !important;
+  }
+
+  html.phone-ui .notes-editor-panel {
+    width: 100%;
+    min-height: 0 !important;
+    padding: 11px;
+    overflow: visible !important;
+  }
+
+  html.phone-ui .notes-editor-heading,
+  html.phone-ui .notes-editor-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  html.phone-ui .notes-editor-state {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  html.phone-ui .note-sticky-field {
+    min-height: 48px;
+    padding: 0 12px;
+  }
+
+  html.phone-ui .note-sticky-field input {
+    width: 20px !important;
+    min-width: 20px !important;
+    max-width: 20px !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+  }
+
+  html.phone-ui #noteContent {
+    height: auto !important;
+    min-height: 420px !important;
+    resize: vertical;
+  }
+
+  html.phone-ui .notes-editor-footer #deleteNoteButton {
+    width: 100%;
+  }
+
+  html.phone-ui .desktop-sticky-notes {
+    right: max(12px, env(safe-area-inset-right));
+    bottom: 14px;
+    left: max(12px, env(safe-area-inset-left));
+    max-width: none;
+    padding-bottom: 4px;
+  }
+
+  html.phone-ui .desktop-sticky-note {
+    flex-basis: min(78vw, 290px);
+    width: min(78vw, 290px);
+    min-height: 112px;
+  }
+}
+
+html.safe-render-ui .notes-sidebar,
+html.safe-render-ui .notes-editor-panel,
+html.safe-render-ui .note-card,
+html.safe-render-ui .desktop-sticky-note {
+  background-image: none !important;
+}
