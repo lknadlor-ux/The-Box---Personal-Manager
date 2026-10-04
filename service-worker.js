@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7m7-notes-sticky";
+const CACHE_NAME = "the-box-os-phase-7m8-fullscreen";
 
 const APP_FILES = [
   "./",

@@ -10641,3 +10641,222 @@ html.safe-render-ui .note-card,
 html.safe-render-ui .desktop-sticky-note {
   background-image: none !important;
 }
+
+
+/* Phase 7M.8 — Cross-device Full Screen
+   Native fullscreen deliberately keeps The Box's internal topbar, dock,
+   selected Mobile/Tablet/Windows mode, window geometry, and scroll rules.
+   Only the fallback used by browsers such as iPhone Safari changes geometry. */
+.fullscreen-topbar-button.active,
+.fullscreen-launcher-button.active {
+  border-color: rgba(143, 174, 255, .65);
+  background: rgba(143, 174, 255, .12);
+  color: var(--accent);
+}
+
+.fullscreen-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 13px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface-soft);
+}
+
+.fullscreen-panel-copy {
+  min-width: 0;
+}
+
+.fullscreen-panel-copy small,
+.fullscreen-panel-copy strong,
+.fullscreen-panel-copy span {
+  display: block;
+}
+
+.fullscreen-panel-copy small {
+  margin-bottom: 3px;
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .8px;
+}
+
+.fullscreen-panel-copy strong {
+  font-size: 12px;
+}
+
+.fullscreen-panel-copy span {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.fullscreen-launcher-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 160px;
+  min-height: 44px;
+}
+
+.fullscreen-fallback-exit {
+  position: fixed;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 10000;
+  display: none;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: rgba(15, 18, 24, .92);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+body.light-theme .fullscreen-fallback-exit {
+  background: rgba(255, 255, 255, .94);
+}
+
+.fullscreen-fallback-exit span {
+  font-size: 16px;
+}
+
+.fullscreen-fallback-exit strong {
+  font-size: 10px;
+}
+
+html.box-fallback-fullscreen .fullscreen-fallback-exit {
+  display: grid;
+}
+
+/* Native browser fullscreen: no Box layout overrides.
+   This is intentional to protect Windows/tablet/phone layouts. */
+html:fullscreen,
+html:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+}
+
+html:fullscreen body,
+html:-webkit-full-screen body {
+  width: 100%;
+  height: 100%;
+}
+
+/* Fallback mode is used only when page-level native fullscreen is unavailable.
+   It hides The Box chrome, then expands the existing desktop region. */
+html.box-fallback-fullscreen .topbar,
+html.box-fallback-fullscreen .dock {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+html.box-fallback-fullscreen .desktop {
+  inset: 0 !important;
+}
+
+html.box-fallback-fullscreen .launcher {
+  top: max(10px, env(safe-area-inset-top)) !important;
+  bottom: max(10px, env(safe-area-inset-bottom)) !important;
+}
+
+/* Windows fallback: existing app windows retain their size and are clamped by
+   JS to the newly enlarged desktop, so their desktop layout is preserved. */
+html.view-mode-windows.box-fallback-fullscreen .desktop {
+  padding-top: 0;
+}
+
+/* Tablet fallback: preserve tablet renderer and window behavior. */
+html.tablet-ui.box-fallback-fullscreen .desktop {
+  inset: 0 !important;
+}
+
+/* Phone fallback: existing phone windows remain full screen, but the reserved
+   topbar/dock gaps disappear. Content keeps bottom room for the Exit control. */
+html.phone-ui.box-fallback-fullscreen .desktop {
+  inset: 0 !important;
+}
+
+html.phone-ui.box-fallback-fullscreen .app-window,
+html.phone-ui.box-fallback-fullscreen .app-window.maximized {
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+html.phone-ui.box-fallback-fullscreen .app-window > .window-content {
+  padding-bottom: calc(78px + env(safe-area-inset-bottom)) !important;
+}
+
+html.phone-ui.box-fallback-fullscreen.mobile-input-active .desktop {
+  bottom: 0 !important;
+}
+
+/* Keep the fallback Exit control out of form text and photo content. */
+html.phone-ui.box-fallback-fullscreen .fullscreen-fallback-exit {
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
+  grid-template-columns: 1fr;
+  place-items: center;
+  border-radius: 15px;
+}
+
+html.phone-ui.box-fallback-fullscreen .fullscreen-fallback-exit strong {
+  display: none;
+}
+
+/* The topbar already has limited width on phones; fullscreen remains available
+   from Launcher so no existing phone controls are squeezed. */
+html.phone-ui .fullscreen-topbar-button {
+  display: none !important;
+}
+
+html.phone-ui .fullscreen-panel {
+  grid-template-columns: 1fr;
+}
+
+html.phone-ui .fullscreen-launcher-button {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+}
+
+/* Tablet launcher keeps a stable, touch-friendly control. */
+html.tablet-ui .fullscreen-launcher-button {
+  min-height: 46px;
+}
+
+/* Small/narrow windows: stack the launcher panel instead of squeezing text. */
+@media (max-width: 720px) {
+  .fullscreen-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .fullscreen-launcher-button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+html.safe-render-ui .fullscreen-panel {
+  background-image: none !important;
+}

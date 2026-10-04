@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7m7">
+  <link rel="stylesheet" href="style.css?v=7m8">
 </head>
 <body>
   <div class="desktop-shell">
@@ -99,6 +99,8 @@
           <span></span><strong>Local</strong>
         </div>
         <button id="themeButton" class="topbar-button" aria-label="Toggle theme">☾</button>
+        <button id="fullscreenButton" class="topbar-button fullscreen-topbar-button"
+          type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
         <button id="notificationButton" class="topbar-button notification-topbar-button"
           type="button" aria-label="Open reminders" title="Reminders">
           <span aria-hidden="true">♢</span>
@@ -149,6 +151,18 @@
         <p id="viewModeHelp" class="view-mode-help">
           Auto detects the device. Your manual choice is saved only on this device.
         </p>
+      </section>
+
+      <section class="fullscreen-panel" aria-labelledby="fullscreenPanelTitle">
+        <div class="fullscreen-panel-copy">
+          <small>FULL SCREEN</small>
+          <strong id="fullscreenPanelTitle">Use the whole screen</strong>
+          <span id="fullscreenHelp">Windows and supported tablets use browser full screen. Phones use the safest available full-screen mode.</span>
+        </div>
+        <button id="launcherFullscreenButton" class="secondary-button fullscreen-launcher-button" type="button">
+          <span aria-hidden="true">⛶</span>
+          <strong>Enter full screen</strong>
+        </button>
       </section>
 
       <div class="launcher-grid">
@@ -1704,6 +1718,12 @@
         </article>
       </section>
     </main>
+
+    <button id="fullscreenFallbackExitButton" class="fullscreen-fallback-exit" type="button"
+      aria-label="Exit full screen" title="Exit full screen" hidden>
+      <span aria-hidden="true">⤢</span>
+      <strong>Exit</strong>
+    </button>
 
     <footer class="dock" aria-label="Application dock">
       <button class="dock-item active" data-open-app="dashboard" title="Dashboard" aria-label="Dashboard">

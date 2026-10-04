@@ -1246,6 +1246,153 @@ function getSelectedNoteLinesForTasks() {
     .slice(0, 12);
 }
 
+
+let boxFullscreenFallbackActive = false;
+
+function getNativeFullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+function isStandaloneAppMode() {
+  return Boolean(
+    window.matchMedia?.("(display-mode: standalone)")?.matches ||
+    window.matchMedia?.("(display-mode: fullscreen)")?.matches ||
+    window.navigator.standalone
+  );
+}
+
+function isFullscreenActive() {
+  return Boolean(getNativeFullscreenElement() || boxFullscreenFallbackActive);
+}
+
+function updateFullscreenUi() {
+  const nativeActive = Boolean(getNativeFullscreenElement());
+  const fallbackActive = Boolean(boxFullscreenFallbackActive);
+  const active = nativeActive || fallbackActive;
+  const root = document.documentElement;
+
+  root.classList.toggle("box-native-fullscreen", nativeActive);
+  root.classList.toggle("box-fallback-fullscreen", fallbackActive);
+
+  const quickButton = $("fullscreenButton");
+  const launcherButton = $("launcherFullscreenButton");
+  const fallbackExit = $("fullscreenFallbackExitButton");
+  const help = $("fullscreenHelp");
+
+  if (quickButton) {
+    quickButton.textContent = active ? "⤢" : "⛶";
+    quickButton.setAttribute(
+      "aria-label",
+      active ? "Exit full screen" : "Enter full screen"
+    );
+    quickButton.title = active ? "Exit full screen" : "Full screen";
+    quickButton.classList.toggle("active", active);
+  }
+
+  if (launcherButton) {
+    const icon = launcherButton.querySelector("span");
+    const label = launcherButton.querySelector("strong");
+    if (icon) icon.textContent = active ? "⤢" : "⛶";
+    if (label) label.textContent = active ? "Exit full screen" : "Enter full screen";
+    launcherButton.classList.toggle("active", active);
+  }
+
+  if (fallbackExit) {
+    fallbackExit.hidden = !fallbackActive;
+  }
+
+  if (help) {
+    if (nativeActive) {
+      help.textContent =
+        "Browser full screen is active. The Box layout and navigation stay unchanged.";
+    } else if (fallbackActive) {
+      help.textContent =
+        "Immersive phone/tablet mode is active. On iPhone, Add to Home Screen gives the cleanest browser-free experience.";
+    } else if (isStandaloneAppMode()) {
+      help.textContent =
+        "The Box is already running as an installed app. Full screen can still maximize the workspace where supported.";
+    } else {
+      help.textContent =
+        "Windows and supported tablets use browser full screen. Phones use the safest available full-screen mode.";
+    }
+  }
+
+  updateAppViewportHeight();
+
+  // Recalculate open-window breakpoints after the browser or fallback viewport
+  // changes. We intentionally do not alter the user's selected device layout.
+  window.requestAnimationFrame(() => {
+    document.querySelectorAll(".app-window").forEach((windowElement) => {
+      updateWindowResponsiveState(windowElement);
+      if (!isCompactWindowMode()) {
+        clampWindowToDesktop(windowElement);
+      }
+    });
+  });
+}
+
+function enterFullscreenFallback() {
+  boxFullscreenFallbackActive = true;
+  closeLauncher();
+  updateFullscreenUi();
+}
+
+async function enterBoxFullscreen() {
+  const root = document.documentElement;
+  const requestFullscreen =
+    root.requestFullscreen ||
+    root.webkitRequestFullscreen;
+
+  if (requestFullscreen) {
+    try {
+      await requestFullscreen.call(root);
+      boxFullscreenFallbackActive = false;
+      closeLauncher();
+      updateFullscreenUi();
+      return;
+    } catch (error) {
+      // Some mobile browsers expose the API but reject page-level fullscreen.
+      // Fall back to a layout-safe immersive mode.
+    }
+  }
+
+  enterFullscreenFallback();
+}
+
+async function exitBoxFullscreen() {
+  const nativeElement = getNativeFullscreenElement();
+  const exitFullscreen =
+    document.exitFullscreen ||
+    document.webkitExitFullscreen;
+
+  if (nativeElement && exitFullscreen) {
+    try {
+      await exitFullscreen.call(document);
+    } catch (error) {
+      // Continue cleaning up our local state below.
+    }
+  }
+
+  boxFullscreenFallbackActive = false;
+  updateFullscreenUi();
+}
+
+async function toggleBoxFullscreen() {
+  if (isFullscreenActive()) {
+    await exitBoxFullscreen();
+  } else {
+    await enterBoxFullscreen();
+  }
+}
+
+function handleFullscreenChange() {
+  // Escape/F11/system gestures can end native fullscreen without our button.
+  if (!getNativeFullscreenElement()) {
+    document.documentElement.classList.remove("box-native-fullscreen");
+  }
+  updateFullscreenUi();
+}
+
 function showToast(message) {
   const toast = $("toast");
   toast.textContent = message;
@@ -7720,7 +7867,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7M.7-Free";
+const BACKUP_APP_VERSION = "7M.8-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -8415,6 +8562,13 @@ document.querySelectorAll("[data-view-mode-option]").forEach((button) => {
   });
 });
 
+$("fullscreenButton").addEventListener("click", toggleBoxFullscreen);
+$("launcherFullscreenButton").addEventListener("click", toggleBoxFullscreen);
+$("fullscreenFallbackExitButton").addEventListener("click", exitBoxFullscreen);
+
+document.addEventListener("fullscreenchange", handleFullscreenChange);
+document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+
 $("themeButton").addEventListener("click", () => {
   document.body.classList.toggle("light-theme");
   localStorage.setItem(
@@ -8541,10 +8695,20 @@ $("taskModal").addEventListener("pointerdown", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && $("taskChecklistFileModal").classList.contains("open")) {
+  if (event.key !== "Escape") return;
+
+  if ($("taskChecklistFileModal").classList.contains("open")) {
     closeTaskChecklistFileModal();
-  } else if (event.key === "Escape" && $("taskModal").classList.contains("open")) {
+    return;
+  }
+
+  if ($("taskModal").classList.contains("open")) {
     closeTaskModal();
+    return;
+  }
+
+  if (boxFullscreenFallbackActive) {
+    exitBoxFullscreen();
   }
 });
 
@@ -9290,6 +9454,7 @@ if ("serviceWorker" in navigator) {
 normalizeData();
 initializeWindowControls();
 restoreTheme();
+updateFullscreenUi();
 updateClock();
 setInterval(updateClock, 1000);
 renderAll();
