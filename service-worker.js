@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7m8-fullscreen";
+const CACHE_NAME = "the-box-os-phase-7n1-design-system-shell";
 
 const APP_FILES = [
   "./",

@@ -74,13 +74,14 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7m8">
+  <link rel="stylesheet" href="style.css?v=7n1">
 </head>
 <body>
   <div class="desktop-shell">
     <header class="topbar">
       <div class="topbar-left">
-        <button id="launcherButton" class="topbar-button" aria-label="Open launcher">⊞</button>
+        <button id="launcherButton" class="topbar-button launcher-topbar-button" aria-label="Open launcher">⊞</button>
+        <span class="box-brand-mark" aria-hidden="true">◇</span>
         <div class="topbar-brand">
           <strong>The Box OS</strong>
           <span id="activeAppLabel">Desktop</span>
@@ -117,11 +118,15 @@
 
     <aside id="launcher" class="launcher">
       <div class="launcher-header">
-        <div>
-          <small>APPLICATIONS</small>
-          <h2>Open a workspace</h2>
+        <div class="launcher-title-group">
+          <span class="launcher-brand-mark" aria-hidden="true">◇</span>
+          <div>
+            <small>THE BOX OS</small>
+            <h2>Everything, one place.</h2>
+            <p>Open a workspace or change how The Box fits this device.</p>
+          </div>
         </div>
-        <button id="closeLauncherButton" class="window-button">✕</button>
+        <button id="closeLauncherButton" class="window-button" aria-label="Close launcher">✕</button>
       </div>
 
       <section class="view-mode-panel" aria-labelledby="viewModePanelTitle">
