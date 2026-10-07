@@ -8391,7 +8391,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7N.5-Free";
+const BACKUP_APP_VERSION = "7N.6-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {

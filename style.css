@@ -15165,3 +15165,516 @@ html.phone-ui .document-list.document-list-view .document-card {
     justify-content: start;
   }
 }
+
+
+/* ==========================================================================
+   Phase 7N.6 — Final UI Polish & Consistency Audit
+   This layer intentionally avoids feature/data changes.
+   ========================================================================== */
+
+/* ---- Interaction + accessibility foundation ---------------------------- */
+:where(
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea,
+  a,
+  .app-tile,
+  .dock-item,
+  .mobile-nav-item,
+  .document-folder,
+  .note-card,
+  .journal-entry-card,
+  .our-space-plan-card
+):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button,
+.app-tile,
+.dock-item,
+.mobile-nav-item,
+.document-folder,
+.note-card,
+.journal-entry-card,
+.our-space-plan-card,
+.dashboard-task-row,
+.dashboard-document-row,
+.dashboard-feature-card,
+.dashboard-sticky-note {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button, .app-tile, .dock-item, .mobile-nav-item):not(:disabled) {
+  cursor: pointer;
+}
+
+:where(input, select, textarea):disabled {
+  opacity: .62;
+  cursor: not-allowed;
+}
+
+/* ---- Active-window depth ------------------------------------------------ */
+.app-window.open {
+  border-color: rgba(255,255,255,.085);
+  box-shadow: 0 18px 54px rgba(0,0,0,.25);
+}
+
+.app-window.open.active-window {
+  border-color: var(--border-strong);
+  box-shadow:
+    0 26px 78px rgba(0,0,0,.36),
+    0 0 0 1px rgba(127,140,255,.045);
+}
+
+body.light-theme .app-window.open.active-window {
+  box-shadow:
+    0 26px 70px rgba(31,42,63,.16),
+    0 0 0 1px rgba(102,115,232,.05);
+}
+
+.app-window.open:not(.active-window) .window-titlebar {
+  opacity: .86;
+}
+
+/* ---- Window chrome consistency ----------------------------------------- */
+.window-titlebar {
+  transition:
+    background var(--motion-fast) ease,
+    opacity var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+
+.app-window.active-window .window-titlebar {
+  background:
+    linear-gradient(90deg, rgba(127,140,255,.035), transparent 40%),
+    rgba(255,255,255,.012);
+}
+
+.window-controls .window-button {
+  color: var(--text-muted);
+}
+
+.window-controls .window-button:hover {
+  color: var(--text);
+}
+
+.window-controls .close-button:hover {
+  border-color: rgba(255,133,141,.2);
+  background: rgba(255,133,141,.09);
+  color: var(--danger);
+}
+
+/* ---- Buttons ------------------------------------------------------------ */
+.primary-button,
+.secondary-button,
+.filter,
+.task-view-button,
+.document-view-button,
+.window-button,
+.topbar-button {
+  user-select: none;
+}
+
+.primary-button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.primary-button:not(:disabled):active,
+.secondary-button:not(:disabled):active {
+  transform: translateY(0) scale(.98);
+}
+
+.secondary-button {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+}
+
+body.light-theme .secondary-button {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.65);
+}
+
+/* ---- Form consistency --------------------------------------------------- */
+.app-window label {
+  line-height: 1.35;
+}
+
+.app-window input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.app-window select,
+.app-window textarea {
+  border-color: var(--border);
+}
+
+.app-window input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):hover,
+.app-window select:hover,
+.app-window textarea:hover {
+  border-color: var(--border-strong);
+}
+
+.app-window textarea {
+  scrollbar-gutter: stable;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+}
+
+/* ---- Unified section/card rhythm --------------------------------------- */
+.dashboard-panel,
+.task-capture-panel,
+.task-workspace-panel,
+.calendar-month-panel,
+.calendar-agenda-panel,
+.notes-sidebar,
+.notes-editor-panel,
+.journal-sidebar,
+.journal-editor-panel,
+.our-space-sidebar,
+.our-space-editor-panel,
+.document-sidebar,
+.document-workspace,
+.workspace-card {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.015);
+}
+
+body.light-theme .dashboard-panel,
+body.light-theme .task-capture-panel,
+body.light-theme .task-workspace-panel,
+body.light-theme .calendar-month-panel,
+body.light-theme .calendar-agenda-panel,
+body.light-theme .notes-sidebar,
+body.light-theme .notes-editor-panel,
+body.light-theme .journal-sidebar,
+body.light-theme .journal-editor-panel,
+body.light-theme .our-space-sidebar,
+body.light-theme .our-space-editor-panel,
+body.light-theme .document-sidebar,
+body.light-theme .document-workspace {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
+}
+
+/* ---- Empty states ------------------------------------------------------- */
+.empty-state,
+.dashboard-widget-empty {
+  margin: 8px 0 0;
+  padding: 18px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,.01);
+  color: var(--text-muted);
+  line-height: 1.45;
+  text-align: center;
+}
+
+body.light-theme .empty-state,
+body.light-theme .dashboard-widget-empty {
+  background: rgba(20,30,50,.018);
+}
+
+/* Do not make tiny inline hidden-state paragraphs take space. */
+.empty-state[hidden],
+.dashboard-widget-empty[hidden] {
+  display: none !important;
+}
+
+/* ---- List/card selected-state consistency ------------------------------ */
+.note-card.active,
+.journal-entry-card.active,
+.our-space-plan-card.active,
+.document-folder.active {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.our-space-plan-card.active {
+  box-shadow: inset 3px 0 0 #f69bb1;
+}
+
+.document-folder.active {
+  box-shadow: none;
+}
+
+/* ---- Launcher polish ---------------------------------------------------- */
+.launcher {
+  transform-origin: top left;
+}
+
+.launcher.open {
+  animation: boxLauncherIn var(--motion-normal) var(--ease-standard);
+}
+
+@keyframes boxLauncherIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.app-tile {
+  position: relative;
+  overflow: hidden;
+}
+
+.app-tile::after {
+  position: absolute;
+  inset: auto 10px 7px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  content: "";
+  opacity: 0;
+  transform: scaleX(.55);
+  transition:
+    opacity var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+
+.app-tile:hover::after,
+.app-tile:focus-visible::after {
+  opacity: .28;
+  transform: scaleX(1);
+}
+
+/* ---- Dock + mobile navigation polish ----------------------------------- */
+.dock-item,
+.mobile-nav-item {
+  transition:
+    transform var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+}
+
+.dock-item.active .dock-icon {
+  transform: translateY(-1px);
+}
+
+.mobile-nav-item.active .mobile-nav-icon {
+  transform: translateY(-1px);
+}
+
+.mobile-nav-icon,
+.dock-icon {
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+
+/* ---- Toast -------------------------------------------------------------- */
+#toast {
+  padding: 12px 14px;
+  border-color: var(--border-strong);
+  border-radius: 14px;
+  background: rgba(16,19,27,.94);
+  box-shadow: 0 16px 46px rgba(0,0,0,.3);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+body.light-theme #toast {
+  background: rgba(255,255,255,.96);
+  box-shadow: 0 16px 40px rgba(31,42,63,.14);
+}
+
+/* ---- Modal consistency -------------------------------------------------- */
+.task-modal-card,
+.vault-modal-card,
+.auth-card,
+.document-preview-card,
+.document-smart-card,
+.document-version-card,
+.task-checklist-file-card {
+  box-shadow:
+    0 28px 80px rgba(0,0,0,.42),
+    0 0 0 1px rgba(255,255,255,.02);
+}
+
+.task-modal-overlay.open .task-modal-card,
+.vault-modal-overlay.open .vault-modal-card,
+.auth-overlay.open .auth-card {
+  animation: boxModalIn var(--motion-normal) var(--ease-standard);
+}
+
+@keyframes boxModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---- Loading states ----------------------------------------------------- */
+.document-loading {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      100deg,
+      rgba(255,255,255,.01) 20%,
+      rgba(127,140,255,.055) 40%,
+      rgba(255,255,255,.01) 60%
+    );
+  background-size: 220% 100%;
+  animation: boxLoadingSweep 1.5s ease-in-out infinite;
+}
+
+@keyframes boxLoadingSweep {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* ---- Hero consistency --------------------------------------------------- */
+.dashboard-command-hero,
+.productivity-hero,
+.journal-hero-redesign,
+.our-space-hero-redesign,
+.documents-hero-redesign,
+.workspace-hero {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.02),
+    0 10px 28px rgba(0,0,0,.06);
+}
+
+body.light-theme .dashboard-command-hero,
+body.light-theme .productivity-hero,
+body.light-theme .journal-hero-redesign,
+body.light-theme .our-space-hero-redesign,
+body.light-theme .documents-hero-redesign,
+body.light-theme .workspace-hero {
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.8),
+    0 10px 26px rgba(31,42,63,.045);
+}
+
+/* ---- Scroll behavior ---------------------------------------------------- */
+.window-content,
+.notes-list,
+.journal-entry-list,
+.our-space-plan-list,
+.calendar-event-list,
+.document-sidebar,
+.document-workspace,
+.task-list-modern {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+
+/* ---- Phone-specific polish --------------------------------------------- */
+html.phone-ui .app-window.open {
+  box-shadow: none;
+}
+
+html.phone-ui .app-window.open.active-window {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+html.phone-ui .app-window.open:not(.active-window) .window-titlebar {
+  opacity: 1;
+}
+
+html.phone-ui .window-titlebar {
+  border-bottom-color: rgba(255,255,255,.055);
+}
+
+html.phone-ui body.light-theme .window-titlebar,
+html.phone-ui .light-theme .window-titlebar {
+  border-bottom-color: rgba(24,33,49,.07);
+}
+
+html.phone-ui #toast {
+  right: max(10px, env(safe-area-inset-right));
+  bottom: calc(82px + env(safe-area-inset-bottom));
+  left: max(10px, env(safe-area-inset-left));
+  max-width: none;
+  text-align: center;
+}
+
+html.phone-ui.mobile-input-active #toast {
+  bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+html.phone-ui .empty-state,
+html.phone-ui .dashboard-widget-empty {
+  padding: 15px 11px;
+}
+
+html.phone-ui .primary-button:not(:disabled):hover {
+  transform: none;
+}
+
+html.phone-ui .primary-button:not(:disabled):active,
+html.phone-ui .secondary-button:not(:disabled):active,
+html.phone-ui .mobile-nav-item:active {
+  transform: scale(.975);
+}
+
+/* Mobile modal sheets: reinforce prior fixes without changing open/closed state. */
+html.phone-ui .task-modal-card,
+html.phone-ui .vault-modal-card,
+html.phone-ui .document-preview-card,
+html.phone-ui .document-smart-card,
+html.phone-ui .document-version-card,
+html.phone-ui .task-checklist-file-card {
+  border-radius: 18px 18px 0 0;
+}
+
+/* ---- Tablet polish ------------------------------------------------------ */
+html.tablet-ui .app-window.open.active-window {
+  box-shadow:
+    0 22px 62px rgba(0,0,0,.3),
+    0 0 0 1px rgba(127,140,255,.04);
+}
+
+html.tablet-ui .app-tile:active,
+html.tablet-ui .dock-item:active {
+  transform: scale(.975);
+}
+
+/* ---- Windows precision ------------------------------------------------- */
+html.view-mode-windows .app-window.active-window .window-titlebar {
+  border-bottom-color: rgba(127,140,255,.09);
+}
+
+html.view-mode-windows .window-titlebar:hover {
+  background:
+    linear-gradient(90deg, rgba(127,140,255,.028), transparent 42%),
+    rgba(255,255,255,.016);
+}
+
+/* ---- Fullscreen compatibility ------------------------------------------ */
+html.box-native-fullscreen #toast,
+html.box-fallback-fullscreen #toast {
+  z-index: 12000;
+}
+
+html.phone-ui.box-fallback-fullscreen #toast {
+  bottom: calc(68px + env(safe-area-inset-bottom));
+}
+
+/* ---- Reduced motion ----------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .launcher.open,
+  .task-modal-overlay.open .task-modal-card,
+  .vault-modal-overlay.open .vault-modal-card,
+  .auth-overlay.open .auth-card,
+  .document-loading {
+    animation: none !important;
+  }
+
+  .window-content,
+  .notes-list,
+  .journal-entry-list,
+  .our-space-plan-list,
+  .calendar-event-list,
+  .document-sidebar,
+  .document-workspace,
+  .task-list-modern {
+    scroll-behavior: auto !important;
+  }
+}
