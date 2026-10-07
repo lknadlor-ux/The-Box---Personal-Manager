@@ -328,6 +328,10 @@ let activeFilter = "all";
 let activeWorkspaceFilter = "all";
 let searchTerm = "";
 let activeTaskTagFilter = "all";
+let activeTaskProjectFilter = "all";
+let selectedProjectName = "";
+let projectsSearchTerm = "";
+let projectsWorkspaceFilter = "all";
 let favoritesFilter = "all";
 let favoritesSearchTerm = "";
 let taskViewMode = localStorage.getItem(STORAGE.taskView) === "kanban" ? "kanban" : "list";
@@ -1482,6 +1486,7 @@ function resetQuickCaptureForm() {
   $("quickCaptureForm").reset();
   $("quickCaptureWorkspace").value = "personal";
   $("quickCapturePriority").value = "normal";
+  $("quickCaptureProject").value = "";
   $("quickCaptureOurSpaceCategory").value = "Date";
   setQuickCaptureDestination("task");
 }
@@ -1522,6 +1527,7 @@ async function saveQuickCapture() {
       dueDate: date,
       workspace,
       priority: $("quickCapturePriority").value,
+      project: $("quickCaptureProject").value,
       status: "todo",
       tags: ["quick-capture"],
       subtasks: [],
@@ -1720,6 +1726,7 @@ function normalizeTask(task = {}) {
       : "",
     workspace: task.workspace || "personal",
     priority: task.priority || "normal",
+    project: String(task.project || "").trim().replace(/\\s+/g, " ").slice(0, 80),
     status,
     completed: status === "done",
     tags: normalizeTaskTags(task.tags),
@@ -1853,6 +1860,10 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "projects") {
+    renderProjectsHub();
   }
 
   if (appName === "favorites") {
@@ -2793,6 +2804,7 @@ function createTask({
   text,
   workspace,
   priority,
+  project = "",
   status = "todo",
   details = "",
   dueDate = "",
@@ -2814,6 +2826,7 @@ function createTask({
     dueDate,
     workspace,
     priority,
+    project,
     status: cleanStatus,
     completed: cleanStatus === "done",
     tags,
@@ -2843,6 +2856,7 @@ function updateTask(taskId, values) {
   task.dueDate = values.dueDate;
   task.workspace = values.workspace;
   task.priority = values.priority;
+  task.project = String(values.project || "").trim().replace(/\\s+/g, " ").slice(0, 80);
   task.tags = normalizeTaskTags(values.tags);
   task.subtasks = normalizeTaskSubtasks(values.subtasks);
   task.recurrence = normalizeTaskRecurrence(values.recurrence);
@@ -2867,6 +2881,7 @@ function openTaskModal(defaults = {}, source = null, taskId = null) {
   $("taskModalPriority").value = defaults.priority || "normal";
   $("taskModalStatus").value = defaults.status || (defaults.completed ? "done" : "todo");
   $("taskModalDueDate").value = defaults.dueDate || "";
+  $("taskModalProject").value = defaults.project || "";
   $("taskModalTags").value = normalizeTaskTags(defaults.tags).join(", ");
   taskDraftSubtasks = normalizeTaskSubtasks(defaults.subtasks).map((item) => ({
     ...item,
@@ -3056,9 +3071,11 @@ function getVisibleTasks() {
       task.workspace === activeWorkspaceFilter;
 
     const matchesTag = activeTaskTagFilter === "all" || task.tags.includes(activeTaskTagFilter);
+    const matchesProject = activeTaskProjectFilter === "all" || task.project === activeTaskProjectFilter;
     const searchableText = [
       task.text,
       task.details || "",
+      task.project || "",
       task.tags.join(" "),
       task.subtasks.map((item) => [
         item.text,
@@ -3068,7 +3085,7 @@ function getVisibleTasks() {
     ].join(" ").toLowerCase();
     const matchesSearch = searchableText.includes(searchTerm.toLowerCase());
 
-    return matchesStatus && matchesWorkspace && matchesTag && matchesSearch;
+    return matchesStatus && matchesWorkspace && matchesTag && matchesProject && matchesSearch;
   });
 }
 
@@ -3082,6 +3099,29 @@ function renderTaskTagFilter() {
     .join("");
   activeTaskTagFilter = tags.includes(current) ? current : "all";
   select.value = activeTaskTagFilter;
+}
+
+function getTaskProjectNames() {
+  return Array.from(new Set(
+    tasks.map((task) => String(task.project || "").trim()).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b));
+}
+
+function renderTaskProjectControls() {
+  const names = getTaskProjectNames();
+
+  const filter = $("taskProjectFilter");
+  if (filter) {
+    const current = activeTaskProjectFilter;
+    filter.innerHTML = `<option value="all">All projects</option>` +
+      names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+    activeTaskProjectFilter = names.includes(current) ? current : "all";
+    filter.value = activeTaskProjectFilter;
+  }
+
+  const options = names.map((name) => `<option value="${escapeHtml(name)}"></option>`).join("");
+  if ($("taskProjectSuggestions")) $("taskProjectSuggestions").innerHTML = options;
+  if ($("quickCaptureProjectSuggestions")) $("quickCaptureProjectSuggestions").innerHTML = options;
 }
 
 function buildTaskRow(task) {
@@ -3125,6 +3165,13 @@ function buildTaskRow(task) {
   statusBadge.textContent = getTaskStatusLabel(task.status);
 
   meta.append(workspaceBadge, priorityBadge, statusBadge);
+
+  if (task.project) {
+    const projectBadge = document.createElement("span");
+    projectBadge.className = "task-badge task-project-badge";
+    projectBadge.textContent = `◆ ${task.project}`;
+    meta.appendChild(projectBadge);
+  }
 
   const recurrenceLabel = getTaskRecurrenceLabel(task.recurrence);
   if (recurrenceLabel) {
@@ -3459,6 +3506,7 @@ function renderTaskOverview() {
 function renderTasks() {
   const list = $("taskList");
   renderTaskTagFilter();
+  renderTaskProjectControls();
   renderTaskOverview();
 
   const visible = getVisibleTasks();
@@ -6147,6 +6195,7 @@ async function loadDocuments({ silent = false } = {}) {
   renderDocuments();
   renderDashboard();
   renderFavoritesHub();
+  renderProjectsHub();
 }
 
 async function uploadSelectedDocuments() {
@@ -8644,7 +8693,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.2-Free";
+const BACKUP_APP_VERSION = "7O.3-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9152,6 +9201,253 @@ async function refreshAppFiles() {
 }
 
 
+
+function getProjectRecords() {
+  const grouped = new Map();
+
+  tasks.forEach((task) => {
+    const name = String(task.project || "").trim();
+    if (!name) return;
+
+    const key = name.toLocaleLowerCase();
+    if (!grouped.has(key)) grouped.set(key, { key, name, tasks: [] });
+    grouped.get(key).tasks.push(task);
+  });
+
+  return Array.from(grouped.values()).map((project) => {
+    const total = project.tasks.length;
+    const done = project.tasks.filter((task) => task.completed).length;
+    const open = total - done;
+    const urgent = project.tasks.filter(
+      (task) => !task.completed && task.priority === "urgent"
+    ).length;
+    const workspaces = Array.from(new Set(
+      project.tasks.map((task) => task.workspace || "personal")
+    ));
+    const dueTasks = project.tasks
+      .filter((task) => !task.completed && task.dueDate)
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    const updatedValues = project.tasks
+      .map((task) => task.updatedAt || task.createdAt || "")
+      .sort();
+
+    return {
+      ...project,
+      total,
+      done,
+      open,
+      urgent,
+      progress: total ? Math.round((done / total) * 100) : 0,
+      workspaces,
+      nextDue: dueTasks[0]?.dueDate || "",
+      updatedAt: updatedValues.length ? updatedValues[updatedValues.length - 1] : ""
+    };
+  }).sort((a, b) => {
+    if (a.open !== b.open) return b.open - a.open;
+    return String(b.updatedAt).localeCompare(String(a.updatedAt));
+  });
+}
+
+function getFilteredProjectRecords() {
+  const query = projectsSearchTerm.toLocaleLowerCase();
+  return getProjectRecords().filter((project) => {
+    const matchesWorkspace =
+      projectsWorkspaceFilter === "all" ||
+      project.workspaces.includes(projectsWorkspaceFilter);
+    const matchesSearch =
+      !query ||
+      project.name.toLocaleLowerCase().includes(query) ||
+      project.tasks.some((task) =>
+        `${task.text} ${task.details || ""}`.toLocaleLowerCase().includes(query)
+      );
+    return matchesWorkspace && matchesSearch;
+  });
+}
+
+function getProjectRecordByName(name) {
+  return getProjectRecords().find((project) => project.name === name) || null;
+}
+
+function ensureSelectedProject(projects) {
+  if (selectedProjectName && projects.some((project) => project.name === selectedProjectName)) return;
+  selectedProjectName = projects[0]?.name || "";
+}
+
+function renderProjectDetail() {
+  const empty = $("projectDetailEmpty");
+  const content = $("projectDetailContent");
+  if (!empty || !content) return;
+
+  const project = getProjectRecordByName(selectedProjectName);
+  empty.classList.toggle("hidden", Boolean(project));
+  content.classList.toggle("hidden", !project);
+  if (!project) return;
+
+  $("projectDetailTitle").textContent = project.name;
+  $("projectDetailMeta").textContent =
+    `${project.total} task${project.total === 1 ? "" : "s"} · ` +
+    project.workspaces.map((item) => item.charAt(0).toUpperCase() + item.slice(1)).join(", ");
+
+  $("projectProgressLabel").textContent = `${project.progress}% complete`;
+  $("projectProgressTaskLabel").textContent = `${project.done} of ${project.total} tasks complete`;
+  $("projectProgressBar").style.width = `${project.progress}%`;
+
+  $("projectDetailOpen").textContent = String(project.open);
+  $("projectDetailUrgent").textContent = String(project.urgent);
+  $("projectDetailDue").textContent = project.nextDue ? formatTaskDate(project.nextDue) : "—";
+  $("projectDetailWorkspace").textContent =
+    project.workspaces.length === 1
+      ? project.workspaces[0].charAt(0).toUpperCase() + project.workspaces[0].slice(1)
+      : "Mixed";
+
+  const ordered = [...project.tasks].sort((a, b) => {
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    const rank = { urgent: 0, important: 1, normal: 2 };
+    const priorityDifference = (rank[a.priority] ?? 3) - (rank[b.priority] ?? 3);
+    if (priorityDifference) return priorityDifference;
+    if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+    if (a.dueDate) return -1;
+    if (b.dueDate) return 1;
+    return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+  });
+
+  $("projectTasksEmpty").hidden = ordered.length > 0;
+  $("projectTaskList").innerHTML = ordered.map((task) => {
+    const due = getDueDateInfo(task);
+    return `
+      <button class="project-task-row ${task.completed ? "done" : ""} ${escapeHtml(task.priority || "normal")}"
+        type="button" data-project-task-id="${escapeHtml(String(task.id))}">
+        <span class="project-task-check">${task.completed ? "✓" : "○"}</span>
+        <span class="project-task-copy">
+          <strong>${escapeHtml(task.text || "Untitled task")}</strong>
+          <span>
+            ${escapeHtml(getTaskStatusLabel(task.status))}
+            <em>·</em>${escapeHtml(task.workspace || "personal")}
+            ${due ? `<em>·</em><b>${escapeHtml(due.label)}</b>` : ""}
+          </span>
+        </span>
+        <span aria-hidden="true">→</span>
+      </button>
+    `;
+  }).join("");
+
+  $("projectTaskList").querySelectorAll("[data-project-task-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const task = tasks.find((item) => String(item.id) === button.dataset.projectTaskId);
+      if (!task) return;
+      openApp("tasks");
+      openTaskModal(task, "tasks", task.id);
+    });
+  });
+}
+
+function renderProjectsHub() {
+  if (!$("projectsList")) return;
+
+  const all = getProjectRecords();
+  const visible = getFilteredProjectRecords();
+  ensureSelectedProject(visible);
+
+  const openTasks = all.reduce((sum, project) => sum + project.open, 0);
+  const totalTasks = all.reduce((sum, project) => sum + project.total, 0);
+  const doneTasks = all.reduce((sum, project) => sum + project.done, 0);
+
+  $("projectsTotalCount").textContent = String(all.length);
+  $("projectsActiveCount").textContent = String(all.filter((project) => project.open > 0).length);
+  $("projectsOpenTaskCount").textContent = String(openTasks);
+  $("projectsProgressCount").textContent =
+    `${totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0}%`;
+  $("projectsVisibleCount").textContent = String(visible.length);
+  $("projectsSearchInput").value = projectsSearchTerm;
+  $("projectsWorkspaceFilter").value = projectsWorkspaceFilter;
+  $("projectsEmptyState").hidden = visible.length > 0;
+
+  $("projectsList").innerHTML = visible.map((project) => `
+    <button class="project-card ${project.name === selectedProjectName ? "active" : ""}"
+      type="button" data-project-name="${escapeHtml(project.name)}">
+      <span class="project-card-icon">◆</span>
+      <span class="project-card-copy">
+        <strong>${escapeHtml(project.name)}</strong>
+        <small>${project.open} open · ${project.total} total</small>
+        <span class="project-card-progress"><i style="width:${project.progress}%"></i></span>
+      </span>
+      <span class="project-card-percent">${project.progress}%</span>
+    </button>
+  `).join("");
+
+  $("projectsList").querySelectorAll("[data-project-name]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedProjectName = button.dataset.projectName;
+      renderProjectsHub();
+    });
+  });
+
+  renderProjectDetail();
+}
+
+function startProjectWithFirstTask(name, workspace = "personal") {
+  const cleanName = String(name || "").trim().replace(/\s+/g, " ").slice(0, 80);
+  if (!cleanName) {
+    showToast("Enter a project name");
+    $("projectCreateName")?.focus();
+    return;
+  }
+
+  openTaskModal({
+    text: "",
+    workspace,
+    priority: "normal",
+    project: cleanName,
+    status: "todo"
+  }, "project");
+
+  showToast(`Add the first task for ${cleanName}`);
+}
+
+function renameSelectedProject() {
+  const project = getProjectRecordByName(selectedProjectName);
+  if (!project) return;
+
+  const nextName = window.prompt("Rename project", project.name);
+  if (nextName === null) return;
+
+  const cleanName = String(nextName).trim().replace(/\s+/g, " ").slice(0, 80);
+  if (!cleanName || cleanName === project.name) return;
+
+  tasks.forEach((task) => {
+    if (task.project === project.name) {
+      task.project = cleanName;
+      task.updatedAt = new Date().toISOString();
+    }
+  });
+
+  selectedProjectName = cleanName;
+  saveJSON(STORAGE.tasks, tasks);
+  renderAll();
+  showToast("Project renamed");
+}
+
+function clearSelectedProject() {
+  const project = getProjectRecordByName(selectedProjectName);
+  if (!project) return;
+
+  if (!window.confirm(
+    `Remove the project “${project.name}” from its ${project.total} task${project.total === 1 ? "" : "s"}? The tasks will not be deleted.`
+  )) return;
+
+  tasks.forEach((task) => {
+    if (task.project === project.name) {
+      task.project = "";
+      task.updatedAt = new Date().toISOString();
+    }
+  });
+
+  selectedProjectName = "";
+  saveJSON(STORAGE.tasks, tasks);
+  renderAll();
+  showToast("Project cleared; tasks were kept");
+}
+
 function getFavoriteHubItems() {
   const items = [];
 
@@ -9558,6 +9854,40 @@ $("favoritesSearchInput").addEventListener("input", (event) => {
   renderFavoritesHub();
 });
 
+$("projectsSearchInput").addEventListener("input", (event) => {
+  projectsSearchTerm = event.target.value.trim();
+  renderProjectsHub();
+});
+
+$("projectsWorkspaceFilter").addEventListener("change", (event) => {
+  projectsWorkspaceFilter = event.target.value;
+  renderProjectsHub();
+});
+
+$("projectCreateForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  startProjectWithFirstTask(
+    $("projectCreateName").value,
+    $("projectCreateWorkspace").value
+  );
+});
+
+$("projectAddTaskButton").addEventListener("click", () => {
+  const project = getProjectRecordByName(selectedProjectName);
+  if (!project) return;
+  startProjectWithFirstTask(project.name, project.workspaces[0] || "personal");
+});
+
+$("projectRenameButton").addEventListener("click", renameSelectedProject);
+$("projectRemoveButton").addEventListener("click", clearSelectedProject);
+
+$("projectOpenTasksButton").addEventListener("click", () => {
+  if (!selectedProjectName) return;
+  activeTaskProjectFilter = selectedProjectName;
+  openApp("tasks");
+  renderTasks();
+});
+
 $("launcherButton").addEventListener("click", toggleMobileMoreMenu);
 $("mobileMoreButton").addEventListener("click", toggleMobileMoreMenu);
 updateMobileNavigation(mobileActiveApp);
@@ -9721,6 +10051,7 @@ $("taskModalForm").addEventListener("submit", (event) => {
     dueDate: $("taskModalDueDate").value,
     workspace: $("taskModalWorkspace").value,
     priority: $("taskModalPriority").value,
+    project: $("taskModalProject").value,
     status: $("taskModalStatus").value,
     tags: normalizeTaskTags($("taskModalTags").value),
     subtasks: normalizeTaskSubtasks(taskDraftSubtasks),
@@ -9742,7 +10073,13 @@ $("taskModalForm").addEventListener("submit", (event) => {
     $("taskInput").value = "";
   }
 
+  if (!wasEditing && pendingTaskSource === "project") {
+    selectedProjectName = String(values.project || "").trim();
+    if ($("projectCreateName")) $("projectCreateName").value = "";
+  }
+
   closeTaskModal();
+  if (!wasEditing && selectedProjectName) renderProjectsHub();
   showToast(wasEditing ? "Task updated" : "Task added");
 });
 
@@ -9787,6 +10124,11 @@ $("workspaceFilter").addEventListener("change", (event) => {
 
 $("taskTagFilter").addEventListener("change", (event) => {
   activeTaskTagFilter = event.target.value;
+  renderTasks();
+});
+
+$("taskProjectFilter").addEventListener("change", (event) => {
+  activeTaskProjectFilter = event.target.value;
   renderTasks();
 });
 

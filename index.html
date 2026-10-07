@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o2">
+  <link rel="stylesheet" href="style.css?v=7o3">
 </head>
 <body>
   <div class="desktop-shell">
@@ -257,6 +257,12 @@
           <small>Local productivity help</small>
         </button>
 
+        <button class="app-tile projects-app-tile" data-open-app="projects">
+          <span class="app-icon">◆</span>
+          <strong>Projects</strong>
+          <small>Group tasks into outcomes</small>
+        </button>
+
         <button class="app-tile favorites-app-tile" data-open-app="favorites">
           <span class="app-icon">★</span>
           <strong>Favorites</strong>
@@ -348,6 +354,11 @@
         <button class="desktop-icon" data-open-app="calendar">
           <span>◫</span>
           <strong>Calendar</strong>
+        </button>
+
+        <button class="desktop-icon" data-open-app="projects">
+          <span>◆</span>
+          <strong>Projects</strong>
         </button>
 
         <button class="desktop-icon" data-open-app="favorites">
@@ -665,6 +676,9 @@
                   <select id="taskTagFilter" aria-label="Filter tasks by tag">
                     <option value="all">All tags</option>
                   </select>
+                  <select id="taskProjectFilter" aria-label="Filter tasks by project">
+                    <option value="all">All projects</option>
+                  </select>
                 </div>
               </div>
 
@@ -852,6 +866,135 @@
             </section>
           </div>
         </article>
+
+        <article class="app-window projects-app-window" data-app-window="projects" style="--x: 9%; --y: 6%; --w: 80%; --h: 84%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>◆</span><strong>Projects</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content projects-window">
+            <section class="projects-hero">
+              <div>
+                <small>PROJECTS HUB</small>
+                <h2>Turn groups of tasks into outcomes.</h2>
+                <p>Projects are built directly from your synced Tasks, so there is no second task system or separate database to maintain.</p>
+              </div>
+
+              <div class="projects-summary" aria-label="Projects summary">
+                <div><strong id="projectsTotalCount">0</strong><span>Projects</span></div>
+                <div><strong id="projectsActiveCount">0</strong><span>Active</span></div>
+                <div><strong id="projectsOpenTaskCount">0</strong><span>Open tasks</span></div>
+                <div><strong id="projectsProgressCount">0%</strong><span>Progress</span></div>
+              </div>
+            </section>
+
+            <section class="projects-create-panel">
+              <div class="projects-create-copy">
+                <small>NEW PROJECT</small>
+                <strong>Create it with its first task.</strong>
+                <span>A project begins when at least one task is assigned to the same Project name.</span>
+              </div>
+
+              <form id="projectCreateForm" class="project-create-form">
+                <input id="projectCreateName" type="text" maxlength="80" placeholder="Project name" required>
+                <select id="projectCreateWorkspace" aria-label="Project workspace">
+                  <option value="personal">Personal</option>
+                  <option value="pharmacy">Pharmacy</option>
+                  <option value="clinic">Clinic</option>
+                  <option value="sk">SK</option>
+                </select>
+                <button class="primary-button" type="submit">Add first task</button>
+              </form>
+            </section>
+
+            <section class="projects-toolbar">
+              <label class="projects-search">
+                <span>⌕</span>
+                <input id="projectsSearchInput" type="search" placeholder="Search projects">
+              </label>
+              <select id="projectsWorkspaceFilter" aria-label="Filter projects by workspace">
+                <option value="all">All workspaces</option>
+                <option value="personal">Personal</option>
+                <option value="pharmacy">Pharmacy</option>
+                <option value="clinic">Clinic</option>
+                <option value="sk">SK</option>
+              </select>
+            </section>
+
+            <section class="projects-layout">
+              <aside class="projects-sidebar">
+                <div class="projects-section-heading">
+                  <div>
+                    <small>PROJECT LIST</small>
+                    <strong>Your outcomes</strong>
+                  </div>
+                  <span id="projectsVisibleCount">0</span>
+                </div>
+
+                <div id="projectsList" class="projects-list"></div>
+                <p id="projectsEmptyState" class="empty-state">No projects match this view.</p>
+              </aside>
+
+              <section class="project-detail-panel">
+                <div id="projectDetailEmpty" class="project-detail-empty">
+                  <span>◆</span>
+                  <strong>Select a project</strong>
+                  <p>Choose a project to see progress, deadlines, and its tasks.</p>
+                </div>
+
+                <div id="projectDetailContent" class="project-detail-content hidden">
+                  <header class="project-detail-header">
+                    <div>
+                      <small>PROJECT</small>
+                      <h3 id="projectDetailTitle">—</h3>
+                      <p id="projectDetailMeta">—</p>
+                    </div>
+
+                    <div class="project-detail-actions">
+                      <button id="projectAddTaskButton" class="primary-button" type="button">＋ Add task</button>
+                      <button id="projectRenameButton" class="secondary-button" type="button">Rename</button>
+                      <button id="projectRemoveButton" class="secondary-button" type="button">Clear project</button>
+                    </div>
+                  </header>
+
+                  <div class="project-progress-panel">
+                    <div class="project-progress-copy">
+                      <strong id="projectProgressLabel">0% complete</strong>
+                      <span id="projectProgressTaskLabel">0 of 0 tasks complete</span>
+                    </div>
+                    <div class="project-progress-track">
+                      <span id="projectProgressBar"></span>
+                    </div>
+                  </div>
+
+                  <div class="project-detail-stats">
+                    <div><strong id="projectDetailOpen">0</strong><span>Open</span></div>
+                    <div><strong id="projectDetailUrgent">0</strong><span>Urgent</span></div>
+                    <div><strong id="projectDetailDue">—</strong><span>Next due</span></div>
+                    <div><strong id="projectDetailWorkspace">—</strong><span>Workspace</span></div>
+                  </div>
+
+                  <div class="project-task-heading">
+                    <div>
+                      <small>PROJECT TASKS</small>
+                      <strong>Work inside this project</strong>
+                    </div>
+                    <button id="projectOpenTasksButton" class="secondary-button" type="button">Open Tasks</button>
+                  </div>
+
+                  <div id="projectTaskList" class="project-task-list"></div>
+                  <p id="projectTasksEmpty" class="empty-state">This project has no tasks.</p>
+                </div>
+              </section>
+            </section>
+          </div>
+        </article>
+
 
         <article class="app-window favorites-app-window" data-app-window="favorites" style="--x: 11%; --y: 7%; --w: 74%; --h: 80%;">
           <div class="window-titlebar">
@@ -2170,6 +2313,10 @@
         <span class="dock-icon" aria-hidden="true">▤</span>
         <span class="dock-label">Templates</span>
       </button>
+      <button class="dock-item" data-open-app="projects" title="Projects" aria-label="Projects">
+        <span class="dock-icon" aria-hidden="true">◆</span>
+        <span class="dock-label">Projects</span>
+      </button>
       <button class="dock-item" data-open-app="favorites" title="Favorites" aria-label="Favorites">
         <span class="dock-icon" aria-hidden="true">★</span>
         <span class="dock-label">Favorites</span>
@@ -2499,6 +2646,13 @@
           <input id="taskModalDueDate" type="date">
         </label>
 
+        <label class="task-field">
+          Project <small>Optional</small>
+          <input id="taskModalProject" type="text" maxlength="80" list="taskProjectSuggestions"
+            placeholder="Example: FDA Distributor LTO">
+          <datalist id="taskProjectSuggestions"></datalist>
+        </label>
+
         <label class="task-field task-field-wide">
           Tags <small>Optional · separate with commas</small>
           <input id="taskModalTags" type="text" maxlength="300" placeholder="example: renewal, supplier, urgent follow-up">
@@ -2668,6 +2822,15 @@
             </label>
           </div>
 
+          <div class="quick-capture-option-group" data-capture-for="task">
+            <label>
+              Project <small>Optional</small>
+              <input id="quickCaptureProject" type="text" maxlength="80" list="quickCaptureProjectSuggestions"
+                placeholder="Project name">
+              <datalist id="quickCaptureProjectSuggestions"></datalist>
+            </label>
+          </div>
+
           <div class="quick-capture-option-group" data-capture-for="task event journal ourspace">
             <label>
               <span id="quickCaptureDateLabel">Due date <small>Optional</small></span>
@@ -2770,6 +2933,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o2"></script>
+  <script src="app.js?v=7o3"></script>
 </body>
 </html>
