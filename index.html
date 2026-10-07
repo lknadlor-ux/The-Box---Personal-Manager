@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7n3">
+  <link rel="stylesheet" href="style.css?v=7n4">
 </head>
 <body>
   <div class="desktop-shell">
@@ -562,7 +562,7 @@
           </div>
         </article>
 
-        <article class="app-window" data-app-window="tasks" style="--x: 13%; --y: 10%; --w: 66%; --h: 74%;">
+        <article class="app-window" data-app-window="tasks" style="--x: 8%; --y: 6%; --w: 78%; --h: 84%;">
           <div class="window-titlebar">
             <div class="window-title"><span>✓</span><strong>Tasks</strong></div>
             <div class="window-controls">
@@ -572,58 +572,97 @@
             </div>
           </div>
 
-          <div class="window-content">
-            <form id="taskForm" class="full-form">
-              <input id="taskInput" type="text" placeholder="What needs to be done?">
-              <select id="taskWorkspace">
-                <option value="pharmacy">Pharmacy</option>
-                <option value="clinic">Clinic</option>
-                <option value="sk">SK</option>
-                <option value="personal">Personal</option>
-              </select>
-              <select id="taskPriority">
-                <option value="normal">Normal</option>
-                <option value="important">Important</option>
-                <option value="urgent">Urgent</option>
-              </select>
-              <button type="submit">Add details</button>
-            </form>
-
-            <div class="toolbar task-toolbar">
-              <div class="task-toolbar-left">
-                <div class="filter-group">
-                  <button class="filter active" data-filter="all">All</button>
-                  <button class="filter" data-filter="open">Open</button>
-                  <button class="filter" data-filter="done">Done</button>
-                </div>
-
-                <div class="task-view-switch" aria-label="Task view">
-                  <button id="taskListViewButton" class="task-view-button active" type="button" title="List view">☷ <span>List</span></button>
-                  <button id="taskKanbanViewButton" class="task-view-button" type="button" title="Kanban view">▦ <span>Board</span></button>
-                </div>
+          <div class="window-content tasks-window">
+            <section class="productivity-hero tasks-hero">
+              <div class="productivity-hero-copy">
+                <small>TASKS</small>
+                <h2>Plan the work. Clear the noise.</h2>
+                <p>Capture quickly, then move important work through a clear workflow.</p>
               </div>
 
-              <div class="task-toolbar-right">
-                <select id="workspaceFilter">
-                  <option value="all">All workspaces</option>
+              <div class="productivity-stat-strip task-overview-stats" aria-label="Task summary">
+                <div>
+                  <strong id="taskOverviewOpen">0</strong>
+                  <span>Open</span>
+                </div>
+                <div>
+                  <strong id="taskOverviewToday">0</strong>
+                  <span>Due today</span>
+                </div>
+                <div class="attention">
+                  <strong id="taskOverviewUrgent">0</strong>
+                  <span>Urgent</span>
+                </div>
+                <div>
+                  <strong id="taskOverviewDone">0</strong>
+                  <span>Completed</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="task-capture-panel">
+              <div class="productivity-section-heading">
+                <div>
+                  <small>QUICK ADD</small>
+                  <strong>Capture a task</strong>
+                </div>
+                <span>Details, due dates, subtasks, files, tags, and recurrence are added in the next step.</span>
+              </div>
+
+              <form id="taskForm" class="full-form task-quick-form">
+                <input id="taskInput" type="text" placeholder="What needs to be done?">
+                <select id="taskWorkspace">
                   <option value="pharmacy">Pharmacy</option>
                   <option value="clinic">Clinic</option>
                   <option value="sk">SK</option>
                   <option value="personal">Personal</option>
                 </select>
-                <select id="taskTagFilter" aria-label="Filter tasks by tag">
-                  <option value="all">All tags</option>
+                <select id="taskPriority">
+                  <option value="normal">Normal</option>
+                  <option value="important">Important</option>
+                  <option value="urgent">Urgent</option>
                 </select>
-              </div>
-            </div>
+                <button type="submit" class="primary-button">Add details</button>
+              </form>
+            </section>
 
-            <div id="taskList" class="list-stack"></div>
-            <div id="taskKanban" class="task-kanban hidden" aria-live="polite"></div>
-            <p id="emptyTasks" class="empty-state">No matching tasks.</p>
+            <section class="task-workspace-panel">
+              <div class="toolbar task-toolbar">
+                <div class="task-toolbar-left">
+                  <div class="filter-group">
+                    <button class="filter active" data-filter="all">All</button>
+                    <button class="filter" data-filter="open">Open</button>
+                    <button class="filter" data-filter="done">Done</button>
+                  </div>
+
+                  <div class="task-view-switch" aria-label="Task view">
+                    <button id="taskListViewButton" class="task-view-button active" type="button" title="List view">☷ <span>List</span></button>
+                    <button id="taskKanbanViewButton" class="task-view-button" type="button" title="Kanban view">▦ <span>Board</span></button>
+                  </div>
+                </div>
+
+                <div class="task-toolbar-right">
+                  <select id="workspaceFilter">
+                    <option value="all">All workspaces</option>
+                    <option value="pharmacy">Pharmacy</option>
+                    <option value="clinic">Clinic</option>
+                    <option value="sk">SK</option>
+                    <option value="personal">Personal</option>
+                  </select>
+                  <select id="taskTagFilter" aria-label="Filter tasks by tag">
+                    <option value="all">All tags</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="taskList" class="list-stack task-list-modern"></div>
+              <div id="taskKanban" class="task-kanban hidden" aria-live="polite"></div>
+              <p id="emptyTasks" class="empty-state">No matching tasks.</p>
+            </section>
           </div>
         </article>
 
-        <article class="app-window" data-app-window="calendar" style="--x: 24%; --y: 8%; --w: 56%; --h: 76%;">
+        <article class="app-window" data-app-window="calendar" style="--x: 10%; --y: 6%; --w: 76%; --h: 84%;">
           <div class="window-titlebar">
             <div class="window-title"><span>◫</span><strong>Calendar</strong></div>
             <div class="window-controls">
@@ -633,43 +672,83 @@
             </div>
           </div>
 
-          <div class="window-content calendar-layout">
-            <div>
-              <div class="calendar-nav">
-                <button id="previousMonth">‹</button>
-                <strong id="calendarTitle"></strong>
-                <button id="nextMonth">›</button>
+          <div class="window-content calendar-window">
+            <section class="productivity-hero calendar-hero">
+              <div class="productivity-hero-copy">
+                <small>CALENDAR</small>
+                <h2 id="calendarTodayLabel">Your schedule at a glance.</h2>
+                <p>See events and task deadlines together without losing the month view.</p>
               </div>
 
-              <div class="weekdays">
-                <span>Su</span><span>Mo</span><span>Tu</span><span>We</span>
-                <span>Th</span><span>Fr</span><span>Sa</span>
+              <div class="productivity-stat-strip calendar-overview-stats" aria-label="Calendar summary">
+                <div>
+                  <strong id="calendarUpcomingCount">0</strong>
+                  <span>Upcoming</span>
+                </div>
+                <div>
+                  <strong id="calendarMonthEventCount">0</strong>
+                  <span>This month</span>
+                </div>
+                <div>
+                  <strong id="calendarMonthTaskCount">0</strong>
+                  <span>Task dates</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="calendar-layout calendar-layout-redesign">
+              <div class="calendar-month-panel">
+                <div class="calendar-nav">
+                  <button id="previousMonth" type="button" aria-label="Previous month">‹</button>
+                  <div class="calendar-title-group">
+                    <strong id="calendarTitle"></strong>
+                    <button id="calendarTodayButton" class="calendar-today-button" type="button">Today</button>
+                  </div>
+                  <button id="nextMonth" type="button" aria-label="Next month">›</button>
+                </div>
+
+                <div class="weekdays">
+                  <span>Su</span><span>Mo</span><span>Tu</span><span>We</span>
+                  <span>Th</span><span>Fr</span><span>Sa</span>
+                </div>
+
+                <div id="calendarDays" class="calendar-days"></div>
+
+                <div class="calendar-legend" aria-label="Calendar legend">
+                  <span><i class="event-dot"></i> Event</span>
+                  <span><i class="task-dot"></i> Task deadline</span>
+                </div>
               </div>
 
-              <div id="calendarDays" class="calendar-days"></div>
-            </div>
+              <aside class="event-panel calendar-agenda-panel">
+                <div class="productivity-section-heading">
+                  <div>
+                    <small>AGENDA</small>
+                    <strong>Upcoming</strong>
+                  </div>
+                  <span>Tap any day to prefill a new event date.</span>
+                </div>
 
-            <div class="event-panel">
-              <h3>Upcoming</h3>
-              <form id="eventForm" class="stack-form">
-                <input id="eventTitle" type="text" placeholder="Event or deadline" required>
-                <input id="eventDate" type="date" required>
-                <select id="eventWorkspace">
-                  <option value="pharmacy">Pharmacy</option>
-                  <option value="clinic">Clinic</option>
-                  <option value="sk">SK</option>
-                  <option value="personal">Personal</option>
-                </select>
-                <button type="submit">Save event</button>
-              </form>
+                <form id="eventForm" class="stack-form calendar-event-form">
+                  <input id="eventTitle" type="text" placeholder="Event or deadline" required>
+                  <input id="eventDate" type="date" required>
+                  <select id="eventWorkspace">
+                    <option value="pharmacy">Pharmacy</option>
+                    <option value="clinic">Clinic</option>
+                    <option value="sk">SK</option>
+                    <option value="personal">Personal</option>
+                  </select>
+                  <button type="submit" class="primary-button">Save event</button>
+                </form>
 
-              <div id="eventList" class="list-stack"></div>
-              <p id="emptyEvents" class="empty-state">No upcoming events.</p>
-            </div>
+                <div id="eventList" class="list-stack calendar-event-list"></div>
+                <p id="emptyEvents" class="empty-state">No upcoming events.</p>
+              </aside>
+            </section>
           </div>
         </article>
 
-        <article class="app-window" data-app-window="notes" style="--x: 32%; --y: 13%; --w: 46%; --h: 64%;">
+        <article class="app-window" data-app-window="notes" style="--x: 12%; --y: 8%; --w: 72%; --h: 80%;">
           <div class="window-titlebar">
             <div class="window-title"><span>✎</span><strong>Notes</strong></div>
             <div class="window-controls">
@@ -679,7 +758,26 @@
             </div>
           </div>
 
-          <div class="window-content notes-window">
+          <div class="window-content notes-window notes-window-redesign">
+            <section class="productivity-hero notes-hero">
+              <div class="productivity-hero-copy">
+                <small>NOTES</small>
+                <h2>Capture it before it disappears.</h2>
+                <p>Keep separate notes, search everything, and pin the ones you want visible on your desktop.</p>
+              </div>
+
+              <div class="productivity-stat-strip notes-overview-stats" aria-label="Notes summary">
+                <div>
+                  <strong id="notesOverviewTotal">0</strong>
+                  <span>Total notes</span>
+                </div>
+                <div class="sticky">
+                  <strong id="notesOverviewSticky">0</strong>
+                  <span>Sticky</span>
+                </div>
+              </div>
+            </section>
+
             <section class="notes-toolbar">
               <button id="newNoteButton" class="primary-button" type="button">＋ New note</button>
 

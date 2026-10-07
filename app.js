@@ -1074,7 +1074,11 @@ function renderNotesList() {
   if (!list) return;
 
   const filtered = getFilteredNoteItems();
+  const stickyCount = noteItems.filter((note) => note.sticky).length;
+
   $("notesCount").textContent = String(filtered.length);
+  if ($("notesOverviewTotal")) $("notesOverviewTotal").textContent = String(noteItems.length);
+  if ($("notesOverviewSticky")) $("notesOverviewSticky").textContent = String(stickyCount);
   $("notesEmptyState").hidden = filtered.length > 0;
 
   list.innerHTML = filtered.map((note) => `
@@ -3189,9 +3193,24 @@ function setTaskViewMode(mode) {
   renderTasks();
 }
 
+function renderTaskOverview() {
+  const today = getLocalDateKey();
+  const open = tasks.filter((task) => !task.completed);
+  const done = tasks.filter((task) => task.completed);
+  const dueToday = open.filter((task) => task.dueDate === today);
+  const urgent = open.filter((task) => task.priority === "urgent");
+
+  if ($("taskOverviewOpen")) $("taskOverviewOpen").textContent = String(open.length);
+  if ($("taskOverviewToday")) $("taskOverviewToday").textContent = String(dueToday.length);
+  if ($("taskOverviewUrgent")) $("taskOverviewUrgent").textContent = String(urgent.length);
+  if ($("taskOverviewDone")) $("taskOverviewDone").textContent = String(done.length);
+}
+
 function renderTasks() {
   const list = $("taskList");
   renderTaskTagFilter();
+  renderTaskOverview();
+
   const visible = getVisibleTasks();
   list.innerHTML = "";
   updateTaskViewControls();
@@ -3556,6 +3575,52 @@ function renderDashboard() {
   renderDashboardOurSpace();
 }
 
+function updateCalendarOverview() {
+  const today = new Date();
+  const currentMonthKey =
+    `${shownYear}-${String(shownMonth + 1).padStart(2, "0")}`;
+
+  const upcoming = getUpcomingEvents();
+  const monthEvents = events.filter((event) =>
+    String(event.date || "").startsWith(currentMonthKey)
+  );
+  const monthTasks = tasks.filter((task) =>
+    !task.completed && String(task.dueDate || "").startsWith(currentMonthKey)
+  );
+
+  if ($("calendarTodayLabel")) {
+    $("calendarTodayLabel").textContent =
+      today.toLocaleDateString("en-PH", {
+        weekday: "long",
+        month: "long",
+        day: "numeric"
+      });
+  }
+  if ($("calendarUpcomingCount")) {
+    $("calendarUpcomingCount").textContent = String(upcoming.length);
+  }
+  if ($("calendarMonthEventCount")) {
+    $("calendarMonthEventCount").textContent = String(monthEvents.length);
+  }
+  if ($("calendarMonthTaskCount")) {
+    $("calendarMonthTaskCount").textContent = String(monthTasks.length);
+  }
+}
+
+function selectCalendarDate(dateKey) {
+  const input = $("eventDate");
+  if (!input) return;
+
+  input.value = dateKey;
+
+  const titleInput = $("eventTitle");
+  if (titleInput) titleInput.focus();
+
+  if (document.documentElement.classList.contains("phone-ui")) {
+    $("eventForm")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
 function renderCalendar() {
   const calendarDays = $("calendarDays");
   calendarDays.innerHTML = "";
@@ -3570,12 +3635,18 @@ function renderCalendar() {
       year: "numeric"
     });
 
+  updateCalendarOverview();
+
   for (let index = 0; index < firstDay; index += 1) {
-    calendarDays.appendChild(document.createElement("div"));
+    const spacer = document.createElement("div");
+    spacer.className = "calendar-day-spacer";
+    spacer.setAttribute("aria-hidden", "true");
+    calendarDays.appendChild(spacer);
   }
 
   for (let day = 1; day <= numberOfDays; day += 1) {
-    const element = document.createElement("div");
+    const element = document.createElement("button");
+    element.type = "button";
     element.className = "calendar-day";
     element.textContent = day;
 
@@ -3589,6 +3660,17 @@ function renderCalendar() {
     const dateKey =
       `${shownYear}-${String(shownMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
+    element.dataset.date = dateKey;
+    element.setAttribute(
+      "aria-label",
+      new Date(`${dateKey}T00:00:00`).toLocaleDateString("en-PH", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric"
+      })
+    );
+
     if (events.some((event) => event.date === dateKey)) {
       element.classList.add("has-event");
     }
@@ -3597,6 +3679,7 @@ function renderCalendar() {
       element.classList.add("has-task-due");
     }
 
+    element.addEventListener("click", () => selectCalendarDate(dateKey));
     calendarDays.appendChild(element);
   }
 }
@@ -3684,6 +3767,7 @@ function renderEvents() {
   });
 
   $("emptyEvents").style.display = upcoming.length ? "none" : "block";
+  updateCalendarOverview();
 }
 
 function formatMoney(amount) {
@@ -8206,7 +8290,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7N.3-Free";
+const BACKUP_APP_VERSION = "7N.4-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9079,6 +9163,14 @@ $("globalSearch").addEventListener("input", (event) => {
   renderTasks();
 
   if (searchTerm) openApp("tasks");
+});
+
+$("calendarTodayButton").addEventListener("click", () => {
+  const today = new Date();
+  shownMonth = today.getMonth();
+  shownYear = today.getFullYear();
+  renderCalendar();
+  selectCalendarDate(getLocalDateKey());
 });
 
 $("previousMonth").addEventListener("click", () => {
