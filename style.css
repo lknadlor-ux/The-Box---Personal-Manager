@@ -15678,3 +15678,8 @@ html.phone-ui.box-fallback-fullscreen #toast {
     scroll-behavior: auto !important;
   }
 }
+
+
+/* Phase 7N.6.1 — Stability Hotfix
+   No intentional visual changes. This marker helps confirm the hotfix bundle
+   has replaced the previous cached stylesheet. */

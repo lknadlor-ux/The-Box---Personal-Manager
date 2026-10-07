@@ -3,6 +3,10 @@
 const VIEW_MODE_STORAGE_KEY = "theBoxOSViewMode";
 const VALID_VIEW_MODES = new Set(["auto", "mobile", "tablet", "windows"]);
 
+// Phase 7N.6.1 stability hotfix:
+// This state must exist before the first updateDeviceUiClasses() call.
+let mobileActiveApp = "dashboard";
+
 function getViewModePreference() {
   const saved = localStorage.getItem(VIEW_MODE_STORAGE_KEY) || "auto";
   return VALID_VIEW_MODES.has(saved) ? saved : "auto";
@@ -334,7 +338,7 @@ let timerInterval = null;
 
 let topWindowZ = 20;
 let toastTimer = null;
-let mobileActiveApp = "dashboard";
+
 
 const DEFAULT_DOCUMENT_FOLDERS = [
   "FDA",
@@ -8391,7 +8395,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7N.6-Free";
+const BACKUP_APP_VERSION = "7N.6.1-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {

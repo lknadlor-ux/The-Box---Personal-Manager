@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7n6-final-polish";
+const CACHE_NAME = "the-box-os-phase-7n61-stability-hotfix";
 
 const APP_FILES = [
   "./",
