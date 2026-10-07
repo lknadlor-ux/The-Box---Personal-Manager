@@ -15683,3 +15683,405 @@ html.phone-ui.box-fallback-fullscreen #toast {
 /* Phase 7N.6.1 — Stability Hotfix
    No intentional visual changes. This marker helps confirm the hotfix bundle
    has replaced the previous cached stylesheet. */
+
+
+/* ==========================================================================
+   Phase 7O.1 — Universal Quick Capture
+   ========================================================================== */
+
+.quick-capture-topbar-button {
+  border-color: rgba(127,140,255,.16);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.quick-capture-topbar-button:hover {
+  border-color: var(--border-focus);
+  background: var(--accent-soft-strong);
+}
+
+.mobile-quick-capture-button {
+  display: none;
+}
+
+.quick-capture-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 520;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(4,6,10,.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-normal) ease;
+}
+
+.quick-capture-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.quick-capture-card {
+  width: min(720px, 100%);
+  max-height: min(760px, calc(var(--box-viewport-height, 100dvh) - 40px));
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 5% 0, rgba(127,140,255,.09), transparent 28%),
+    var(--surface-solid);
+  box-shadow: 0 32px 100px rgba(0,0,0,.46);
+  transform: translateY(12px) scale(.985);
+  transition: transform var(--motion-normal) var(--ease-standard);
+}
+
+.quick-capture-overlay.open .quick-capture-card {
+  transform: translateY(0) scale(1);
+}
+
+.quick-capture-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.quick-capture-header small,
+.quick-capture-header h2,
+.quick-capture-header p {
+  display: block;
+}
+
+.quick-capture-header small {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.quick-capture-header h2 {
+  margin: 4px 0;
+  font-size: 24px;
+  font-weight: 730;
+  letter-spacing: -.035em;
+}
+
+.quick-capture-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+#quickCaptureForm {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.quick-capture-input-field {
+  display: grid;
+  gap: 7px;
+  color: var(--text-soft);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+#quickCaptureText {
+  width: 100%;
+  min-height: 150px;
+  max-height: 320px;
+  padding: 15px;
+  resize: vertical;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.quick-capture-destinations {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.quick-capture-destination {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 46px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: rgba(255,255,255,.018);
+  color: var(--text-soft);
+  text-align: left;
+}
+
+.quick-capture-destination > span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--accent);
+}
+
+.quick-capture-destination strong {
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-capture-destination:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.quick-capture-destination.active {
+  border-color: var(--border-focus);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.quick-capture-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: rgba(255,255,255,.012);
+}
+
+.quick-capture-option-group {
+  min-width: 0;
+}
+
+.quick-capture-option-group > label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-soft);
+  font-size: 9px;
+}
+
+.quick-capture-option-group input:not([type="checkbox"]),
+.quick-capture-option-group select {
+  width: 100%;
+  min-height: 42px;
+}
+
+.quick-capture-option-group small {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.quick-capture-check-field {
+  display: flex !important;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-soft);
+}
+
+.quick-capture-check-field input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 0 8px 0 0;
+}
+
+.quick-capture-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.quick-capture-actions > div {
+  display: flex;
+  gap: 7px;
+}
+
+.quick-capture-shortcut {
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+html.quick-capture-open {
+  overflow: hidden;
+}
+
+/* Tablet */
+html.tablet-ui .quick-capture-card {
+  width: min(680px, calc(100vw - 28px));
+}
+
+/* Mobile */
+html.phone-ui .quick-capture-topbar-button {
+  display: none !important;
+}
+
+html.phone-ui .mobile-quick-capture-button {
+  position: fixed;
+  right: max(16px, calc(env(safe-area-inset-right) + 9px));
+  bottom: calc(82px + env(safe-area-inset-bottom));
+  z-index: 132;
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.09), transparent),
+    var(--accent);
+  color: #fff;
+  box-shadow: 0 14px 34px rgba(70,80,190,.3);
+  font-size: 25px;
+  line-height: 1;
+}
+
+html.phone-ui.mobile-input-active .mobile-quick-capture-button,
+html.phone-ui.box-fallback-fullscreen .mobile-quick-capture-button {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(18px);
+}
+
+html.phone-ui .quick-capture-overlay {
+  align-items: end;
+  padding:
+    10px
+    max(7px, env(safe-area-inset-right))
+    max(7px, env(safe-area-inset-bottom))
+    max(7px, env(safe-area-inset-left));
+}
+
+html.phone-ui .quick-capture-card {
+  width: 100%;
+  max-height: calc(var(--box-viewport-height, 100dvh) - 16px);
+  padding: 14px;
+  border-radius: 20px 20px 15px 15px;
+}
+
+html.phone-ui .quick-capture-header {
+  position: sticky;
+  top: -14px;
+  z-index: 4;
+  margin: 0 -14px;
+  padding: 14px;
+  background: rgba(16,19,27,.97);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+html.phone-ui body.light-theme .quick-capture-header,
+html.phone-ui .light-theme .quick-capture-header {
+  background: rgba(255,255,255,.97);
+}
+
+html.phone-ui .quick-capture-header h2 {
+  font-size: 20px;
+}
+
+html.phone-ui #quickCaptureText {
+  min-height: 130px;
+  font-size: 16px;
+}
+
+html.phone-ui .quick-capture-destinations {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+html.phone-ui .quick-capture-destination {
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  min-height: 58px;
+  padding: 5px 2px;
+  text-align: center;
+}
+
+html.phone-ui .quick-capture-destination > span {
+  width: 27px;
+  height: 27px;
+  border-radius: 8px;
+}
+
+html.phone-ui .quick-capture-destination strong {
+  width: 100%;
+  font-size: 7px;
+}
+
+html.phone-ui .quick-capture-options {
+  grid-template-columns: 1fr;
+  padding: 9px;
+}
+
+html.phone-ui .quick-capture-actions {
+  position: sticky;
+  bottom: -14px;
+  z-index: 4;
+  align-items: stretch;
+  flex-direction: column;
+  margin: 0 -14px -14px;
+  padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: rgba(16,19,27,.97);
+}
+
+html.phone-ui body.light-theme .quick-capture-actions,
+html.phone-ui .light-theme .quick-capture-actions {
+  background: rgba(255,255,255,.97);
+}
+
+html.phone-ui .quick-capture-actions > div {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+}
+
+html.phone-ui .quick-capture-actions button {
+  width: 100%;
+  min-height: 46px;
+}
+
+html.phone-ui .quick-capture-shortcut {
+  display: none;
+}
+
+@media (orientation: landscape) {
+  html.phone-ui .mobile-quick-capture-button {
+    right: max(12px, env(safe-area-inset-right));
+    bottom: calc(61px + env(safe-area-inset-bottom));
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  html.phone-ui .quick-capture-destinations {
+    grid-template-columns: repeat(5, minmax(70px, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-capture-overlay,
+  .quick-capture-card,
+  .mobile-quick-capture-button {
+    transition: none !important;
+  }
+}

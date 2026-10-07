@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7n61">
+  <link rel="stylesheet" href="style.css?v=7o1">
 </head>
 <body>
   <div class="desktop-shell">
@@ -102,6 +102,8 @@
         <button id="themeButton" class="topbar-button" aria-label="Toggle theme">☾</button>
         <button id="fullscreenButton" class="topbar-button fullscreen-topbar-button"
           type="button" aria-label="Enter full screen" title="Full screen">⛶</button>
+        <button id="quickCaptureButton" class="topbar-button quick-capture-topbar-button"
+          type="button" aria-label="Quick capture" title="Quick capture">＋</button>
         <button id="notificationButton" class="topbar-button notification-topbar-button"
           type="button" aria-label="Open reminders" title="Reminders">
           <span aria-hidden="true">♢</span>
@@ -2012,6 +2014,11 @@
       <strong>Exit</strong>
     </button>
 
+    <button id="mobileQuickCaptureButton" class="mobile-quick-capture-button"
+      type="button" aria-label="Quick capture" title="Quick capture">
+      <span aria-hidden="true">＋</span>
+    </button>
+
     <nav id="mobileNavigation" class="mobile-navigation" aria-label="Mobile navigation">
       <button class="mobile-nav-item active" type="button" data-open-app="dashboard" data-mobile-nav-app="dashboard" aria-label="Home">
         <span class="mobile-nav-icon" aria-hidden="true">⌂</span>
@@ -2527,6 +2534,117 @@
     </section>
   </div>
 
+  <div id="quickCaptureOverlay" class="quick-capture-overlay" aria-hidden="true">
+    <section class="quick-capture-card" role="dialog" aria-modal="true" aria-labelledby="quickCaptureTitle">
+      <header class="quick-capture-header">
+        <div>
+          <small>UNIVERSAL QUICK CAPTURE</small>
+          <h2 id="quickCaptureTitle">Capture it now.</h2>
+          <p>Write once, then choose where it belongs.</p>
+        </div>
+        <button id="closeQuickCaptureButton" class="window-button" type="button" aria-label="Close quick capture">✕</button>
+      </header>
+
+      <form id="quickCaptureForm">
+        <label class="quick-capture-input-field">
+          <span>What do you want to remember?</span>
+          <textarea id="quickCaptureText" maxlength="20000" spellcheck="true"
+            placeholder="Type a task, note, event, journal thought, or plan..."></textarea>
+        </label>
+
+        <div class="quick-capture-destinations" role="group" aria-label="Save as">
+          <button class="quick-capture-destination active" type="button" data-capture-destination="task" aria-pressed="true">
+            <span>✓</span><strong>Task</strong>
+          </button>
+          <button class="quick-capture-destination" type="button" data-capture-destination="note" aria-pressed="false">
+            <span>✎</span><strong>Note</strong>
+          </button>
+          <button class="quick-capture-destination" type="button" data-capture-destination="event" aria-pressed="false">
+            <span>◫</span><strong>Event</strong>
+          </button>
+          <button class="quick-capture-destination" type="button" data-capture-destination="journal" aria-pressed="false">
+            <span>☷</span><strong>Journal</strong>
+          </button>
+          <button class="quick-capture-destination" type="button" data-capture-destination="ourspace" aria-pressed="false">
+            <span>♥</span><strong>Our Space</strong>
+          </button>
+        </div>
+
+        <section class="quick-capture-options">
+          <div class="quick-capture-option-group" data-capture-for="task event">
+            <label>
+              Workspace
+              <select id="quickCaptureWorkspace">
+                <option value="personal">Personal</option>
+                <option value="pharmacy">Pharmacy</option>
+                <option value="clinic">Clinic</option>
+                <option value="sk">SK</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="quick-capture-option-group" data-capture-for="task">
+            <label>
+              Priority
+              <select id="quickCapturePriority">
+                <option value="normal">Normal</option>
+                <option value="important">Important</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="quick-capture-option-group" data-capture-for="task event journal ourspace">
+            <label>
+              <span id="quickCaptureDateLabel">Due date <small>Optional</small></span>
+              <input id="quickCaptureDate" type="date">
+            </label>
+          </div>
+
+          <div class="quick-capture-option-group hidden" data-capture-for="note">
+            <label class="quick-capture-check-field">
+              <input id="quickCaptureSticky" type="checkbox">
+              <span>Make this a Sticky Note</span>
+            </label>
+          </div>
+
+          <div class="quick-capture-option-group hidden" data-capture-for="journal">
+            <label class="quick-capture-check-field">
+              <input id="quickCaptureFavorite" type="checkbox">
+              <span>Favorite this journal entry</span>
+            </label>
+          </div>
+
+          <div class="quick-capture-option-group hidden" data-capture-for="ourspace">
+            <label>
+              Category
+              <select id="quickCaptureOurSpaceCategory">
+                <option value="Date">Date</option>
+                <option value="Travel">Travel</option>
+                <option value="Food / Café">Food / Café</option>
+                <option value="Movie / Series">Movie / Series</option>
+                <option value="Activity">Activity</option>
+                <option value="Gift idea">Gift idea</option>
+                <option value="Future purchase">Future purchase</option>
+                <option value="Milestone">Milestone</option>
+                <option value="Bucket list">Bucket list</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <footer class="quick-capture-actions">
+          <span class="quick-capture-shortcut">Ctrl/⌘ + Shift + Space</span>
+          <div>
+            <button id="cancelQuickCaptureButton" class="secondary-button" type="button">Cancel</button>
+            <button id="saveQuickCaptureButton" class="primary-button" type="submit">Save task</button>
+          </div>
+        </footer>
+      </form>
+    </section>
+  </div>
+
   <div id="authOverlay" class="auth-overlay">
     <section class="auth-card">
       <div class="auth-brand">
@@ -2578,6 +2696,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7n61"></script>
+  <script src="app.js?v=7o1"></script>
 </body>
 </html>

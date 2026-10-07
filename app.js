@@ -6,6 +6,7 @@ const VALID_VIEW_MODES = new Set(["auto", "mobile", "tablet", "windows"]);
 // Phase 7N.6.1 stability hotfix:
 // This state must exist before the first updateDeviceUiClasses() call.
 let mobileActiveApp = "dashboard";
+let quickCaptureDestination = "task";
 
 function getViewModePreference() {
   const saved = localStorage.getItem(VIEW_MODE_STORAGE_KEY) || "auto";
@@ -1404,6 +1405,241 @@ function handleFullscreenChange() {
     document.documentElement.classList.remove("box-native-fullscreen");
   }
   updateFullscreenUi();
+}
+
+
+function getQuickCaptureFirstLine(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean) || "";
+}
+
+function getQuickCaptureRemainder(text) {
+  const lines = String(text || "").split(/\r?\n/);
+  const firstNonEmptyIndex = lines.findIndex((line) => line.trim());
+  if (firstNonEmptyIndex < 0) return "";
+  return lines
+    .slice(firstNonEmptyIndex + 1)
+    .join("\n")
+    .trim();
+}
+
+function getQuickCaptureAutoTitle(text, fallback = "Untitled") {
+  const firstLine = getQuickCaptureFirstLine(text);
+  if (!firstLine) return fallback;
+  return firstLine.length > 100 ? `${firstLine.slice(0, 99)}…` : firstLine;
+}
+
+function setQuickCaptureDestination(destination) {
+  const allowed = new Set(["task", "note", "event", "journal", "ourspace"]);
+  quickCaptureDestination = allowed.has(destination) ? destination : "task";
+
+  document.querySelectorAll("[data-capture-destination]").forEach((button) => {
+    const active = button.dataset.captureDestination === quickCaptureDestination;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+
+  document.querySelectorAll("[data-capture-for]").forEach((group) => {
+    const destinations = String(group.dataset.captureFor || "").split(/\s+/);
+    group.classList.toggle("hidden", !destinations.includes(quickCaptureDestination));
+  });
+
+  const dateLabel = $("quickCaptureDateLabel");
+  const dateInput = $("quickCaptureDate");
+  const saveButton = $("saveQuickCaptureButton");
+
+  const labels = {
+    task: "Save task",
+    note: "Save note",
+    event: "Save event",
+    journal: "Save journal entry",
+    ourspace: "Save plan"
+  };
+  saveButton.textContent = labels[quickCaptureDestination];
+
+  if (quickCaptureDestination === "event") {
+    dateLabel.innerHTML = "Event date <small>Required</small>";
+    dateInput.required = true;
+  } else if (quickCaptureDestination === "journal") {
+    dateLabel.innerHTML = "Journal date";
+    dateInput.required = false;
+    if (!dateInput.value) dateInput.value = getLocalDateKey();
+  } else if (quickCaptureDestination === "ourspace") {
+    dateLabel.innerHTML = "Target date <small>Optional</small>";
+    dateInput.required = false;
+  } else {
+    dateLabel.innerHTML = "Due date <small>Optional</small>";
+    dateInput.required = false;
+  }
+}
+
+function resetQuickCaptureForm() {
+  $("quickCaptureForm").reset();
+  $("quickCaptureWorkspace").value = "personal";
+  $("quickCapturePriority").value = "normal";
+  $("quickCaptureOurSpaceCategory").value = "Date";
+  setQuickCaptureDestination("task");
+}
+
+function openQuickCapture(destination = "task") {
+  closeLauncher();
+  resetQuickCaptureForm();
+  setQuickCaptureDestination(destination);
+  $("quickCaptureOverlay").classList.add("open");
+  $("quickCaptureOverlay").setAttribute("aria-hidden", "false");
+  document.documentElement.classList.add("quick-capture-open");
+  window.setTimeout(() => $("quickCaptureText").focus(), 40);
+}
+
+function closeQuickCapture() {
+  $("quickCaptureOverlay").classList.remove("open");
+  $("quickCaptureOverlay").setAttribute("aria-hidden", "true");
+  document.documentElement.classList.remove("quick-capture-open");
+}
+
+async function saveQuickCapture() {
+  const text = $("quickCaptureText").value.trim();
+  if (!text) {
+    showToast("Write something first");
+    $("quickCaptureText").focus();
+    return false;
+  }
+
+  const firstLine = getQuickCaptureFirstLine(text);
+  const remainder = getQuickCaptureRemainder(text);
+  const date = $("quickCaptureDate").value;
+  const workspace = $("quickCaptureWorkspace").value;
+
+  if (quickCaptureDestination === "task") {
+    const saved = createTask({
+      text: firstLine || text,
+      details: remainder,
+      dueDate: date,
+      workspace,
+      priority: $("quickCapturePriority").value,
+      status: "todo",
+      tags: ["quick-capture"],
+      subtasks: [],
+      recurrence: { type: "none", days: [] }
+    });
+    if (!saved) return false;
+    showToast("Task captured");
+    return true;
+  }
+
+  if (quickCaptureDestination === "note") {
+    const now = new Date().toISOString();
+    const note = normalizeNoteItem({
+      id: createNoteItemId(),
+      title: getQuickCaptureAutoTitle(text, "Quick Note"),
+      content: text,
+      sticky: $("quickCaptureSticky").checked,
+      createdAt: now,
+      updatedAt: now
+    });
+    noteItems.unshift(note);
+    selectedNoteId = note.id;
+    persistNoteItems();
+    renderNotesCenter();
+    renderDashboard();
+    showToast(note.sticky ? "Sticky Note captured" : "Note captured");
+    return true;
+  }
+
+  if (quickCaptureDestination === "event") {
+    if (!date) {
+      showToast("Choose an event date");
+      $("quickCaptureDate").focus();
+      return false;
+    }
+    events.unshift({
+      id: Date.now() + Math.random(),
+      title: firstLine || text,
+      date,
+      workspace
+    });
+    saveJSON(STORAGE.events, events);
+    renderAll();
+    showToast("Event captured");
+    return true;
+  }
+
+  if (quickCaptureDestination === "journal") {
+    const now = new Date().toISOString();
+    const entry = normalizeJournalEntry({
+      id: createJournalEntryId(),
+      entry_date: date || getJournalToday(),
+      entry_time: "",
+      title: getQuickCaptureAutoTitle(text, "Journal entry"),
+      content: text,
+      mood: "",
+      tags: ["quick-capture"],
+      favorite: $("quickCaptureFavorite").checked,
+      created_at: now,
+      updated_at: now
+    });
+
+    journalEntries.unshift(entry);
+    persistJournalEntries({ pendingCloudSync: !window.BoxCloud?.isReady() });
+    renderJournalCenter();
+
+    if (window.BoxCloud?.isReady() && window.BoxCloud.saveJournalEntry) {
+      const result = await window.BoxCloud.saveJournalEntry(entry);
+      if (result?.error) {
+        localStorage.setItem(STORAGE.journalPendingSync, "1");
+        showToast("Journal captured locally · sync pending");
+        return true;
+      }
+    }
+
+    showToast("Journal entry captured");
+    return true;
+  }
+
+  if (quickCaptureDestination === "ourspace") {
+    const now = new Date().toISOString();
+    const plan = normalizeOurSpacePlan({
+      id: createOurSpaceId(),
+      title: firstLine || text,
+      category: $("quickCaptureOurSpaceCategory").value,
+      status: date ? "scheduled" : "idea",
+      target_date: date,
+      place: "",
+      estimated_budget: null,
+      notes: remainder,
+      checklist: [],
+      links: [],
+      attachments: [],
+      favorite: false,
+      priority: "medium",
+      actual_date: "",
+      favorite_memory: "",
+      actual_budget: null,
+      rating: null,
+      created_at: now,
+      updated_at: now
+    });
+
+    ourSpacePlans.unshift(plan);
+    persistOurSpacePlans({ pendingCloudSync: !window.BoxCloud?.isReady() });
+    renderOurSpaceCenter();
+
+    if (window.BoxCloud?.isReady() && window.BoxCloud.saveOurSpacePlan) {
+      const result = await window.BoxCloud.saveOurSpacePlan(plan);
+      if (result?.error) {
+        localStorage.setItem(STORAGE.ourSpacePendingSync, "1");
+        showToast("Plan captured locally · sync pending");
+        return true;
+      }
+    }
+
+    showToast("Our Space plan captured");
+    return true;
+  }
+
+  return false;
 }
 
 function showToast(message) {
@@ -8395,7 +8631,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7N.6.1-Free";
+const BACKUP_APP_VERSION = "7O.1-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9104,6 +9340,57 @@ $("themeButton").addEventListener("click", () => {
     document.body.classList.contains("light-theme") ? "light" : "dark"
   );
   restoreTheme();
+});
+
+$("quickCaptureButton").addEventListener("click", () => openQuickCapture());
+$("mobileQuickCaptureButton").addEventListener("click", () => openQuickCapture());
+$("closeQuickCaptureButton").addEventListener("click", closeQuickCapture);
+$("cancelQuickCaptureButton").addEventListener("click", closeQuickCapture);
+
+document.querySelectorAll("[data-capture-destination]").forEach((button) => {
+  button.addEventListener("click", () => {
+    setQuickCaptureDestination(button.dataset.captureDestination);
+  });
+});
+
+$("quickCaptureForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("saveQuickCaptureButton").disabled = true;
+  try {
+    const saved = await saveQuickCapture();
+    if (saved) closeQuickCapture();
+  } finally {
+    $("saveQuickCaptureButton").disabled = false;
+  }
+});
+
+$("quickCaptureOverlay").addEventListener("pointerdown", (event) => {
+  if (event.target === $("quickCaptureOverlay")) closeQuickCapture();
+});
+
+document.addEventListener("keydown", (event) => {
+  const shortcut =
+    (event.ctrlKey || event.metaKey) &&
+    event.shiftKey &&
+    event.code === "Space";
+
+  if (shortcut) {
+    event.preventDefault();
+    if ($("quickCaptureOverlay").classList.contains("open")) {
+      closeQuickCapture();
+    } else {
+      openQuickCapture();
+    }
+    return;
+  }
+
+  if (
+    event.key === "Escape" &&
+    $("quickCaptureOverlay").classList.contains("open")
+  ) {
+    event.preventDefault();
+    closeQuickCapture();
+  }
 });
 
 $("quickTaskForm").addEventListener("submit", (event) => {
