@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o1">
+  <link rel="stylesheet" href="style.css?v=7o2">
 </head>
 <body>
   <div class="desktop-shell">
@@ -257,6 +257,12 @@
           <small>Local productivity help</small>
         </button>
 
+        <button class="app-tile favorites-app-tile" data-open-app="favorites">
+          <span class="app-icon">★</span>
+          <strong>Favorites</strong>
+          <small>Pinned items in one place</small>
+        </button>
+
         <button class="app-tile" data-open-app="reminders">
           <span class="app-icon">♢</span>
           <strong>Reminders</strong>
@@ -342,6 +348,11 @@
         <button class="desktop-icon" data-open-app="calendar">
           <span>◫</span>
           <strong>Calendar</strong>
+        </button>
+
+        <button class="desktop-icon" data-open-app="favorites">
+          <span>★</span>
+          <strong>Favorites</strong>
         </button>
 
         <button class="desktop-icon" data-open-app="templates">
@@ -841,6 +852,65 @@
             </section>
           </div>
         </article>
+
+        <article class="app-window favorites-app-window" data-app-window="favorites" style="--x: 11%; --y: 7%; --w: 74%; --h: 80%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>★</span><strong>Favorites</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content favorites-window">
+            <section class="favorites-hero">
+              <div>
+                <small>FAVORITES HUB</small>
+                <h2>Everything you marked as important.</h2>
+                <p>Sticky notes, favorite journal entries, Our Space plans, favorite Vault files, and important tasks — gathered in one place.</p>
+              </div>
+
+              <div class="favorites-summary" aria-label="Favorites summary">
+                <div><strong id="favoritesTotalCount">0</strong><span>Total</span></div>
+                <div><strong id="favoritesNotesCount">0</strong><span>Notes</span></div>
+                <div><strong id="favoritesJournalCount">0</strong><span>Journal</span></div>
+                <div><strong id="favoritesOurSpaceCount">0</strong><span>Our Space</span></div>
+                <div><strong id="favoritesFilesCount">0</strong><span>Files</span></div>
+              </div>
+            </section>
+
+            <section class="favorites-toolbar">
+              <label class="favorites-search">
+                <span>⌕</span>
+                <input id="favoritesSearchInput" type="search" placeholder="Search favorites">
+              </label>
+
+              <div class="favorites-filter-group" role="group" aria-label="Favorites type">
+                <button class="favorites-filter active" type="button" data-favorites-filter="all">All</button>
+                <button class="favorites-filter" type="button" data-favorites-filter="tasks">Tasks</button>
+                <button class="favorites-filter" type="button" data-favorites-filter="notes">Notes</button>
+                <button class="favorites-filter" type="button" data-favorites-filter="journal">Journal</button>
+                <button class="favorites-filter" type="button" data-favorites-filter="ourspace">Our Space</button>
+                <button class="favorites-filter" type="button" data-favorites-filter="files">Files</button>
+              </div>
+            </section>
+
+            <section class="favorites-content">
+              <div class="favorites-section-heading">
+                <div>
+                  <small id="favoritesEyebrow">ALL FAVORITES</small>
+                  <h3 id="favoritesHeading">Pinned across The Box</h3>
+                </div>
+                <span id="favoritesResultCount">0 items</span>
+              </div>
+
+              <div id="favoritesList" class="favorites-list"></div>
+              <p id="favoritesEmptyState" class="empty-state">No favorites match this view.</p>
+            </section>
+          </div>
+        </article>
+
 
         <article class="app-window" data-app-window="pharmacy" style="--x: 9%; --y: 12%; --w: 72%; --h: 72%;">
           <div class="window-titlebar">
@@ -2100,6 +2170,10 @@
         <span class="dock-icon" aria-hidden="true">▤</span>
         <span class="dock-label">Templates</span>
       </button>
+      <button class="dock-item" data-open-app="favorites" title="Favorites" aria-label="Favorites">
+        <span class="dock-icon" aria-hidden="true">★</span>
+        <span class="dock-label">Favorites</span>
+      </button>
       <button class="dock-item" data-open-app="reminders" title="Reminders" aria-label="Reminders">
         <span class="dock-icon dock-reminder-icon" aria-hidden="true">♢</span>
         <span class="dock-label">Alerts</span>
@@ -2696,6 +2770,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o1"></script>
+  <script src="app.js?v=7o2"></script>
 </body>
 </html>

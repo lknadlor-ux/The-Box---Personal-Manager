@@ -328,6 +328,8 @@ let activeFilter = "all";
 let activeWorkspaceFilter = "all";
 let searchTerm = "";
 let activeTaskTagFilter = "all";
+let favoritesFilter = "all";
+let favoritesSearchTerm = "";
 let taskViewMode = localStorage.getItem(STORAGE.taskView) === "kanban" ? "kanban" : "list";
 let shownMonth = new Date().getMonth();
 let shownYear = new Date().getFullYear();
@@ -1235,6 +1237,7 @@ function updateSelectedNoteFromEditor() {
     persistNoteItems();
     $("noteStatus").textContent = "Saved";
     renderDashboard();
+    renderFavoritesHub();
   }, 450);
 }
 
@@ -1850,6 +1853,13 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "favorites") {
+    renderFavoritesHub();
+    if (window.BoxCloud?.isReady() && !documents.length && !documentsLoading) {
+      loadDocuments({ silent: true }).then(() => renderFavoritesHub());
+    }
   }
 
   if (appName === "dashboard") {
@@ -6136,6 +6146,7 @@ async function loadDocuments({ silent = false } = {}) {
   renderEvents();
   renderDocuments();
   renderDashboard();
+  renderFavoritesHub();
 }
 
 async function uploadSelectedDocuments() {
@@ -6457,6 +6468,7 @@ function renderJournalCenter() {
   renderJournalEntryList();
   updateJournalNavigation();
   updateJournalWordCount();
+  renderFavoritesHub();
 }
 
 async function saveJournalEntryFromEditor() {
@@ -7477,6 +7489,7 @@ function renderOurSpaceCenter() {
     resetOurSpaceEditor();
   }
   renderDashboard();
+  renderFavoritesHub();
 }
 
 function collectOurSpaceEditorPlan() {
@@ -8631,7 +8644,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.1-Free";
+const BACKUP_APP_VERSION = "7O.2-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9138,6 +9151,224 @@ async function refreshAppFiles() {
   }
 }
 
+
+function getFavoriteHubItems() {
+  const items = [];
+
+  tasks
+    .filter((task) =>
+      !task.completed &&
+      (task.priority === "urgent" || task.priority === "important")
+    )
+    .forEach((task) => {
+      items.push({
+        type: "tasks",
+        id: String(task.id),
+        icon: task.priority === "urgent" ? "!" : "✓",
+        title: task.text || "Untitled task",
+        preview: [
+          task.priority === "urgent" ? "Urgent" : "Important",
+          task.workspace || "Personal",
+          task.dueDate ? getDashboardTaskDueLabel(task) : ""
+        ].filter(Boolean).join(" · "),
+        updatedAt: task.updatedAt || task.createdAt || "",
+        accent: task.priority === "urgent" ? "danger" : "warning"
+      });
+    });
+
+  noteItems
+    .filter((note) => note.sticky)
+    .forEach((note) => {
+      items.push({
+        type: "notes",
+        id: String(note.id),
+        icon: "✎",
+        title: note.title || "Untitled note",
+        preview: getNotePreview(note, 180),
+        updatedAt: note.updatedAt || note.createdAt || "",
+        accent: "warning"
+      });
+    });
+
+  journalEntries
+    .filter((entry) => entry.favorite)
+    .forEach((entry) => {
+      items.push({
+        type: "journal",
+        id: String(entry.id),
+        icon: "☷",
+        title: entry.title || "Untitled entry",
+        preview: [
+          formatJournalDate(entry.entry_date),
+          String(entry.content || "").replace(/\s+/g, " ").trim().slice(0, 150)
+        ].filter(Boolean).join(" · "),
+        updatedAt: entry.updated_at || entry.created_at || "",
+        accent: "accent"
+      });
+    });
+
+  ourSpacePlans
+    .filter((plan) => plan.favorite)
+    .forEach((plan) => {
+      const meta = [
+        plan.category,
+        plan.status === "done" ? "Archived memory" : getOurSpaceStatusLabel(plan.status),
+        plan.target_date ? formatOurSpaceDate(plan.target_date) : ""
+      ].filter(Boolean).join(" · ");
+
+      items.push({
+        type: "ourspace",
+        id: String(plan.id),
+        icon: getOurSpaceCategoryIcon(plan.category),
+        title: plan.title || "Untitled plan",
+        preview: meta,
+        updatedAt: plan.updated_at || plan.created_at || "",
+        accent: "love"
+      });
+    });
+
+  documents
+    .filter((documentItem) => !documentItem.deleted_at && documentItem.is_favorite)
+    .forEach((documentItem) => {
+      items.push({
+        type: "files",
+        id: String(documentItem.id),
+        icon: getDocumentTypeLabel(documentItem),
+        title: documentItem.name || "Untitled file",
+        preview: [
+          documentItem.folder || "Documents",
+          formatBytes(Number(documentItem.size_bytes || 0)),
+          getDocumentCompliance(documentItem).label
+        ].filter(Boolean).join(" · "),
+        updatedAt: documentItem.updated_at || documentItem.created_at || "",
+        accent: "accent"
+      });
+    });
+
+  return items.sort((a, b) =>
+    String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
+  );
+}
+
+function getFilteredFavoriteHubItems() {
+  const query = favoritesSearchTerm.toLocaleLowerCase();
+  return getFavoriteHubItems().filter((item) => {
+    if (favoritesFilter !== "all" && item.type !== favoritesFilter) return false;
+    if (!query) return true;
+    return `${item.title} ${item.preview}`.toLocaleLowerCase().includes(query);
+  });
+}
+
+function getFavoritesFilterLabel(filter) {
+  return {
+    all: "ALL FAVORITES",
+    tasks: "IMPORTANT TASKS",
+    notes: "STICKY NOTES",
+    journal: "FAVORITE JOURNAL",
+    ourspace: "OUR SPACE FAVORITES",
+    files: "FAVORITE FILES"
+  }[filter] || "FAVORITES";
+}
+
+function getFavoritesHeading(filter) {
+  return {
+    all: "Pinned across The Box",
+    tasks: "Important work",
+    notes: "Sticky notes",
+    journal: "Journal favorites",
+    ourspace: "Plans worth keeping close",
+    files: "Favorite Vault files"
+  }[filter] || "Favorites";
+}
+
+function openFavoriteHubItem(type, id) {
+  if (type === "tasks") {
+    const task = tasks.find((item) => String(item.id) === String(id));
+    openApp("tasks");
+    if (task) openTaskModal(task, "tasks", task.id);
+    return;
+  }
+
+  if (type === "notes") {
+    openApp("notes");
+    selectNoteItem(id);
+    return;
+  }
+
+  if (type === "journal") {
+    openApp("journal");
+    selectJournalEntry(id, { bypassDirtyCheck: true });
+    return;
+  }
+
+  if (type === "ourspace") {
+    openApp("ourspace");
+    selectOurSpacePlan(id);
+    return;
+  }
+
+  if (type === "files") {
+    const documentItem = documents.find((item) => String(item.id) === String(id));
+    openApp("documents");
+    if (documentItem) openDocumentPreview(documentItem);
+  }
+}
+
+function renderFavoritesHub() {
+  const list = $("favoritesList");
+  if (!list) return;
+
+  const all = getFavoriteHubItems();
+  const visible = getFilteredFavoriteHubItems();
+
+  const notesCount = all.filter((item) => item.type === "notes").length;
+  const journalCount = all.filter((item) => item.type === "journal").length;
+  const ourSpaceCount = all.filter((item) => item.type === "ourspace").length;
+  const filesCount = all.filter((item) => item.type === "files").length;
+
+  $("favoritesTotalCount").textContent = String(all.length);
+  $("favoritesNotesCount").textContent = String(notesCount);
+  $("favoritesJournalCount").textContent = String(journalCount);
+  $("favoritesOurSpaceCount").textContent = String(ourSpaceCount);
+  $("favoritesFilesCount").textContent = String(filesCount);
+
+  $("favoritesSearchInput").value = favoritesSearchTerm;
+  $("favoritesEyebrow").textContent = getFavoritesFilterLabel(favoritesFilter);
+  $("favoritesHeading").textContent = getFavoritesHeading(favoritesFilter);
+  $("favoritesResultCount").textContent =
+    `${visible.length} item${visible.length === 1 ? "" : "s"}`;
+  $("favoritesEmptyState").hidden = visible.length > 0;
+
+  document.querySelectorAll("[data-favorites-filter]").forEach((button) => {
+    const active = button.dataset.favoritesFilter === favoritesFilter;
+    button.classList.toggle("active", active);
+  });
+
+  list.innerHTML = visible.map((item) => `
+    <button class="favorite-hub-card ${escapeHtml(item.type)} ${escapeHtml(item.accent)}"
+      type="button"
+      data-favorite-type="${escapeHtml(item.type)}"
+      data-favorite-id="${escapeHtml(item.id)}">
+      <span class="favorite-hub-icon">${escapeHtml(item.icon)}</span>
+      <span class="favorite-hub-copy">
+        <small>${escapeHtml(getFavoritesFilterLabel(item.type).replace(/S$/, ""))}</small>
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.preview || "Open item")}</p>
+      </span>
+      <span class="favorite-hub-arrow" aria-hidden="true">→</span>
+    </button>
+  `).join("");
+
+  list.querySelectorAll("[data-favorite-type]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openFavoriteHubItem(
+        button.dataset.favoriteType,
+        button.dataset.favoriteId
+      );
+    });
+  });
+}
+
 function renderAll() {
   renderTasks();
   renderDashboard();
@@ -9149,6 +9380,7 @@ function renderAll() {
   renderTemplateCenter();
   renderReminderCenter();
   renderNotesCenter();
+  renderFavoritesHub();
 }
 
 async function loadWeather() {
@@ -9312,6 +9544,18 @@ function runAssistant(action) {
 
 document.querySelectorAll("[data-open-app]").forEach((button) => {
   button.addEventListener("click", () => openApp(button.dataset.openApp));
+});
+
+document.querySelectorAll("[data-favorites-filter]").forEach((button) => {
+  button.addEventListener("click", () => {
+    favoritesFilter = button.dataset.favoritesFilter || "all";
+    renderFavoritesHub();
+  });
+});
+
+$("favoritesSearchInput").addEventListener("input", (event) => {
+  favoritesSearchTerm = event.target.value.trim();
+  renderFavoritesHub();
 });
 
 $("launcherButton").addEventListener("click", toggleMobileMoreMenu);
