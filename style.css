@@ -12741,3 +12741,514 @@ html.tablet-ui .dashboard-bottom-grid {
 html.tablet-ui .dashboard-quick-links-panel {
   grid-column: 1 / -1;
 }
+
+
+/* ==========================================================================
+   Phase 7N.3 — Mobile Navigation + Native Phone Layouts
+   ========================================================================== */
+
+.mobile-navigation {
+  display: none;
+}
+
+html.phone-ui .dock {
+  display: none !important;
+}
+
+html.phone-ui .mobile-navigation {
+  position: fixed;
+  right: max(7px, env(safe-area-inset-right));
+  bottom: max(7px, env(safe-area-inset-bottom));
+  left: max(7px, env(safe-area-inset-left));
+  z-index: 130;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch;
+  height: 64px;
+  padding: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  background: rgba(13, 16, 22, .9);
+  box-shadow: 0 16px 46px rgba(0,0,0,.34);
+  backdrop-filter: blur(24px) saturate(135%);
+  -webkit-backdrop-filter: blur(24px) saturate(135%);
+  transition:
+    opacity var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+
+html.phone-ui body.light-theme .mobile-navigation,
+html.phone-ui .light-theme .mobile-navigation {
+  background: rgba(255,255,255,.9);
+}
+
+html.phone-ui .mobile-nav-item {
+  position: relative;
+  display: grid;
+  grid-template-rows: 27px 12px;
+  place-items: center;
+  align-content: center;
+  gap: 1px;
+  min-width: 0;
+  min-height: 52px !important;
+  padding: 3px 2px;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+html.phone-ui .mobile-nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+html.phone-ui .mobile-nav-icon {
+  display: grid;
+  place-items: center;
+  min-width: 25px;
+  min-height: 25px;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+html.phone-ui .mobile-nav-more .mobile-nav-icon {
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+html.phone-ui .mobile-nav-item > span:last-of-type {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 7.5px;
+  font-weight: 720;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html.phone-ui .mobile-nav-badge {
+  position: absolute;
+  top: 3px;
+  right: 9px;
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 2px solid var(--surface-solid);
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 7px;
+  font-weight: 800;
+}
+
+html.phone-ui .mobile-nav-badge.hidden {
+  display: none !important;
+}
+
+html.phone-ui.mobile-input-active .mobile-navigation {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(125%);
+}
+
+html.phone-ui .desktop {
+  inset:
+    calc(58px + env(safe-area-inset-top))
+    0
+    calc(78px + env(safe-area-inset-bottom))
+    0;
+}
+
+html.phone-ui.mobile-input-active .desktop {
+  bottom: env(safe-area-inset-bottom);
+}
+
+html.phone-ui .app-window > .window-content {
+  padding-bottom: calc(104px + env(safe-area-inset-bottom)) !important;
+}
+
+html.phone-ui .topbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+html.phone-ui .launcher-topbar-button {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+}
+
+html.phone-ui .topbar-brand span {
+  max-width: 175px;
+}
+
+html.phone-ui .launcher {
+  top: calc(64px + env(safe-area-inset-top));
+  right: max(7px, env(safe-area-inset-right));
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  left: max(7px, env(safe-area-inset-left));
+  max-height: none;
+  padding: 14px;
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.4);
+}
+
+html.phone-ui .launcher-header {
+  top: -14px;
+  border-radius: 18px 18px 0 0;
+}
+
+html.phone-ui .view-mode-panel,
+html.phone-ui .fullscreen-panel {
+  border-radius: 13px;
+}
+
+html.phone-ui .launcher-grid {
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+html.phone-ui .window-titlebar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: 54px;
+  min-height: 54px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(16, 19, 27, .96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+html.phone-ui body.light-theme .window-titlebar,
+html.phone-ui .light-theme .window-titlebar {
+  background: rgba(255,255,255,.96);
+}
+
+html.phone-ui .window-title span {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+}
+
+html.phone-ui .window-title strong {
+  max-width: 205px;
+  font-size: 14px;
+  font-weight: 740;
+}
+
+html.phone-ui .minimize-button,
+html.phone-ui .window-size-button,
+html.phone-ui .maximize-button,
+html.phone-ui .window-resize-handle {
+  display: none !important;
+}
+
+html.phone-ui .close-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+html.phone-ui .close-button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* Tasks */
+html.phone-ui .app-window[data-app-window="tasks"] > .window-content {
+  display: block !important;
+}
+
+html.phone-ui .app-window[data-app-window="tasks"] .full-form {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px !important;
+  margin-bottom: 12px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,.018);
+}
+
+html.phone-ui .app-window[data-app-window="tasks"] #taskInput {
+  grid-column: 1 / -1;
+}
+
+html.phone-ui .app-window[data-app-window="tasks"] .full-form > button {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 46px;
+}
+
+html.phone-ui .task-toolbar {
+  position: static !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+html.phone-ui .task-toolbar-left,
+html.phone-ui .task-toolbar-right {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 7px;
+  width: 100%;
+}
+
+html.phone-ui .filter-group,
+html.phone-ui .task-view-switch {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+}
+
+html.phone-ui .task-view-switch {
+  grid-template-columns: 1fr 1fr;
+}
+
+html.phone-ui .filter,
+html.phone-ui .task-view-button {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+}
+
+html.phone-ui .task-toolbar-right select {
+  width: 100%;
+}
+
+html.phone-ui .task-item {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 58px;
+  padding: 11px;
+  border-radius: 13px;
+}
+
+html.phone-ui .task-title {
+  white-space: normal;
+}
+
+/* Calendar */
+html.phone-ui .app-window[data-app-window="calendar"] .calendar-layout {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+
+html.phone-ui .app-window[data-app-window="calendar"] .calendar-layout > div {
+  width: 100%;
+  min-width: 0;
+}
+
+html.phone-ui .calendar-nav {
+  margin-bottom: 10px;
+}
+
+html.phone-ui .calendar-nav button {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+}
+
+html.phone-ui .weekdays,
+html.phone-ui .calendar-days {
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  min-width: 0 !important;
+  gap: 3px;
+}
+
+html.phone-ui .weekdays {
+  font-size: 9px;
+}
+
+html.phone-ui .calendar-day {
+  min-height: 43px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+html.phone-ui .event-panel {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,.018);
+}
+
+html.phone-ui .event-panel .stack-form {
+  gap: 8px;
+}
+
+html.phone-ui .event-panel .stack-form > * {
+  width: 100%;
+}
+
+html.phone-ui .event-item {
+  min-height: 60px;
+}
+
+/* Notes */
+html.phone-ui .notes-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px;
+  margin: -2px 0 10px;
+  padding: 2px 0 8px;
+  background: var(--surface);
+}
+
+html.phone-ui .notes-toolbar .primary-button {
+  order: 2;
+}
+
+html.phone-ui .notes-workspace {
+  gap: 10px !important;
+}
+
+html.phone-ui .notes-sidebar {
+  padding: 10px;
+  border-radius: 14px;
+}
+
+html.phone-ui .notes-list {
+  max-height: 210px !important;
+}
+
+html.phone-ui .note-card {
+  min-height: 68px;
+  padding: 10px;
+}
+
+html.phone-ui .notes-editor-panel {
+  padding: 12px;
+  border-radius: 14px;
+}
+
+html.phone-ui .note-title-field input {
+  font-size: 16px;
+  font-weight: 680;
+}
+
+html.phone-ui #noteContent {
+  min-height: 46vh !important;
+  padding: 13px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* Journal */
+html.phone-ui .journal-filter-bar {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 7px;
+}
+
+html.phone-ui .journal-entry-list {
+  max-height: 210px !important;
+}
+
+html.phone-ui #journalEntryContent {
+  min-height: 48vh !important;
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+/* Our Space */
+html.phone-ui .our-space-summary-grid {
+  grid-template-columns: 1fr 1fr !important;
+  gap: 7px !important;
+}
+
+html.phone-ui .our-space-filter-bar {
+  gap: 7px;
+}
+
+html.phone-ui .our-space-plan-list {
+  max-height: 210px !important;
+}
+
+html.phone-ui .our-space-editor-panel {
+  border-radius: 14px;
+}
+
+html.phone-ui .our-space-media-section .our-space-attachment-list {
+  grid-template-columns: 1fr !important;
+}
+
+/* Document Vault */
+html.phone-ui .app-window[data-app-window="documents"] > .window-content {
+  padding-bottom: calc(108px + env(safe-area-inset-bottom)) !important;
+}
+
+html.phone-ui .document-toolbar,
+html.phone-ui .document-upload-panel {
+  border-radius: 14px;
+}
+
+html.phone-ui .document-card {
+  border-radius: 13px;
+}
+
+/* Fullscreen */
+html.phone-ui.box-fallback-fullscreen .mobile-navigation {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+html.phone-ui.box-fallback-fullscreen .app-window > .window-content {
+  padding-bottom: calc(78px + env(safe-area-inset-bottom)) !important;
+}
+
+@media (orientation: landscape) {
+  html.phone-ui .mobile-navigation {
+    right: max(6px, env(safe-area-inset-right));
+    bottom: max(4px, env(safe-area-inset-bottom));
+    left: max(6px, env(safe-area-inset-left));
+    height: 52px;
+    padding: 3px 5px;
+    border-radius: 14px;
+  }
+
+  html.phone-ui .mobile-nav-item {
+    grid-template-rows: 24px;
+    min-height: 44px !important;
+  }
+
+  html.phone-ui .mobile-nav-item > span:last-of-type {
+    display: none;
+  }
+
+  html.phone-ui .mobile-nav-icon {
+    font-size: 18px;
+  }
+
+  html.phone-ui .desktop {
+    inset:
+      calc(50px + env(safe-area-inset-top))
+      0
+      calc(60px + env(safe-area-inset-bottom))
+      0;
+  }
+
+  html.phone-ui .launcher {
+    top: calc(54px + env(safe-area-inset-top));
+    bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+
+  html.phone-ui .app-window > .window-content {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+  }
+}

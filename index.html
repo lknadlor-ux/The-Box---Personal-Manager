@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7n2">
+  <link rel="stylesheet" href="style.css?v=7n3">
 </head>
 <body>
   <div class="desktop-shell">
@@ -1871,6 +1871,30 @@
       <span aria-hidden="true">⤢</span>
       <strong>Exit</strong>
     </button>
+
+    <nav id="mobileNavigation" class="mobile-navigation" aria-label="Mobile navigation">
+      <button class="mobile-nav-item active" type="button" data-open-app="dashboard" data-mobile-nav-app="dashboard" aria-label="Home">
+        <span class="mobile-nav-icon" aria-hidden="true">⌂</span>
+        <span>Home</span>
+      </button>
+      <button class="mobile-nav-item" type="button" data-open-app="tasks" data-mobile-nav-app="tasks" aria-label="Tasks">
+        <span class="mobile-nav-icon" aria-hidden="true">✓</span>
+        <span>Tasks</span>
+      </button>
+      <button class="mobile-nav-item" type="button" data-open-app="calendar" data-mobile-nav-app="calendar" aria-label="Calendar">
+        <span class="mobile-nav-icon" aria-hidden="true">◫</span>
+        <span>Calendar</span>
+      </button>
+      <button class="mobile-nav-item" type="button" data-open-app="notes" data-mobile-nav-app="notes" aria-label="Notes">
+        <span class="mobile-nav-icon" aria-hidden="true">✎</span>
+        <span>Notes</span>
+      </button>
+      <button id="mobileMoreButton" class="mobile-nav-item mobile-nav-more" type="button" data-mobile-nav-app="more" aria-label="More apps">
+        <span class="mobile-nav-icon" aria-hidden="true">•••</span>
+        <span>More</span>
+        <strong id="mobileMoreBadge" class="mobile-nav-badge hidden">0</strong>
+      </button>
+    </nav>
 
     <footer class="dock" aria-label="Application dock">
       <button class="dock-item active" data-open-app="dashboard" title="Dashboard" aria-label="Dashboard">

@@ -118,6 +118,9 @@ function updateDeviceUiClasses() {
   root.classList.toggle("view-mode-windows", selectedMode === "windows");
 
   updateViewModeControls();
+  if (typeof updateMobileNavigation === "function") {
+    updateMobileNavigation(mobileActiveApp);
+  }
 }
 
 function setViewModePreference(mode, { notify = true } = {}) {
@@ -331,6 +334,7 @@ let timerInterval = null;
 
 let topWindowZ = 20;
 let toastTimer = null;
+let mobileActiveApp = "dashboard";
 
 const DEFAULT_DOCUMENT_FOLDERS = [
   "FDA",
@@ -1540,6 +1544,34 @@ function updateClock() {
   });
 }
 
+
+function updateMobileNavigation(appName = mobileActiveApp) {
+  const mapped = ["dashboard", "tasks", "calendar", "notes"].includes(appName)
+    ? appName
+    : "more";
+
+  document.querySelectorAll("[data-mobile-nav-app]").forEach((item) => {
+    item.classList.toggle("active", item.dataset.mobileNavApp === mapped);
+  });
+}
+
+function setMobileActiveApp(appName) {
+  mobileActiveApp = appName || "dashboard";
+  updateMobileNavigation(mobileActiveApp);
+}
+
+function toggleMobileMoreMenu() {
+  const launcher = $("launcher");
+  const opening = !launcher.classList.contains("open");
+  launcher.classList.toggle("open", opening);
+
+  if (opening) {
+    updateMobileNavigation("more");
+  } else {
+    updateMobileNavigation(mobileActiveApp);
+  }
+}
+
 function openApp(appName) {
   const windowElement = document.querySelector(`[data-app-window="${appName}"]`);
   if (!windowElement) return;
@@ -1551,6 +1583,8 @@ function openApp(appName) {
 
   $("activeAppLabel").textContent =
     appName.charAt(0).toUpperCase() + appName.slice(1);
+
+  setMobileActiveApp(appName);
 
   document.querySelectorAll(".dock-item").forEach((item) => {
     item.classList.toggle("active", item.dataset.openApp === appName);
@@ -1917,6 +1951,7 @@ function openLauncher() {
 
 function closeLauncher() {
   $("launcher").classList.remove("open");
+  updateMobileNavigation(mobileActiveApp);
 }
 
 function initializeWindowControls() {
@@ -7962,8 +7997,9 @@ function updateReminderBadges(summary) {
   const count = summary.attention + summary.today;
   const topBadge = $("notificationBadge");
   const dockBadge = $("dockReminderBadge");
+  const mobileMoreBadge = $("mobileMoreBadge");
 
-  [topBadge, dockBadge].forEach((badge) => {
+  [topBadge, dockBadge, mobileMoreBadge].forEach((badge) => {
     if (!badge) return;
     badge.textContent = count > 99 ? "99+" : String(count);
     badge.classList.toggle("hidden", count === 0);
@@ -8170,7 +8206,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7N.2-Free";
+const BACKUP_APP_VERSION = "7N.3-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -8853,9 +8889,9 @@ document.querySelectorAll("[data-open-app]").forEach((button) => {
   button.addEventListener("click", () => openApp(button.dataset.openApp));
 });
 
-$("launcherButton").addEventListener("click", () => {
-  $("launcher").classList.toggle("open");
-});
+$("launcherButton").addEventListener("click", toggleMobileMoreMenu);
+$("mobileMoreButton").addEventListener("click", toggleMobileMoreMenu);
+updateMobileNavigation(mobileActiveApp);
 
 $("closeLauncherButton").addEventListener("click", closeLauncher);
 

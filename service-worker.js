@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7n2-dashboard-command-center";
+const CACHE_NAME = "the-box-os-phase-7n3-mobile-navigation";
 
 const APP_FILES = [
   "./",
