@@ -1221,6 +1221,7 @@ function updateSelectedNoteFromEditor() {
   noteSaveTimer = setTimeout(() => {
     persistNoteItems();
     $("noteStatus").textContent = "Saved";
+    renderDashboard();
   }, 450);
 }
 
@@ -1571,6 +1572,13 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "dashboard") {
+    renderDashboard();
+    if (window.BoxCloud?.isReady() && !documents.length && !documentsLoading) {
+      loadDocuments({ silent: true }).then(() => renderDashboard());
+    }
   }
 
   if (appName === "notes") {
@@ -3183,6 +3191,267 @@ function renderWorkspaceTaskList(workspace, container) {
   workspaceTasks.forEach((task) => container.appendChild(buildTaskRow(task)));
 }
 
+function getDashboardGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning.";
+  if (hour < 18) return "Good afternoon.";
+  return "Good evening.";
+}
+
+function getDashboardDateLabel() {
+  return new Date().toLocaleDateString("en-PH", {
+    weekday: "long",
+    month: "long",
+    day: "numeric"
+  }).toUpperCase();
+}
+
+function getDashboardTaskQueue(openTasks) {
+  const todayKey = getLocalDateKey();
+  const priorityRank = { urgent: 0, important: 1, normal: 2 };
+
+  return [...openTasks]
+    .sort((a, b) => {
+      const aToday = a.dueDate === todayKey ? 0 : 1;
+      const bToday = b.dueDate === todayKey ? 0 : 1;
+      if (aToday !== bToday) return aToday - bToday;
+
+      const aOverdue = a.dueDate && a.dueDate < todayKey ? 0 : 1;
+      const bOverdue = b.dueDate && b.dueDate < todayKey ? 0 : 1;
+      if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+
+      const priorityDifference =
+        (priorityRank[a.priority] ?? 3) - (priorityRank[b.priority] ?? 3);
+      if (priorityDifference) return priorityDifference;
+
+      if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+      if (a.dueDate) return -1;
+      if (b.dueDate) return 1;
+      return String(b.updatedAt || b.createdAt || "").localeCompare(
+        String(a.updatedAt || a.createdAt || "")
+      );
+    })
+    .slice(0, 5);
+}
+
+function getDashboardTaskDueLabel(task) {
+  if (!task.dueDate) return "";
+  const today = getLocalDateKey();
+  if (task.dueDate === today) return "Due today";
+  if (task.dueDate < today) return "Overdue";
+  return formatEventDate(task.dueDate);
+}
+
+function renderDashboardTaskQueue(openTasks) {
+  const list = $("dashboardTaskList");
+  if (!list) return;
+
+  const queue = getDashboardTaskQueue(openTasks);
+  const today = getLocalDateKey();
+  const todayCount = openTasks.filter((task) => task.dueDate === today).length;
+  const overdueCount = openTasks.filter(
+    (task) => task.dueDate && task.dueDate < today
+  ).length;
+
+  $("dashboardTaskEyebrow").textContent =
+    overdueCount ? "ATTENTION" : todayCount ? "TODAY" : "PRIORITY QUEUE";
+  $("dashboardTaskHeading").textContent =
+    overdueCount
+      ? `${overdueCount} overdue task${overdueCount === 1 ? "" : "s"}`
+      : todayCount
+        ? `${todayCount} task${todayCount === 1 ? "" : "s"} due today`
+        : "What to work on next";
+  $("dashboardTaskSubheading").textContent =
+    overdueCount
+      ? "Clear overdue work first, then move into today."
+      : todayCount
+        ? "Your time-sensitive work is already sorted to the top."
+        : "Urgent and important work is surfaced automatically.";
+
+  $("dashboardTaskEmpty").hidden = queue.length > 0;
+
+  list.innerHTML = queue.map((task) => {
+    const dueLabel = getDashboardTaskDueLabel(task);
+    const statusLabel =
+      typeof getTaskStatusLabel === "function"
+        ? getTaskStatusLabel(task.status || (task.completed ? "done" : "todo"))
+        : "Open";
+
+    return `
+      <button class="dashboard-task-row ${escapeHtml(task.priority || "normal")}"
+        type="button" data-dashboard-task-id="${escapeHtml(String(task.id))}">
+        <span class="dashboard-task-priority-dot" aria-hidden="true"></span>
+        <span class="dashboard-task-copy">
+          <strong>${escapeHtml(task.text || "Untitled task")}</strong>
+          <span>
+            ${escapeHtml(String(task.workspace || "personal"))}
+            <em>·</em>
+            ${escapeHtml(statusLabel)}
+            ${dueLabel ? `<em>·</em><b>${escapeHtml(dueLabel)}</b>` : ""}
+          </span>
+        </span>
+        <span class="dashboard-task-arrow" aria-hidden="true">→</span>
+      </button>
+    `;
+  }).join("");
+
+  list.querySelectorAll("[data-dashboard-task-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const task = tasks.find(
+        (item) => String(item.id) === button.dataset.dashboardTaskId
+      );
+      if (!task) {
+        openApp("tasks");
+        return;
+      }
+
+      openApp("tasks");
+      openTaskModal(task, "tasks", task.id);
+    });
+  });
+}
+
+function renderDashboardNextEvent() {
+  const upcoming = getUpcomingEvents();
+  const nextEvent = upcoming[0];
+  const dateBadge = $("dashboardNextEventDateBadge");
+  const title = $("dashboardNextEventTitle");
+  const meta = $("dashboardNextEventMeta");
+  if (!dateBadge || !title || !meta) return;
+
+  if (!nextEvent) {
+    dateBadge.textContent = "—";
+    title.textContent = "Nothing scheduled";
+    meta.textContent = "Your next event will appear here.";
+    return;
+  }
+
+  const date = new Date(`${nextEvent.date}T00:00:00`);
+  dateBadge.innerHTML =
+    `<strong>${escapeHtml(String(date.getDate()))}</strong>` +
+    `<span>${escapeHtml(date.toLocaleDateString("en-US", { month: "short" }).toUpperCase())}</span>`;
+  title.textContent = nextEvent.title || "Untitled event";
+  meta.textContent = `${formatEventDate(nextEvent.date)} · ${nextEvent.workspace || "Personal"}`;
+}
+
+function renderDashboardStickyNote() {
+  const button = $("dashboardStickyNote");
+  if (!button) return;
+
+  const sticky = getSortedNoteItems(
+    noteItems.filter((note) => note.sticky)
+  )[0];
+
+  button.dataset.noteId = sticky?.id || "";
+  button.classList.toggle("has-note", Boolean(sticky));
+
+  $("dashboardStickyTitle").textContent =
+    sticky?.title || "No sticky note";
+  $("dashboardStickyPreview").textContent =
+    sticky
+      ? getNotePreview(sticky, 180)
+      : "Mark a note as Sticky and it will surface here.";
+  $("dashboardStickyMeta").textContent =
+    sticky ? formatNoteUpdatedAt(sticky.updatedAt) : "Open Notes";
+}
+
+function getDashboardRecentDocuments() {
+  return documents
+    .filter((documentItem) => !documentItem.deleted_at)
+    .sort((a, b) => {
+      const aDate = String(a.updated_at || a.created_at || "");
+      const bDate = String(b.updated_at || b.created_at || "");
+      return bDate.localeCompare(aDate);
+    })
+    .slice(0, 3);
+}
+
+function renderDashboardRecentDocuments() {
+  const list = $("dashboardRecentDocuments");
+  if (!list) return;
+
+  const recent = getDashboardRecentDocuments();
+  $("dashboardRecentDocumentsEmpty").hidden = recent.length > 0;
+
+  list.innerHTML = recent.map((documentItem) => `
+    <button class="dashboard-document-row" type="button"
+      data-dashboard-document-id="${escapeHtml(String(documentItem.id))}">
+      <span class="dashboard-document-type">${escapeHtml(getDocumentTypeLabel(documentItem))}</span>
+      <span class="dashboard-document-copy">
+        <strong>${escapeHtml(documentItem.name || "Untitled file")}</strong>
+        <small>${escapeHtml(documentItem.folder || "Documents")} · ${escapeHtml(formatDocumentDate(documentItem.updated_at || documentItem.created_at))}</small>
+      </span>
+      <span aria-hidden="true">→</span>
+    </button>
+  `).join("");
+
+  list.querySelectorAll("[data-dashboard-document-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const documentItem = documents.find(
+        (item) => String(item.id) === button.dataset.dashboardDocumentId
+      );
+      if (!documentItem) {
+        openApp("documents");
+        return;
+      }
+
+      openApp("documents");
+      if (typeof openDocumentPreview === "function") {
+        openDocumentPreview(documentItem);
+      }
+    });
+  });
+}
+
+function getDashboardOurSpacePlan() {
+  const today = getLocalDateKey();
+  return [...ourSpacePlans]
+    .filter((plan) => plan.status !== "done")
+    .sort((a, b) => {
+      if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+
+      const aFuture = a.target_date && a.target_date >= today ? 0 : 1;
+      const bFuture = b.target_date && b.target_date >= today ? 0 : 1;
+      if (aFuture !== bFuture) return aFuture - bFuture;
+
+      if (a.target_date && b.target_date) {
+        return a.target_date.localeCompare(b.target_date);
+      }
+      if (a.target_date) return -1;
+      if (b.target_date) return 1;
+
+      return String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
+    })[0] || null;
+}
+
+function renderDashboardOurSpace() {
+  const button = $("dashboardOurSpacePlan");
+  if (!button) return;
+
+  const plan = getDashboardOurSpacePlan();
+  button.dataset.planId = plan?.id || "";
+  button.classList.toggle("has-plan", Boolean(plan));
+
+  $("dashboardOurSpaceIcon").textContent =
+    plan && typeof getOurSpaceCategoryIcon === "function"
+      ? getOurSpaceCategoryIcon(plan.category)
+      : "♥";
+  $("dashboardOurSpaceTitle").textContent =
+    plan?.title || "No active plan yet";
+
+  if (!plan) {
+    $("dashboardOurSpaceMeta").textContent =
+      "Create something to look forward to.";
+    return;
+  }
+
+  const meta = [];
+  if (plan.target_date) meta.push(formatOurSpaceDate(plan.target_date));
+  if (plan.place) meta.push(plan.place);
+  meta.push(getOurSpaceStatusLabel(plan.status));
+  $("dashboardOurSpaceMeta").textContent = meta.join(" · ");
+}
+
 function renderDashboard() {
   const open = tasks.filter((task) => !task.completed);
   const done = tasks.filter((task) => task.completed);
@@ -3197,13 +3466,39 @@ function renderDashboard() {
   $("desktopUrgentTasks").textContent = urgent.length;
   $("dashboardOpen").textContent = open.length;
   $("dashboardUrgent").textContent = urgent.length;
-  $("dashboardFocus").textContent = Number(localStorage.getItem(STORAGE.focusTotal) || 0);
+  $("dashboardFocus").textContent = Number(
+    localStorage.getItem(STORAGE.focusTotal) || 0
+  );
 
-  $("topPriority").textContent = topPriority ? topPriority.text : "Everything is complete";
-  $("completionText").textContent = `${percent}% of your tasks are complete.`;
+  if ($("dashboardGreeting")) {
+    $("dashboardGreeting").textContent = getDashboardGreeting();
+  }
+  if ($("dashboardDateLabel")) {
+    $("dashboardDateLabel").textContent = getDashboardDateLabel();
+  }
+
+  $("topPriority").textContent =
+    topPriority ? topPriority.text : "Everything is complete";
+  $("completionText").textContent =
+    tasks.length
+      ? `${percent}% of your tasks are complete.`
+      : "Your task list is clear. Capture something when you are ready.";
   $("completionPercent").textContent = `${percent}%`;
   $("progressRing").style.background =
     `conic-gradient(var(--accent) ${percent * 3.6}deg, var(--surface-soft) 0deg)`;
+
+  const reminders = getVisibleReminderItems();
+  const reminderSummary = getReminderSummary(reminders);
+  const pressingReminders = reminderSummary.attention + reminderSummary.today;
+  $("dashboardReminderCount").textContent = String(pressingReminders);
+  $("dashboardReminderLabel").textContent =
+    reminderSummary.attention
+      ? `${reminderSummary.attention} need attention`
+      : reminderSummary.today
+        ? `${reminderSummary.today} due today`
+        : reminderSummary.upcoming
+          ? `${reminderSummary.upcoming} upcoming`
+          : "Nothing pressing";
 
   $("pharmacyOpenCount").textContent =
     `${open.filter((task) => task.workspace === "pharmacy").length} open`;
@@ -3214,11 +3509,16 @@ function renderDashboard() {
 
   const upcoming = getUpcomingEvents();
   const nextEvent = upcoming[0];
-
   $("desktopNextEvent").textContent = nextEvent ? nextEvent.title : "None";
   $("desktopNextEventDate").textContent = nextEvent
     ? formatEventDate(nextEvent.date)
     : "No upcoming date";
+
+  renderDashboardTaskQueue(open);
+  renderDashboardNextEvent();
+  renderDashboardStickyNote();
+  renderDashboardRecentDocuments();
+  renderDashboardOurSpace();
 }
 
 function renderCalendar() {
@@ -5447,6 +5747,7 @@ async function loadDocuments({ silent = false } = {}) {
   renderTasks();
   renderEvents();
   renderDocuments();
+  renderDashboard();
 }
 
 async function uploadSelectedDocuments() {
@@ -5515,6 +5816,7 @@ async function uploadSelectedDocuments() {
   $("chooseDocumentFilesButton").disabled = false;
   updateDocumentAccessUI();
   renderDocuments();
+  renderDashboard();
 
   if (uploaded) {
     setDocumentUploadStatus(
@@ -6714,6 +7016,7 @@ function renderOurSpaceCenter() {
   if (!selectedOurSpacePlanId && !$("ourSpaceTitle").value && !$("ourSpaceEditorModeLabel").textContent.includes("NEW")) {
     resetOurSpaceEditor();
   }
+  renderDashboard();
 }
 
 function collectOurSpaceEditorPlan() {
@@ -7867,7 +8170,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7N.1-Free";
+const BACKUP_APP_VERSION = "7N.2-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -8778,6 +9081,18 @@ $("eventForm").addEventListener("submit", (event) => {
 });
 
 initializeNoteItems();
+
+$("dashboardStickyNote").addEventListener("click", () => {
+  const noteId = $("dashboardStickyNote").dataset.noteId;
+  openApp("notes");
+  if (noteId) selectNoteItem(noteId);
+});
+
+$("dashboardOurSpacePlan").addEventListener("click", () => {
+  const planId = $("dashboardOurSpacePlan").dataset.planId;
+  openApp("ourspace");
+  if (planId) selectOurSpacePlan(planId);
+});
 
 $("newNoteButton").addEventListener("click", createNewNoteItem);
 $("notesSearchInput").addEventListener("input", (event) => {

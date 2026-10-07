@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7n1">
+  <link rel="stylesheet" href="style.css?v=7n2">
 </head>
 <body>
   <div class="desktop-shell">
@@ -349,7 +349,7 @@
       </section>
 
       <section id="windowLayer" class="window-layer">
-        <article class="app-window active-window" data-app-window="dashboard" style="--x: 4%; --y: 7%; --w: 58%; --h: 70%;">
+        <article class="app-window active-window" data-app-window="dashboard" style="--x: 4%; --y: 5%; --w: 76%; --h: 82%;">
           <div class="window-titlebar">
             <div class="window-title">
               <span>⌂</span>
@@ -362,61 +362,203 @@
             </div>
           </div>
 
-          <div class="window-content dashboard-window">
-            <div class="dashboard-hero">
-              <div>
-                <small>TODAY'S PRIORITY</small>
-                <h2 id="topPriority">Add your first priority task</h2>
-                <p id="completionText">0% of your tasks are complete.</p>
-              </div>
-              <div class="progress-ring" id="progressRing">
-                <div>
-                  <strong id="completionPercent">0%</strong>
-                  <span>complete</span>
+          <div class="window-content dashboard-window dashboard-command-center">
+            <section class="dashboard-command-hero">
+              <div class="dashboard-command-copy">
+                <span id="dashboardDateLabel" class="dashboard-date-label">TODAY</span>
+                <h2 id="dashboardGreeting">Good day.</h2>
+                <p class="dashboard-command-intro">Here is what deserves your attention right now.</p>
+
+                <div class="dashboard-priority-block">
+                  <small>TOP PRIORITY</small>
+                  <strong id="topPriority">Add your first priority task</strong>
+                  <span id="completionText">0% of your tasks are complete.</span>
                 </div>
               </div>
-            </div>
 
-            <div class="dashboard-grid">
-              <div class="dashboard-card">
-                <small>WORKLOAD</small>
-                <strong id="dashboardOpen">0</strong>
-                <span>Open tasks</span>
+              <div class="dashboard-progress-block">
+                <div class="progress-ring" id="progressRing">
+                  <div>
+                    <strong id="completionPercent">0%</strong>
+                    <span>complete</span>
+                  </div>
+                </div>
+                <button class="dashboard-hero-action" type="button" data-open-app="tasks">
+                  Open tasks <span aria-hidden="true">→</span>
+                </button>
               </div>
-              <div class="dashboard-card">
-                <small>URGENT</small>
-                <strong id="dashboardUrgent">0</strong>
-                <span>Need attention</span>
-              </div>
-              <div class="dashboard-card">
-                <small>FOCUS</small>
-                <strong id="dashboardFocus">0</strong>
-                <span>Minutes logged</span>
-              </div>
-              <div class="dashboard-card">
-                <small>WEATHER</small>
-                <strong id="dashboardWeather">--°</strong>
-                <span id="dashboardWeatherText">Loading</span>
-              </div>
-            </div>
+            </section>
 
-            <div class="quick-capture">
-              <form id="quickTaskForm">
-                <input id="quickTaskInput" type="text" placeholder="Quickly add a task">
-                <select id="quickTaskWorkspace">
-                  <option value="pharmacy">Pharmacy</option>
-                  <option value="clinic">Clinic</option>
-                  <option value="sk">SK</option>
-                  <option value="personal">Personal</option>
-                </select>
-                <select id="quickTaskPriority">
-                  <option value="normal">Normal</option>
-                  <option value="important">Important</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-                <button type="submit">Continue</button>
-              </form>
-            </div>
+            <section class="dashboard-quick-capture-shell">
+              <div class="dashboard-section-heading compact">
+                <div>
+                  <small>QUICK CAPTURE</small>
+                  <strong>Turn a thought into a task.</strong>
+                </div>
+              </div>
+
+              <div class="quick-capture dashboard-quick-capture">
+                <form id="quickTaskForm">
+                  <input id="quickTaskInput" type="text" placeholder="What needs your attention?">
+                  <select id="quickTaskWorkspace" aria-label="Quick task workspace">
+                    <option value="pharmacy">Pharmacy</option>
+                    <option value="clinic">Clinic</option>
+                    <option value="sk">SK</option>
+                    <option value="personal">Personal</option>
+                  </select>
+                  <select id="quickTaskPriority" aria-label="Quick task priority">
+                    <option value="normal">Normal</option>
+                    <option value="important">Important</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                  <button type="submit" class="primary-button">Continue</button>
+                </form>
+              </div>
+            </section>
+
+            <section class="dashboard-stat-grid" aria-label="Today overview">
+              <button class="dashboard-stat-card" type="button" data-open-app="tasks">
+                <span class="dashboard-stat-icon">☷</span>
+                <span>
+                  <small>OPEN TASKS</small>
+                  <strong id="dashboardOpen">0</strong>
+                  <em>Workload</em>
+                </span>
+              </button>
+
+              <button class="dashboard-stat-card attention" type="button" data-open-app="tasks">
+                <span class="dashboard-stat-icon">!</span>
+                <span>
+                  <small>URGENT</small>
+                  <strong id="dashboardUrgent">0</strong>
+                  <em>Need attention</em>
+                </span>
+              </button>
+
+              <button class="dashboard-stat-card" type="button" data-open-app="reminders">
+                <span class="dashboard-stat-icon">♢</span>
+                <span>
+                  <small>REMINDERS</small>
+                  <strong id="dashboardReminderCount">0</strong>
+                  <em id="dashboardReminderLabel">Nothing pressing</em>
+                </span>
+              </button>
+
+              <button class="dashboard-stat-card" type="button" data-open-app="focus">
+                <span class="dashboard-stat-icon">◉</span>
+                <span>
+                  <small>FOCUS</small>
+                  <strong id="dashboardFocus">0</strong>
+                  <em>Minutes logged</em>
+                </span>
+              </button>
+
+              <div class="dashboard-stat-card weather">
+                <span class="dashboard-stat-icon">⌁</span>
+                <span>
+                  <small>WEATHER</small>
+                  <strong id="dashboardWeather">--°</strong>
+                  <em id="dashboardWeatherText">Loading</em>
+                </span>
+              </div>
+            </section>
+
+            <section class="dashboard-content-grid">
+              <article class="dashboard-panel dashboard-today-panel">
+                <div class="dashboard-section-heading">
+                  <div>
+                    <small id="dashboardTaskEyebrow">TODAY</small>
+                    <strong id="dashboardTaskHeading">Your task queue</strong>
+                    <span id="dashboardTaskSubheading">Priority work appears here.</span>
+                  </div>
+                  <button class="dashboard-text-action" type="button" data-open-app="tasks">View all</button>
+                </div>
+
+                <div id="dashboardTaskList" class="dashboard-task-list"></div>
+                <p id="dashboardTaskEmpty" class="dashboard-widget-empty">No open tasks right now.</p>
+              </article>
+
+              <div class="dashboard-side-stack">
+                <article class="dashboard-panel dashboard-next-panel">
+                  <div class="dashboard-section-heading">
+                    <div>
+                      <small>UP NEXT</small>
+                      <strong>Calendar</strong>
+                    </div>
+                    <button class="dashboard-icon-action" type="button" data-open-app="calendar" aria-label="Open Calendar">→</button>
+                  </div>
+
+                  <div id="dashboardNextEventCard" class="dashboard-next-event">
+                    <span id="dashboardNextEventDateBadge" class="dashboard-next-date">—</span>
+                    <div>
+                      <strong id="dashboardNextEventTitle">Nothing scheduled</strong>
+                      <p id="dashboardNextEventMeta">Your next event will appear here.</p>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="dashboard-panel dashboard-sticky-panel">
+                  <div class="dashboard-section-heading">
+                    <div>
+                      <small>STICKY NOTE</small>
+                      <strong>Keep it visible</strong>
+                    </div>
+                    <button class="dashboard-icon-action" type="button" data-open-app="notes" aria-label="Open Notes">→</button>
+                  </div>
+                  <button id="dashboardStickyNote" class="dashboard-sticky-note" type="button">
+                    <strong id="dashboardStickyTitle">No sticky note</strong>
+                    <p id="dashboardStickyPreview">Mark a note as Sticky and it will surface here.</p>
+                    <span id="dashboardStickyMeta">Open Notes</span>
+                  </button>
+                </article>
+              </div>
+            </section>
+
+            <section class="dashboard-bottom-grid">
+              <article class="dashboard-panel">
+                <div class="dashboard-section-heading">
+                  <div>
+                    <small>RECENT FILES</small>
+                    <strong>Document Vault</strong>
+                  </div>
+                  <button class="dashboard-text-action" type="button" data-open-app="documents">Open Vault</button>
+                </div>
+                <div id="dashboardRecentDocuments" class="dashboard-recent-documents"></div>
+                <p id="dashboardRecentDocumentsEmpty" class="dashboard-widget-empty">No Vault files loaded yet.</p>
+              </article>
+
+              <article class="dashboard-panel dashboard-our-space-widget">
+                <div class="dashboard-section-heading">
+                  <div>
+                    <small>OUR SPACE</small>
+                    <strong>Next plan together</strong>
+                  </div>
+                  <button class="dashboard-icon-action" type="button" data-open-app="ourspace" aria-label="Open Our Space">→</button>
+                </div>
+                <button id="dashboardOurSpacePlan" class="dashboard-feature-card" type="button">
+                  <span id="dashboardOurSpaceIcon" class="dashboard-feature-icon">♥</span>
+                  <span>
+                    <strong id="dashboardOurSpaceTitle">No active plan yet</strong>
+                    <small id="dashboardOurSpaceMeta">Create something to look forward to.</small>
+                  </span>
+                </button>
+              </article>
+
+              <article class="dashboard-panel dashboard-quick-links-panel">
+                <div class="dashboard-section-heading">
+                  <div>
+                    <small>QUICK ACCESS</small>
+                    <strong>Jump back in</strong>
+                  </div>
+                </div>
+                <div class="dashboard-quick-links">
+                  <button type="button" data-open-app="notes"><span>✎</span><strong>Notes</strong></button>
+                  <button type="button" data-open-app="journal"><span>☷</span><strong>Journal</strong></button>
+                  <button type="button" data-open-app="documents"><span>▣</span><strong>Files</strong></button>
+                  <button type="button" data-open-app="ourspace"><span>♥</span><strong>Our Space</strong></button>
+                </div>
+              </article>
+            </section>
           </div>
         </article>
 

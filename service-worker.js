@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7n1-design-system-shell";
+const CACHE_NAME = "the-box-os-phase-7n2-dashboard-command-center";
 
 const APP_FILES = [
   "./",
