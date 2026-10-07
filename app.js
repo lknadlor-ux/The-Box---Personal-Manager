@@ -332,6 +332,9 @@ let activeTaskProjectFilter = "all";
 let selectedProjectName = "";
 let projectsSearchTerm = "";
 let projectsWorkspaceFilter = "all";
+let activityTypeFilter = "all";
+let activityRangeFilter = "30";
+let activitySearchTerm = "";
 let favoritesFilter = "all";
 let favoritesSearchTerm = "";
 let taskViewMode = localStorage.getItem(STORAGE.taskView) === "kanban" ? "kanban" : "list";
@@ -1242,6 +1245,7 @@ function updateSelectedNoteFromEditor() {
     $("noteStatus").textContent = "Saved";
     renderDashboard();
     renderFavoritesHub();
+    renderActivityTimeline();
   }, 450);
 }
 
@@ -1726,7 +1730,7 @@ function normalizeTask(task = {}) {
       : "",
     workspace: task.workspace || "personal",
     priority: task.priority || "normal",
-    project: String(task.project || "").trim().replace(/\\s+/g, " ").slice(0, 80),
+    project: String(task.project || "").trim().replace(/\s+/g, " ").slice(0, 80),
     status,
     completed: status === "done",
     tags: normalizeTaskTags(task.tags),
@@ -1860,6 +1864,13 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "activity") {
+    renderActivityTimeline();
+    if (window.BoxCloud?.isReady() && !documents.length && !documentsLoading) {
+      loadDocuments({ silent: true }).then(() => renderActivityTimeline());
+    }
   }
 
   if (appName === "projects") {
@@ -2856,7 +2867,7 @@ function updateTask(taskId, values) {
   task.dueDate = values.dueDate;
   task.workspace = values.workspace;
   task.priority = values.priority;
-  task.project = String(values.project || "").trim().replace(/\\s+/g, " ").slice(0, 80);
+  task.project = String(values.project || "").trim().replace(/\s+/g, " ").slice(0, 80);
   task.tags = normalizeTaskTags(values.tags);
   task.subtasks = normalizeTaskSubtasks(values.subtasks);
   task.recurrence = normalizeTaskRecurrence(values.recurrence);
@@ -6196,6 +6207,7 @@ async function loadDocuments({ silent = false } = {}) {
   renderDashboard();
   renderFavoritesHub();
   renderProjectsHub();
+  renderActivityTimeline();
 }
 
 async function uploadSelectedDocuments() {
@@ -6265,6 +6277,8 @@ async function uploadSelectedDocuments() {
   updateDocumentAccessUI();
   renderDocuments();
   renderDashboard();
+  renderFavoritesHub();
+  renderActivityTimeline();
 
   if (uploaded) {
     setDocumentUploadStatus(
@@ -6518,6 +6532,7 @@ function renderJournalCenter() {
   updateJournalNavigation();
   updateJournalWordCount();
   renderFavoritesHub();
+  renderActivityTimeline();
 }
 
 async function saveJournalEntryFromEditor() {
@@ -7539,6 +7554,7 @@ function renderOurSpaceCenter() {
   }
   renderDashboard();
   renderFavoritesHub();
+  renderActivityTimeline();
 }
 
 function collectOurSpaceEditorPlan() {
@@ -8693,7 +8709,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.3-Free";
+const BACKUP_APP_VERSION = "7O.4-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9202,6 +9218,306 @@ async function refreshAppFiles() {
 
 
 
+
+function getActivityTimestamp(value) {
+  const date = new Date(value || 0);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function getActivityItems() {
+  const items = [];
+
+  tasks.forEach((task) => {
+    items.push({
+      type: "tasks",
+      id: String(task.id),
+      icon: task.completed ? "✓" : "○",
+      title: task.text || "Untitled task",
+      action: task.updatedAt !== task.createdAt ? "Task updated" : "Task created",
+      meta: [
+        task.project ? `◆ ${task.project}` : "",
+        task.workspace || "personal",
+        task.priority || "normal"
+      ].filter(Boolean).join(" · "),
+      timestamp: task.updatedAt || task.createdAt || "",
+      searchText: `${task.text || ""} ${task.details || ""} ${task.project || ""} ${(task.tags || []).join(" ")}`
+    });
+  });
+
+  noteItems.forEach((note) => {
+    items.push({
+      type: "notes",
+      id: String(note.id),
+      icon: note.sticky ? "★" : "✎",
+      title: note.title || "Untitled note",
+      action: note.updatedAt !== note.createdAt ? "Note updated" : "Note created",
+      meta: note.sticky ? "Sticky Note" : "Note",
+      timestamp: note.updatedAt || note.createdAt || "",
+      searchText: `${note.title || ""} ${note.content || ""}`
+    });
+  });
+
+  journalEntries.forEach((entry) => {
+    items.push({
+      type: "journal",
+      id: String(entry.id),
+      icon: entry.favorite ? "★" : "☷",
+      title: entry.title || "Untitled journal entry",
+      action: entry.updated_at !== entry.created_at ? "Journal updated" : "Journal created",
+      meta: [formatJournalDate(entry.entry_date), entry.favorite ? "Favorite" : ""]
+        .filter(Boolean).join(" · "),
+      timestamp: entry.updated_at || entry.created_at || "",
+      searchText: `${entry.title || ""} ${entry.content || ""} ${(entry.tags || []).join(" ")}`
+    });
+  });
+
+  ourSpacePlans.forEach((plan) => {
+    items.push({
+      type: "ourspace",
+      id: String(plan.id),
+      icon: getOurSpaceCategoryIcon(plan.category),
+      title: plan.title || "Untitled plan",
+      action: plan.status === "done"
+        ? "Memory updated"
+        : (plan.updated_at !== plan.created_at ? "Plan updated" : "Plan created"),
+      meta: [plan.category || "Other", getOurSpaceStatusLabel(plan.status), plan.place || ""]
+        .filter(Boolean).join(" · "),
+      timestamp: plan.updated_at || plan.created_at || "",
+      searchText: `${plan.title || ""} ${plan.notes || ""} ${plan.favorite_memory || ""} ${plan.place || ""}`
+    });
+  });
+
+  documents
+    .filter((documentItem) => !documentItem.deleted_at)
+    .forEach((documentItem) => {
+      items.push({
+        type: "files",
+        id: String(documentItem.id),
+        icon: getDocumentTypeLabel(documentItem),
+        title: documentItem.name || "Untitled file",
+        action: documentItem.updated_at && documentItem.created_at &&
+          documentItem.updated_at !== documentItem.created_at
+          ? "File details updated"
+          : "File added",
+        meta: [
+          documentItem.folder || "Documents",
+          formatBytes(Number(documentItem.size_bytes || 0))
+        ].filter(Boolean).join(" · "),
+        timestamp: documentItem.updated_at || documentItem.created_at || "",
+        searchText: `${documentItem.name || ""} ${documentItem.folder || ""} ${documentItem.details || ""} ${(getDocumentTags(documentItem) || []).join(" ")}`
+      });
+    });
+
+  financeEntries.forEach((entry) => {
+    items.push({
+      type: "finance",
+      id: String(entry.id),
+      icon: entry.type === "income" ? "＋" : "−",
+      title: entry.description || "Finance entry",
+      action: entry.type === "income" ? "Income recorded" : "Expense recorded",
+      meta: `${entry.workspace || "personal"} · ${formatMoney(entry.amount)}`,
+      timestamp: entry.createdAt || "",
+      searchText: `${entry.description || ""} ${entry.workspace || ""} ${entry.type || ""}`
+    });
+  });
+
+  return items
+    .filter((item) => getActivityTimestamp(item.timestamp) > 0)
+    .sort((a, b) => getActivityTimestamp(b.timestamp) - getActivityTimestamp(a.timestamp));
+}
+
+function getFilteredActivityItems() {
+  const now = Date.now();
+  const query = activitySearchTerm.toLocaleLowerCase();
+
+  return getActivityItems().filter((item) => {
+    if (activityTypeFilter !== "all" && item.type !== activityTypeFilter) return false;
+
+    if (activityRangeFilter !== "all") {
+      const days = Number(activityRangeFilter) || 30;
+      if (now - getActivityTimestamp(item.timestamp) > days * 86400000) return false;
+    }
+
+    if (query) {
+      const haystack = `${item.title} ${item.action} ${item.meta} ${item.searchText}`
+        .toLocaleLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+
+    return true;
+  });
+}
+
+function getActivityDayKey(timestamp) {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "unknown";
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function getActivityDayLabel(timestamp) {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+
+  const today = getLocalDateKey();
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = [
+    yesterdayDate.getFullYear(),
+    String(yesterdayDate.getMonth() + 1).padStart(2, "0"),
+    String(yesterdayDate.getDate()).padStart(2, "0")
+  ].join("-");
+
+  const key = getActivityDayKey(timestamp);
+  if (key === today) return "Today";
+  if (key === yesterday) return "Yesterday";
+
+  return date.toLocaleDateString("en-PH", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric"
+  });
+}
+
+function formatActivityTime(timestamp) {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  });
+}
+
+function getActivityTypeLabel(type) {
+  return {
+    tasks: "Task",
+    notes: "Note",
+    journal: "Journal",
+    ourspace: "Our Space",
+    files: "File",
+    finance: "Finance"
+  }[type] || "Activity";
+}
+
+function openActivityItem(type, id) {
+  if (type === "tasks") {
+    const task = tasks.find((item) => String(item.id) === String(id));
+    openApp("tasks");
+    if (task) openTaskModal(task, "tasks", task.id);
+    return;
+  }
+
+  if (type === "notes") {
+    openApp("notes");
+    selectNoteItem(id);
+    return;
+  }
+
+  if (type === "journal") {
+    openApp("journal");
+    selectJournalEntry(id, { bypassDirtyCheck: true });
+    return;
+  }
+
+  if (type === "ourspace") {
+    openApp("ourspace");
+    selectOurSpacePlan(id);
+    return;
+  }
+
+  if (type === "files") {
+    const documentItem = documents.find((item) => String(item.id) === String(id));
+    openApp("documents");
+    if (documentItem) openDocumentPreview(documentItem);
+    return;
+  }
+
+  if (type === "finance") {
+    openApp("finance");
+  }
+}
+
+function renderActivityTimeline() {
+  if (!$("activityTimeline")) return;
+
+  const all = getActivityItems();
+  const visible = getFilteredActivityItems();
+  const now = Date.now();
+  const todayKey = getLocalDateKey();
+
+  $("activityTotalCount").textContent = String(all.length);
+  $("activityTodayCount").textContent = String(
+    all.filter((item) => getActivityDayKey(item.timestamp) === todayKey).length
+  );
+  $("activityWeekCount").textContent = String(
+    all.filter((item) => now - getActivityTimestamp(item.timestamp) <= 7 * 86400000).length
+  );
+  $("activityMonthCount").textContent = String(
+    all.filter((item) => now - getActivityTimestamp(item.timestamp) <= 30 * 86400000).length
+  );
+
+  $("activitySearchInput").value = activitySearchTerm;
+  $("activityTypeFilter").value = activityTypeFilter;
+  $("activityRangeFilter").value = activityRangeFilter;
+  $("activityResultCount").textContent =
+    `${visible.length} item${visible.length === 1 ? "" : "s"}`;
+
+  $("activityHeading").textContent =
+    activityRangeFilter === "all" ? "All activity" : `Last ${activityRangeFilter} days`;
+  $("activityEyebrow").textContent =
+    activityTypeFilter === "all"
+      ? "RECENT ACTIVITY"
+      : `${getActivityTypeLabel(activityTypeFilter).toUpperCase()} ACTIVITY`;
+
+  $("activityEmptyState").hidden = visible.length > 0;
+
+  const grouped = new Map();
+  visible.forEach((item) => {
+    const key = getActivityDayKey(item.timestamp);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(item);
+  });
+
+  $("activityTimeline").innerHTML = Array.from(grouped.values()).map((items) => {
+    const first = items[0];
+    return `
+      <section class="activity-day-group">
+        <header class="activity-day-heading">
+          <strong>${escapeHtml(getActivityDayLabel(first.timestamp))}</strong>
+          <span>${items.length} item${items.length === 1 ? "" : "s"}</span>
+        </header>
+
+        <div class="activity-day-list">
+          ${items.map((item) => `
+            <button class="activity-item ${escapeHtml(item.type)}" type="button"
+              data-activity-type="${escapeHtml(item.type)}"
+              data-activity-id="${escapeHtml(item.id)}">
+              <span class="activity-item-icon">${escapeHtml(item.icon)}</span>
+              <span class="activity-item-copy">
+                <small>${escapeHtml(item.action)} · ${escapeHtml(getActivityTypeLabel(item.type))}</small>
+                <strong>${escapeHtml(item.title)}</strong>
+                <p>${escapeHtml(item.meta || "Open item")}</p>
+              </span>
+              <span class="activity-item-time">${escapeHtml(formatActivityTime(item.timestamp))}</span>
+            </button>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }).join("");
+
+  $("activityTimeline").querySelectorAll("[data-activity-type]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openActivityItem(button.dataset.activityType, button.dataset.activityId);
+    });
+  });
+}
+
 function getProjectRecords() {
   const grouped = new Map();
 
@@ -9677,6 +9993,8 @@ function renderAll() {
   renderReminderCenter();
   renderNotesCenter();
   renderFavoritesHub();
+  renderProjectsHub();
+  renderActivityTimeline();
 }
 
 async function loadWeather() {
@@ -9862,6 +10180,21 @@ $("projectsSearchInput").addEventListener("input", (event) => {
 $("projectsWorkspaceFilter").addEventListener("change", (event) => {
   projectsWorkspaceFilter = event.target.value;
   renderProjectsHub();
+});
+
+$("activitySearchInput").addEventListener("input", (event) => {
+  activitySearchTerm = event.target.value.trim();
+  renderActivityTimeline();
+});
+
+$("activityTypeFilter").addEventListener("change", (event) => {
+  activityTypeFilter = event.target.value;
+  renderActivityTimeline();
+});
+
+$("activityRangeFilter").addEventListener("change", (event) => {
+  activityRangeFilter = event.target.value;
+  renderActivityTimeline();
 });
 
 $("projectCreateForm").addEventListener("submit", (event) => {
@@ -10229,6 +10562,7 @@ $("financeForm").addEventListener("submit", (event) => {
   $("financeDescription").value = "";
   $("financeAmount").value = "";
   renderFinance();
+  renderActivityTimeline();
   showToast("Finance entry saved");
 });
 

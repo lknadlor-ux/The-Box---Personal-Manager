@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o3">
+  <link rel="stylesheet" href="style.css?v=7o4">
 </head>
 <body>
   <div class="desktop-shell">
@@ -257,6 +257,12 @@
           <small>Local productivity help</small>
         </button>
 
+        <button class="app-tile activity-app-tile" data-open-app="activity">
+          <span class="app-icon">↺</span>
+          <strong>Activity</strong>
+          <small>Recent changes across The Box</small>
+        </button>
+
         <button class="app-tile projects-app-tile" data-open-app="projects">
           <span class="app-icon">◆</span>
           <strong>Projects</strong>
@@ -354,6 +360,11 @@
         <button class="desktop-icon" data-open-app="calendar">
           <span>◫</span>
           <strong>Calendar</strong>
+        </button>
+
+        <button class="desktop-icon" data-open-app="activity">
+          <span>↺</span>
+          <strong>Activity</strong>
         </button>
 
         <button class="desktop-icon" data-open-app="projects">
@@ -866,6 +877,72 @@
             </section>
           </div>
         </article>
+
+        <article class="app-window activity-app-window" data-app-window="activity" style="--x: 10%; --y: 7%; --w: 76%; --h: 80%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>↺</span><strong>Activity</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content activity-window">
+            <section class="activity-hero">
+              <div>
+                <small>ACTIVITY TIMELINE</small>
+                <h2>See what changed, without hunting for it.</h2>
+                <p>Recent work from Tasks, Notes, Journal, Our Space, Document Vault, and Finance is gathered into one chronological view.</p>
+              </div>
+
+              <div class="activity-summary" aria-label="Activity summary">
+                <div><strong id="activityTotalCount">0</strong><span>Total</span></div>
+                <div><strong id="activityTodayCount">0</strong><span>Today</span></div>
+                <div><strong id="activityWeekCount">0</strong><span>7 days</span></div>
+                <div><strong id="activityMonthCount">0</strong><span>30 days</span></div>
+              </div>
+            </section>
+
+            <section class="activity-toolbar">
+              <label class="activity-search">
+                <span>⌕</span>
+                <input id="activitySearchInput" type="search" placeholder="Search recent activity">
+              </label>
+
+              <select id="activityTypeFilter" aria-label="Filter activity type">
+                <option value="all">All sources</option>
+                <option value="tasks">Tasks</option>
+                <option value="notes">Notes</option>
+                <option value="journal">Journal</option>
+                <option value="ourspace">Our Space</option>
+                <option value="files">Files</option>
+                <option value="finance">Finance</option>
+              </select>
+
+              <select id="activityRangeFilter" aria-label="Filter activity date range">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="all">All activity</option>
+              </select>
+            </section>
+
+            <section class="activity-content">
+              <div class="activity-section-heading">
+                <div>
+                  <small id="activityEyebrow">RECENT ACTIVITY</small>
+                  <h3 id="activityHeading">Last 30 days</h3>
+                </div>
+                <span id="activityResultCount">0 items</span>
+              </div>
+
+              <div id="activityTimeline" class="activity-timeline"></div>
+              <p id="activityEmptyState" class="empty-state">No activity matches this view.</p>
+            </section>
+          </div>
+        </article>
+
 
         <article class="app-window projects-app-window" data-app-window="projects" style="--x: 9%; --y: 6%; --w: 80%; --h: 84%;">
           <div class="window-titlebar">
@@ -2313,6 +2390,10 @@
         <span class="dock-icon" aria-hidden="true">▤</span>
         <span class="dock-label">Templates</span>
       </button>
+      <button class="dock-item" data-open-app="activity" title="Activity Timeline" aria-label="Activity Timeline">
+        <span class="dock-icon" aria-hidden="true">↺</span>
+        <span class="dock-label">Activity</span>
+      </button>
       <button class="dock-item" data-open-app="projects" title="Projects" aria-label="Projects">
         <span class="dock-icon" aria-hidden="true">◆</span>
         <span class="dock-label">Projects</span>
@@ -2933,6 +3014,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o3"></script>
+  <script src="app.js?v=7o4"></script>
 </body>
 </html>

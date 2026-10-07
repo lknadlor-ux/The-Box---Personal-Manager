@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o3-projects-hub";
+const CACHE_NAME = "the-box-os-phase-7o4-activity-timeline";
 
 const APP_FILES = [
   "./",
