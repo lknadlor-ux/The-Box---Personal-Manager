@@ -4292,6 +4292,35 @@ function renderDocumentCounts() {
   $("documentTotalCount").textContent = activeDocuments.length;
   $("documentFavoriteCount").textContent = favorites;
   $("documentStorageUsed").textContent = formatBytes(totalSize);
+
+  if ($("documentLatestUpload")) {
+    const latest = [...activeDocuments].sort((a, b) =>
+      String(b.updated_at || b.created_at || "").localeCompare(
+        String(a.updated_at || a.created_at || "")
+      )
+    )[0];
+
+    if (!latest) {
+      $("documentLatestUpload").textContent = "—";
+      $("documentLatestUpload").title = "No active files";
+    } else {
+      const latestDate = new Date(latest.updated_at || latest.created_at);
+      const today = new Date();
+      const sameDay =
+        latestDate.getFullYear() === today.getFullYear() &&
+        latestDate.getMonth() === today.getMonth() &&
+        latestDate.getDate() === today.getDate();
+
+      $("documentLatestUpload").textContent = sameDay
+        ? "Today"
+        : latestDate.toLocaleDateString("en-PH", {
+            month: "short",
+            day: "numeric"
+          });
+      $("documentLatestUpload").title = latest.name || "Latest active file";
+    }
+  }
+
   $("documentAllFolderCount").textContent = activeDocuments.length;
   $("documentFavoritesFolderCount").textContent = favorites;
   $("documentTrashFolderCount").textContent = trashedDocuments.length;
@@ -6147,6 +6176,36 @@ function updateJournalNavigation() {
   $('nextJournalEntryButton').disabled = index <= 0;
 }
 
+function formatCompactCount(value) {
+  const count = Number(value) || 0;
+  if (count >= 1000000) return `${(count / 1000000).toFixed(count >= 10000000 ? 0 : 1)}m`;
+  if (count >= 1000) return `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}k`;
+  return String(count);
+}
+
+function renderJournalOverview() {
+  if (!$('journalOverviewTotal')) return;
+
+  const now = new Date();
+  const monthKey =
+    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const monthEntries = journalEntries.filter((entry) =>
+    String(entry.entry_date || '').startsWith(monthKey)
+  );
+  const favorites = journalEntries.filter((entry) => entry.favorite);
+  const totalWords = journalEntries.reduce((sum, entry) => {
+    const content = String(entry.content || '').trim();
+    if (!content) return sum;
+    return sum + content.split(/\s+/).filter(Boolean).length;
+  }, 0);
+
+  $('journalOverviewTotal').textContent = String(journalEntries.length);
+  $('journalOverviewMonth').textContent = String(monthEntries.length);
+  $('journalOverviewFavorites').textContent = String(favorites.length);
+  $('journalOverviewWords').textContent = formatCompactCount(totalWords);
+}
+
 function renderJournalCenter() {
   if (!$('journalEntryList')) return;
   initializeJournalEditor();
@@ -6154,6 +6213,7 @@ function renderJournalCenter() {
   $('journalFavoritesOnly').checked = journalFavoritesOnly;
   $('journalDateFrom').value = journalDateFrom;
   $('journalDateTo').value = journalDateTo;
+  renderJournalOverview();
   renderJournalEntryList();
   updateJournalNavigation();
   updateJournalWordCount();
@@ -7119,6 +7179,46 @@ function selectOurSpacePlan(planId) {
   renderOurSpacePlanList();
 }
 
+function renderOurSpaceHeroHighlight() {
+  if (!$("ourSpaceHeroNextTitle")) return;
+
+  const today = getOurSpaceToday();
+  const nextPlan = [...ourSpacePlans]
+    .filter((plan) =>
+      plan.status !== "done" &&
+      plan.target_date &&
+      plan.target_date >= today
+    )
+    .sort((a, b) => {
+      if (a.target_date !== b.target_date) {
+        return a.target_date.localeCompare(b.target_date);
+      }
+      if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+      return String(b.updated_at || "").localeCompare(String(a.updated_at || ""));
+    })[0];
+
+  if (!nextPlan) {
+    $("ourSpaceHeroNextTitle").textContent = "Nothing scheduled yet";
+    $("ourSpaceHeroNextMeta").textContent =
+      "Add a date to a plan and it will appear here.";
+    $("ourSpaceHeroNext").classList.remove("has-plan");
+    $("ourSpaceHeroNext").dataset.planId = "";
+    return;
+  }
+
+  const meta = [
+    formatOurSpaceDate(nextPlan.target_date),
+    nextPlan.place || "",
+    getOurSpaceStatusLabel(nextPlan.status)
+  ].filter(Boolean);
+
+  $("ourSpaceHeroNextTitle").textContent =
+    nextPlan.title || "Untitled plan";
+  $("ourSpaceHeroNextMeta").textContent = meta.join(" · ");
+  $("ourSpaceHeroNext").classList.add("has-plan");
+  $("ourSpaceHeroNext").dataset.planId = nextPlan.id;
+}
+
 function renderOurSpaceCenter() {
   if (!$("ourSpacePlanList")) return;
   $("ourSpaceSearchInput").value = ourSpaceSearchTerm;
@@ -7126,6 +7226,7 @@ function renderOurSpaceCenter() {
   $("ourSpaceStatusFilter").value = ourSpaceStatusFilter;
   $("ourSpaceFavoritesOnly").checked = ourSpaceFavoritesOnly;
 
+  renderOurSpaceHeroHighlight();
   renderOurSpaceSummary();
   updateOurSpaceSidebarHeading();
   renderOurSpacePlanList();
@@ -8290,7 +8391,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7N.4-Free";
+const BACKUP_APP_VERSION = "7N.5-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9535,6 +9636,11 @@ document.addEventListener("keydown", (event) => {
 
 
 
+
+$("ourSpaceHeroNext").addEventListener("click", () => {
+  const planId = $("ourSpaceHeroNext").dataset.planId;
+  if (planId) selectOurSpacePlan(planId);
+});
 
 $("newOurSpacePlanButton").addEventListener("click", () => {
   resetOurSpaceEditor();

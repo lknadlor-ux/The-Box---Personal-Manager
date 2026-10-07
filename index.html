@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7n4">
+  <link rel="stylesheet" href="style.css?v=7n5">
 </head>
 <body>
   <div class="desktop-shell">
@@ -966,7 +966,7 @@
           </div>
         </article>
 
-        <article class="app-window" data-app-window="documents" style="--x: 10%; --y: 7%; --w: 76%; --h: 80%;">
+        <article class="app-window" data-app-window="documents" style="--x: 6%; --y: 5%; --w: 86%; --h: 86%;">
           <div class="window-titlebar">
             <div class="window-title"><span>▣</span><strong>Document Vault</strong></div>
             <div class="window-controls">
@@ -977,16 +977,17 @@
           </div>
 
           <div class="window-content documents-window">
-            <section class="documents-hero">
-              <div>
-                <small>PRIVATE CLOUD STORAGE</small>
-                <h2>Document Vault</h2>
-                <p>Organize private files, track expiry dates, add tags, and stay ahead of compliance deadlines.</p>
+            <section class="documents-hero documents-hero-redesign">
+              <div class="documents-hero-copy">
+                <small>PRIVATE DOCUMENT VAULT</small>
+                <h2>Your files, organized and ready.</h2>
+                <p>Keep private documents searchable, grouped into folders, linked to work, and monitored for expiry deadlines.</p>
               </div>
-              <div class="document-stats">
-                <div><strong id="documentTotalCount">0</strong><span>Files</span></div>
+              <div class="document-stats document-stats-redesign">
+                <div><strong id="documentTotalCount">0</strong><span>Active files</span></div>
                 <div><strong id="documentFavoriteCount">0</strong><span>Favorites</span></div>
-                <div><strong id="documentStorageUsed">0 B</strong><span>Stored</span></div>
+                <div><strong id="documentStorageUsed">0 B</strong><span>Active size</span></div>
+                <div><strong id="documentLatestUpload">—</strong><span>Latest</span></div>
               </div>
             </section>
 
@@ -1025,6 +1026,14 @@
               </aside>
 
               <section class="document-workspace">
+                <div class="document-workspace-heading">
+                  <div>
+                    <small>VAULT BROWSER</small>
+                    <strong>Find what you need</strong>
+                  </div>
+                  <span>Search, sort, filter, or switch between grid and list.</span>
+                </div>
+
                 <div class="document-toolbar">
                   <label class="document-search">
                     <span>⌕</span>
@@ -1200,7 +1209,7 @@
 
 
 
-        <article class="app-window" data-app-window="journal" style="--x: 10%; --y: 6%; --w: 78%; --h: 82%;">
+        <article class="app-window" data-app-window="journal" style="--x: 8%; --y: 5%; --w: 82%; --h: 86%;">
           <div class="window-titlebar">
             <div class="window-title"><span>☷</span><strong>Journal</strong></div>
             <div class="window-controls">
@@ -1211,12 +1220,32 @@
           </div>
 
           <div class="window-content journal-window">
-            <section class="journal-hero">
-              <div>
+            <section class="journal-hero journal-hero-redesign">
+              <div class="journal-hero-copy">
                 <small>PERSONAL JOURNAL</small>
-                <h2>Your private writing space</h2>
-                <p>Capture reflections, notes, and meaningful moments in a distraction-free private writing space. Entries sync privately through your Supabase account.</p>
+                <h2>Make room for what matters.</h2>
+                <p>Write privately, revisit meaningful days, and keep reflections together without clutter.</p>
               </div>
+
+              <div class="journal-overview-stats" aria-label="Journal summary">
+                <div>
+                  <strong id="journalOverviewTotal">0</strong>
+                  <span>Entries</span>
+                </div>
+                <div>
+                  <strong id="journalOverviewMonth">0</strong>
+                  <span>This month</span>
+                </div>
+                <div class="favorite">
+                  <strong id="journalOverviewFavorites">0</strong>
+                  <span>Favorites</span>
+                </div>
+                <div>
+                  <strong id="journalOverviewWords">0</strong>
+                  <span>Words</span>
+                </div>
+              </div>
+
               <div class="journal-hero-actions">
                 <button id="journalTodayButton" class="secondary-button" type="button">Today</button>
                 <button id="newJournalEntryButton" class="primary-button" type="button">＋ New entry</button>
@@ -1312,7 +1341,7 @@
         </article>
 
 
-        <article class="app-window our-space-app-window" data-app-window="ourspace" style="--x: 8%; --y: 5%; --w: 82%; --h: 84%;">
+        <article class="app-window our-space-app-window" data-app-window="ourspace" style="--x: 6%; --y: 4%; --w: 86%; --h: 88%;">
           <div class="window-titlebar">
             <div class="window-title"><span>♥</span><strong>Our Space</strong></div>
             <div class="window-controls">
@@ -1323,13 +1352,21 @@
           </div>
 
           <div class="window-content our-space-window">
-            <section class="our-space-hero">
-              <div>
+            <section class="our-space-hero our-space-hero-redesign">
+              <div class="our-space-hero-copy">
                 <small>OUR LIFE TOGETHER</small>
-                <h2>Things we want to do, places we want to go, and memories we want to make.</h2>
-                <p>Keep date ideas, trips, food spots, milestones, purchases, and future plans together in one private space.</p>
+                <h2>Plans become memories here.</h2>
+                <p>Keep the ideas, places, photos, little details, and completed moments you want to remember together.</p>
               </div>
-              <button id="newOurSpacePlanButton" class="primary-button" type="button">＋ New plan</button>
+
+              <div class="our-space-hero-side">
+                <div id="ourSpaceHeroNext" class="our-space-next-card">
+                  <small>NEXT UP</small>
+                  <strong id="ourSpaceHeroNextTitle">Nothing scheduled yet</strong>
+                  <span id="ourSpaceHeroNextMeta">Add a date to a plan and it will appear here.</span>
+                </div>
+                <button id="newOurSpacePlanButton" class="primary-button" type="button">＋ New plan</button>
+              </div>
             </section>
 
             <section class="our-space-summary-grid">
@@ -1417,6 +1454,11 @@
                     <input id="ourSpaceFavorite" type="checkbox">
                     <span>♥ Favorite</span>
                   </label>
+                </div>
+
+                <div class="our-space-section-kicker">
+                  <small>PLAN DETAILS</small>
+                  <span>Set the basics first. Photos stay close to the plan so the editor feels visual.</span>
                 </div>
 
                 <div class="our-space-meta-grid">
