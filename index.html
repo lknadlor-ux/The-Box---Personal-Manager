@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o5">
+  <link rel="stylesheet" href="style.css?v=7o6">
 </head>
 <body>
   <div class="desktop-shell">
@@ -257,6 +257,12 @@
           <small>Local productivity help</small>
         </button>
 
+        <button class="app-tile workspaces-app-tile" data-open-app="workspaces">
+          <span class="app-icon">▦</span>
+          <strong>Workspaces</strong>
+          <small>Personal, Pharmacy, Clinic, SK</small>
+        </button>
+
         <button class="app-tile activity-app-tile" data-open-app="activity">
           <span class="app-icon">↺</span>
           <strong>Activity</strong>
@@ -360,6 +366,11 @@
         <button class="desktop-icon" data-open-app="calendar">
           <span>◫</span>
           <strong>Calendar</strong>
+        </button>
+
+        <button class="desktop-icon" data-open-app="workspaces">
+          <span>▦</span>
+          <strong>Workspaces</strong>
         </button>
 
         <button class="desktop-icon" data-open-app="activity">
@@ -877,6 +888,103 @@
             </section>
           </div>
         </article>
+
+        <article class="app-window workspaces-app-window" data-app-window="workspaces" style="--x: 8%; --y: 6%; --w: 82%; --h: 84%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>▦</span><strong>Workspaces</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content workspaces-window">
+            <section class="workspaces-hero">
+              <div>
+                <small>WORKSPACES HUB</small>
+                <h2>Keep every part of your life in context.</h2>
+                <p>Switch between Personal, Pharmacy, Clinic, and SK without rebuilding filters every time.</p>
+              </div>
+
+              <div class="workspaces-summary" aria-label="Workspace summary">
+                <div><strong id="workspacesOpenTaskCount">0</strong><span>Open tasks</span></div>
+                <div><strong id="workspacesUrgentCount">0</strong><span>Urgent</span></div>
+                <div><strong id="workspacesUpcomingCount">0</strong><span>Upcoming</span></div>
+                <div><strong id="workspacesProjectCount">0</strong><span>Projects</span></div>
+              </div>
+            </section>
+
+            <section id="workspaceHubCards" class="workspace-hub-cards" aria-label="Choose a workspace"></section>
+
+            <section class="workspace-detail-shell">
+              <header class="workspace-detail-header">
+                <div class="workspace-detail-title">
+                  <span id="workspaceDetailIcon">◇</span>
+                  <div>
+                    <small id="workspaceDetailEyebrow">WORKSPACE</small>
+                    <h3 id="workspaceDetailTitle">Personal</h3>
+                    <p id="workspaceDetailSubtitle">Your personal tasks, events, projects, and finance.</p>
+                  </div>
+                </div>
+
+                <div class="workspace-detail-actions">
+                  <button id="workspaceNewTaskButton" class="primary-button" type="button">＋ Task</button>
+                  <button id="workspaceNewEventButton" class="secondary-button" type="button">＋ Event</button>
+                  <button id="workspaceOpenTasksButton" class="secondary-button" type="button">Open Tasks</button>
+                  <button id="workspaceOpenFinanceButton" class="secondary-button" type="button">Open Finance</button>
+                </div>
+              </header>
+
+              <div class="workspace-detail-stats">
+                <div><strong id="workspaceDetailOpenTasks">0</strong><span>Open tasks</span></div>
+                <div><strong id="workspaceDetailUrgentTasks">0</strong><span>Urgent</span></div>
+                <div><strong id="workspaceDetailUpcomingEvents">0</strong><span>Upcoming events</span></div>
+                <div><strong id="workspaceDetailActiveProjects">0</strong><span>Active projects</span></div>
+                <div><strong id="workspaceDetailBalance">₱0.00</strong><span>Finance balance</span></div>
+              </div>
+
+              <div class="workspace-detail-grid">
+                <article class="workspace-panel workspace-tasks-panel">
+                  <div class="workspace-panel-heading">
+                    <div><small>ATTENTION</small><strong>Open tasks</strong></div>
+                    <button id="workspaceViewAllTasksButton" type="button">View all</button>
+                  </div>
+                  <div id="workspaceTaskList" class="workspace-item-list"></div>
+                  <p id="workspaceTaskEmpty" class="empty-state">No open tasks in this workspace.</p>
+                </article>
+
+                <article class="workspace-panel workspace-events-panel">
+                  <div class="workspace-panel-heading">
+                    <div><small>UPCOMING</small><strong>Events</strong></div>
+                    <button id="workspaceViewCalendarButton" type="button">Calendar</button>
+                  </div>
+                  <div id="workspaceEventList" class="workspace-item-list"></div>
+                  <p id="workspaceEventEmpty" class="empty-state">No upcoming events in this workspace.</p>
+                </article>
+
+                <article class="workspace-panel workspace-projects-panel">
+                  <div class="workspace-panel-heading">
+                    <div><small>OUTCOMES</small><strong>Projects</strong></div>
+                    <button id="workspaceViewProjectsButton" type="button">Projects</button>
+                  </div>
+                  <div id="workspaceProjectList" class="workspace-item-list"></div>
+                  <p id="workspaceProjectEmpty" class="empty-state">No active projects in this workspace.</p>
+                </article>
+
+                <article class="workspace-panel workspace-finance-panel">
+                  <div class="workspace-panel-heading">
+                    <div><small>FINANCE</small><strong>Recent entries</strong></div>
+                    <button id="workspaceViewFinanceButton" type="button">Finance</button>
+                  </div>
+                  <div id="workspaceFinanceList" class="workspace-item-list"></div>
+                  <p id="workspaceFinanceEmpty" class="empty-state">No finance entries in this workspace.</p>
+                </article>
+              </div>
+            </section>
+          </div>
+        </article>
+
 
         <article class="app-window activity-app-window" data-app-window="activity" style="--x: 10%; --y: 7%; --w: 76%; --h: 80%;">
           <div class="window-titlebar">
@@ -2395,6 +2503,10 @@
         <span class="dock-icon" aria-hidden="true">▤</span>
         <span class="dock-label">Templates</span>
       </button>
+      <button class="dock-item" data-open-app="workspaces" title="Workspaces" aria-label="Workspaces">
+        <span class="dock-icon" aria-hidden="true">▦</span>
+        <span class="dock-label">Workspaces</span>
+      </button>
       <button class="dock-item" data-open-app="activity" title="Activity Timeline" aria-label="Activity Timeline">
         <span class="dock-icon" aria-hidden="true">↺</span>
         <span class="dock-label">Activity</span>
@@ -3047,6 +3159,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o5"></script>
+  <script src="app.js?v=7o6"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o5-command-palette";
+const CACHE_NAME = "the-box-os-phase-7o6-workspaces-hub";
 
 const APP_FILES = [
   "./",

@@ -338,6 +338,7 @@ let activitySearchTerm = "";
 let commandPaletteActiveIndex = 0;
 let commandPaletteItems = [];
 let commandPaletteLastQuery = "";
+let selectedWorkspaceHub = "personal";
 let favoritesFilter = "all";
 let favoritesSearchTerm = "";
 let taskViewMode = localStorage.getItem(STORAGE.taskView) === "kanban" ? "kanban" : "list";
@@ -1433,6 +1434,7 @@ const COMMAND_PALETTE_APPS = [
   { app: "documents", icon: "▱", label: "Document Vault", keywords: "files documents vault storage compliance" },
   { app: "projects", icon: "◆", label: "Projects", keywords: "projects outcomes grouped tasks" },
   { app: "favorites", icon: "★", label: "Favorites", keywords: "favorites pinned sticky important" },
+  { app: "workspaces", icon: "▦", label: "Workspaces", keywords: "workspaces personal pharmacy clinic sk contexts" },
   { app: "activity", icon: "↺", label: "Activity", keywords: "activity timeline history recent changes" },
   { app: "finance", icon: "₱", label: "Finance", keywords: "finance income expenses money" },
   { app: "focus", icon: "◉", label: "Focus", keywords: "focus timer pomodoro" },
@@ -1459,6 +1461,15 @@ function getCommandPaletteActions() {
       description: "Capture a Task, Note, Event, Journal entry, or Our Space plan",
       keywords: "new capture add inbox",
       run: () => openQuickCapture()
+    },
+    {
+      key: "action-workspaces",
+      type: "action",
+      icon: "▦",
+      title: "Open Workspaces",
+      description: "Switch between Personal, Pharmacy, Clinic, and SK",
+      keywords: "workspaces contexts personal pharmacy clinic sk",
+      run: () => openApp("workspaces")
     },
     {
       key: "action-new-task",
@@ -2298,6 +2309,10 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "workspaces") {
+    renderWorkspacesHub();
   }
 
   if (appName === "activity") {
@@ -4562,6 +4577,8 @@ function renderFinance() {
       financeEntries = financeEntries.filter((item) => item.id !== entry.id);
       saveJSON(STORAGE.finance, financeEntries);
       renderFinance();
+      renderActivityTimeline();
+      renderWorkspacesHub();
       showToast("Finance entry deleted");
     });
 
@@ -6642,6 +6659,7 @@ async function loadDocuments({ silent = false } = {}) {
   renderFavoritesHub();
   renderProjectsHub();
   renderActivityTimeline();
+  renderWorkspacesHub();
   if (isCommandPaletteOpen()) renderCommandPalette();
 }
 
@@ -9144,7 +9162,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.5-Free";
+const BACKUP_APP_VERSION = "7O.6-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9653,6 +9671,328 @@ async function refreshAppFiles() {
 
 
 
+
+
+const WORKSPACE_HUB_DEFINITIONS = [
+  {
+    key: "personal",
+    label: "Personal",
+    icon: "◇",
+    description: "Personal plans, errands, goals, and everyday work."
+  },
+  {
+    key: "pharmacy",
+    label: "Pharmacy",
+    icon: "Rx",
+    description: "Pharmacy operations, compliance, inventory, and regulatory work."
+  },
+  {
+    key: "clinic",
+    label: "Clinic",
+    icon: "+",
+    description: "Clinic operations, patient-service tasks, and internal coordination."
+  },
+  {
+    key: "sk",
+    label: "SK",
+    icon: "SK",
+    description: "Barangay youth programs, reports, sessions, and activities."
+  }
+];
+
+function getWorkspaceHubDefinition(workspaceKey) {
+  return WORKSPACE_HUB_DEFINITIONS.find((item) => item.key === workspaceKey)
+    || WORKSPACE_HUB_DEFINITIONS[0];
+}
+
+function getWorkspaceHubData(workspaceKey) {
+  const workspaceTasks = tasks.filter((task) => task.workspace === workspaceKey);
+  const openTasks = workspaceTasks.filter((task) => !task.completed);
+  const urgentTasks = openTasks.filter((task) => task.priority === "urgent");
+
+  const upcomingEvents = getUpcomingEvents()
+    .filter((eventItem) => eventItem.workspace === workspaceKey);
+
+  const projects = getProjectRecords()
+    .filter((project) => project.workspaces.includes(workspaceKey));
+
+  const activeProjects = projects.filter((project) => project.tasks.some(
+    (task) => task.workspace === workspaceKey && !task.completed
+  ));
+
+  const finance = financeEntries
+    .filter((entry) => entry.workspace === workspaceKey)
+    .sort((a, b) =>
+      String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+    );
+
+  const income = finance
+    .filter((entry) => entry.type === "income")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+
+  const expenses = finance
+    .filter((entry) => entry.type === "expense")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+
+  return {
+    workspaceKey,
+    tasks: workspaceTasks,
+    openTasks,
+    urgentTasks,
+    upcomingEvents,
+    projects,
+    activeProjects,
+    finance,
+    balance: income - expenses
+  };
+}
+
+function getWorkspaceTaskQueue(workspaceKey) {
+  const data = getWorkspaceHubData(workspaceKey);
+  const today = getLocalDateKey();
+  const priorityRank = { urgent: 0, important: 1, normal: 2 };
+
+  return [...data.openTasks]
+    .sort((a, b) => {
+      const aOverdue = a.dueDate && a.dueDate < today ? 0 : 1;
+      const bOverdue = b.dueDate && b.dueDate < today ? 0 : 1;
+      if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+
+      const aToday = a.dueDate === today ? 0 : 1;
+      const bToday = b.dueDate === today ? 0 : 1;
+      if (aToday !== bToday) return aToday - bToday;
+
+      const priorityDiff =
+        (priorityRank[a.priority] ?? 3) - (priorityRank[b.priority] ?? 3);
+      if (priorityDiff) return priorityDiff;
+
+      if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+      if (a.dueDate) return -1;
+      if (b.dueDate) return 1;
+
+      return String(b.updatedAt || b.createdAt || "")
+        .localeCompare(String(a.updatedAt || a.createdAt || ""));
+    })
+    .slice(0, 6);
+}
+
+function getWorkspaceProjectRecords(workspaceKey) {
+  return getProjectRecords()
+    .filter((project) => project.workspaces.includes(workspaceKey))
+    .map((project) => {
+      const workspaceTasks = project.tasks.filter(
+        (task) => task.workspace === workspaceKey
+      );
+      const total = workspaceTasks.length;
+      const done = workspaceTasks.filter((task) => task.completed).length;
+      const open = total - done;
+      return {
+        ...project,
+        workspaceTotal: total,
+        workspaceDone: done,
+        workspaceOpen: open,
+        workspaceProgress: total ? Math.round((done / total) * 100) : 0
+      };
+    })
+    .filter((project) => project.workspaceTotal > 0)
+    .sort((a, b) => {
+      if (a.workspaceOpen !== b.workspaceOpen) return b.workspaceOpen - a.workspaceOpen;
+      return a.name.localeCompare(b.name);
+    });
+}
+
+function selectWorkspaceHub(workspaceKey) {
+  const valid = WORKSPACE_HUB_DEFINITIONS.some((item) => item.key === workspaceKey);
+  selectedWorkspaceHub = valid ? workspaceKey : "personal";
+  renderWorkspacesHub();
+}
+
+function openWorkspaceTasks(workspaceKey = selectedWorkspaceHub) {
+  activeFilter = "all";
+  activeWorkspaceFilter = workspaceKey;
+  activeTaskProjectFilter = "all";
+  document.querySelectorAll(".filter").forEach((button) => {
+    button.classList.toggle("active", button.dataset.filter === "all");
+  });
+  $("workspaceFilter").value = workspaceKey;
+  openApp("tasks");
+  renderTasks();
+}
+
+function createWorkspaceTask(workspaceKey = selectedWorkspaceHub) {
+  openApp("tasks");
+  openTaskModal({
+    text: "",
+    workspace: workspaceKey,
+    priority: "normal",
+    status: "todo"
+  }, "workspace");
+}
+
+function createWorkspaceEvent(workspaceKey = selectedWorkspaceHub) {
+  openApp("calendar");
+  $("eventWorkspace").value = workspaceKey;
+  $("eventTitle").value = "";
+  $("eventDate").value = "";
+  $("eventTitle").focus();
+  showToast(`New ${getWorkspaceHubDefinition(workspaceKey).label} event`);
+}
+
+function openWorkspaceFinance(workspaceKey = selectedWorkspaceHub) {
+  openApp("finance");
+  $("financeWorkspace").value = workspaceKey;
+}
+
+function renderWorkspacesHub() {
+  if (!$("workspaceHubCards")) return;
+
+  const allData = WORKSPACE_HUB_DEFINITIONS.map((definition) => ({
+    definition,
+    data: getWorkspaceHubData(definition.key)
+  }));
+
+  const totalOpen = allData.reduce((sum, item) => sum + item.data.openTasks.length, 0);
+  const totalUrgent = allData.reduce((sum, item) => sum + item.data.urgentTasks.length, 0);
+  const totalUpcoming = allData.reduce((sum, item) => sum + item.data.upcomingEvents.length, 0);
+  const totalProjects = getProjectRecords().filter((project) => project.open > 0).length;
+
+  $("workspacesOpenTaskCount").textContent = String(totalOpen);
+  $("workspacesUrgentCount").textContent = String(totalUrgent);
+  $("workspacesUpcomingCount").textContent = String(totalUpcoming);
+  $("workspacesProjectCount").textContent = String(totalProjects);
+
+  if (!WORKSPACE_HUB_DEFINITIONS.some((item) => item.key === selectedWorkspaceHub)) {
+    selectedWorkspaceHub = "personal";
+  }
+
+  $("workspaceHubCards").innerHTML = allData.map(({ definition, data }) => `
+    <button class="workspace-hub-card ${definition.key === selectedWorkspaceHub ? "active" : ""}"
+      type="button" data-workspace-hub="${escapeHtml(definition.key)}">
+      <span class="workspace-hub-icon">${escapeHtml(definition.icon)}</span>
+      <span class="workspace-hub-copy">
+        <strong>${escapeHtml(definition.label)}</strong>
+        <small>${data.openTasks.length} open · ${data.upcomingEvents.length} upcoming</small>
+      </span>
+      <span class="workspace-hub-badges">
+        ${data.urgentTasks.length ? `<b>${data.urgentTasks.length} urgent</b>` : ""}
+        <em>${formatMoney(data.balance)}</em>
+      </span>
+    </button>
+  `).join("");
+
+  $("workspaceHubCards").querySelectorAll("[data-workspace-hub]").forEach((button) => {
+    button.addEventListener("click", () => selectWorkspaceHub(button.dataset.workspaceHub));
+  });
+
+  const definition = getWorkspaceHubDefinition(selectedWorkspaceHub);
+  const data = getWorkspaceHubData(selectedWorkspaceHub);
+  const taskQueue = getWorkspaceTaskQueue(selectedWorkspaceHub);
+  const projects = getWorkspaceProjectRecords(selectedWorkspaceHub).slice(0, 5);
+  const eventsForWorkspace = data.upcomingEvents.slice(0, 5);
+  const financeForWorkspace = data.finance.slice(0, 5);
+
+  $("workspaceDetailIcon").textContent = definition.icon;
+  $("workspaceDetailEyebrow").textContent = `${definition.label.toUpperCase()} WORKSPACE`;
+  $("workspaceDetailTitle").textContent = definition.label;
+  $("workspaceDetailSubtitle").textContent = definition.description;
+  $("workspaceDetailOpenTasks").textContent = String(data.openTasks.length);
+  $("workspaceDetailUrgentTasks").textContent = String(data.urgentTasks.length);
+  $("workspaceDetailUpcomingEvents").textContent = String(data.upcomingEvents.length);
+  $("workspaceDetailActiveProjects").textContent = String(data.activeProjects.length);
+  $("workspaceDetailBalance").textContent = formatMoney(data.balance);
+
+  $("workspaceTaskEmpty").hidden = taskQueue.length > 0;
+  $("workspaceTaskList").innerHTML = taskQueue.map((task) => `
+    <button class="workspace-list-item task ${escapeHtml(task.priority || "normal")}"
+      type="button" data-workspace-task-id="${escapeHtml(String(task.id))}">
+      <span class="workspace-item-mark">${task.priority === "urgent" ? "!" : "✓"}</span>
+      <span class="workspace-item-copy">
+        <strong>${escapeHtml(task.text || "Untitled task")}</strong>
+        <small>
+          ${escapeHtml(getTaskStatusLabel(task.status))}
+          ${task.project ? ` · ◆ ${escapeHtml(task.project)}` : ""}
+          ${task.dueDate ? ` · ${escapeHtml(getDashboardTaskDueLabel(task))}` : ""}
+        </small>
+      </span>
+      <span aria-hidden="true">→</span>
+    </button>
+  `).join("");
+
+  $("workspaceTaskList").querySelectorAll("[data-workspace-task-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const task = tasks.find((item) => String(item.id) === button.dataset.workspaceTaskId);
+      if (!task) return;
+      openApp("tasks");
+      openTaskModal(task, "tasks", task.id);
+    });
+  });
+
+  $("workspaceEventEmpty").hidden = eventsForWorkspace.length > 0;
+  $("workspaceEventList").innerHTML = eventsForWorkspace.map((eventItem) => `
+    <button class="workspace-list-item event" type="button"
+      data-workspace-event-id="${escapeHtml(String(eventItem.id))}">
+      <span class="workspace-item-mark">◫</span>
+      <span class="workspace-item-copy">
+        <strong>${escapeHtml(eventItem.title || "Untitled event")}</strong>
+        <small>${escapeHtml(formatTaskDate(eventItem.date))}</small>
+      </span>
+      <span aria-hidden="true">→</span>
+    </button>
+  `).join("");
+
+  $("workspaceEventList").querySelectorAll("[data-workspace-event-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const eventItem = events.find(
+        (item) => String(item.id) === button.dataset.workspaceEventId
+      );
+      if (!eventItem) return;
+      const date = new Date(`${eventItem.date}T00:00:00`);
+      shownMonth = date.getMonth();
+      shownYear = date.getFullYear();
+      openApp("calendar");
+      renderCalendar();
+      renderEvents();
+    });
+  });
+
+  $("workspaceProjectEmpty").hidden = projects.length > 0;
+  $("workspaceProjectList").innerHTML = projects.map((project) => `
+    <button class="workspace-list-item project" type="button"
+      data-workspace-project="${escapeHtml(project.name)}">
+      <span class="workspace-item-mark">◆</span>
+      <span class="workspace-item-copy">
+        <strong>${escapeHtml(project.name)}</strong>
+        <small>${project.workspaceOpen} open · ${project.workspaceProgress}% complete</small>
+      </span>
+      <span class="workspace-item-progress">${project.workspaceProgress}%</span>
+    </button>
+  `).join("");
+
+  $("workspaceProjectList").querySelectorAll("[data-workspace-project]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedProjectName = button.dataset.workspaceProject;
+      openApp("projects");
+      renderProjectsHub();
+    });
+  });
+
+  $("workspaceFinanceEmpty").hidden = financeForWorkspace.length > 0;
+  $("workspaceFinanceList").innerHTML = financeForWorkspace.map((entry) => `
+    <button class="workspace-list-item finance ${escapeHtml(entry.type || "expense")}"
+      type="button" data-workspace-finance-id="${escapeHtml(String(entry.id))}">
+      <span class="workspace-item-mark">${entry.type === "income" ? "＋" : "−"}</span>
+      <span class="workspace-item-copy">
+        <strong>${escapeHtml(entry.description || "Finance entry")}</strong>
+        <small>${escapeHtml(formatActivityTime(entry.createdAt))}</small>
+      </span>
+      <span class="workspace-item-amount">${escapeHtml(formatMoney(entry.amount))}</span>
+    </button>
+  `).join("");
+
+  $("workspaceFinanceList").querySelectorAll("[data-workspace-finance-id]").forEach((button) => {
+    button.addEventListener("click", () => openWorkspaceFinance(selectedWorkspaceHub));
+  });
+}
 
 function getActivityTimestamp(value) {
   const date = new Date(value || 0);
@@ -10632,6 +10972,40 @@ $("activityRangeFilter").addEventListener("change", (event) => {
   renderActivityTimeline();
 });
 
+$("workspaceNewTaskButton").addEventListener("click", () => {
+  createWorkspaceTask(selectedWorkspaceHub);
+});
+
+$("workspaceNewEventButton").addEventListener("click", () => {
+  createWorkspaceEvent(selectedWorkspaceHub);
+});
+
+$("workspaceOpenTasksButton").addEventListener("click", () => {
+  openWorkspaceTasks(selectedWorkspaceHub);
+});
+
+$("workspaceViewAllTasksButton").addEventListener("click", () => {
+  openWorkspaceTasks(selectedWorkspaceHub);
+});
+
+$("workspaceOpenFinanceButton").addEventListener("click", () => {
+  openWorkspaceFinance(selectedWorkspaceHub);
+});
+
+$("workspaceViewFinanceButton").addEventListener("click", () => {
+  openWorkspaceFinance(selectedWorkspaceHub);
+});
+
+$("workspaceViewCalendarButton").addEventListener("click", () => {
+  openApp("calendar");
+});
+
+$("workspaceViewProjectsButton").addEventListener("click", () => {
+  projectsWorkspaceFilter = selectedWorkspaceHub;
+  openApp("projects");
+  renderProjectsHub();
+});
+
 $("projectCreateForm").addEventListener("submit", (event) => {
   event.preventDefault();
   startProjectWithFirstTask(
@@ -11051,6 +11425,7 @@ $("financeForm").addEventListener("submit", (event) => {
   $("financeAmount").value = "";
   renderFinance();
   renderActivityTimeline();
+  renderWorkspacesHub();
   showToast("Finance entry saved");
 });
 
