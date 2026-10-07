@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o4">
+  <link rel="stylesheet" href="style.css?v=7o5">
 </head>
 <body>
   <div class="desktop-shell">
@@ -91,7 +91,7 @@
       <div class="topbar-center">
         <label class="global-search">
           <span>⌕</span>
-          <input id="globalSearch" type="search" placeholder="Search tasks, notes, and events">
+          <input id="globalSearch" type="search" placeholder="Search everything · Ctrl/⌘ K">
         </label>
       </div>
 
@@ -2304,6 +2304,11 @@
       <strong>Exit</strong>
     </button>
 
+    <button id="mobileCommandButton" class="mobile-command-button"
+      type="button" aria-label="Search The Box" title="Search The Box">
+      <span aria-hidden="true">⌕</span>
+    </button>
+
     <button id="mobileQuickCaptureButton" class="mobile-quick-capture-button"
       type="button" aria-label="Quick capture" title="Quick capture">
       <span aria-hidden="true">＋</span>
@@ -2843,6 +2848,34 @@
     </section>
   </div>
 
+  <div id="commandPaletteOverlay" class="command-palette-overlay" aria-hidden="true">
+    <section class="command-palette-card" role="dialog" aria-modal="true" aria-labelledby="commandPaletteTitle">
+      <header class="command-palette-header">
+        <span class="command-palette-search-icon" aria-hidden="true">⌕</span>
+        <input id="commandPaletteInput" type="search" autocomplete="off" spellcheck="false"
+          placeholder="Search apps, tasks, notes, files, projects…"
+          aria-label="Search The Box">
+        <button id="closeCommandPaletteButton" class="window-button" type="button" aria-label="Close search">✕</button>
+      </header>
+
+      <div class="command-palette-context">
+        <div>
+          <small id="commandPaletteTitle">THE BOX COMMAND PALETTE</small>
+          <span id="commandPaletteSummary">Apps, actions, and your content.</span>
+        </div>
+        <span class="command-palette-shortcut">Ctrl/⌘ K</span>
+      </div>
+
+      <div id="commandPaletteResults" class="command-palette-results" role="listbox" aria-label="Search results"></div>
+
+      <footer class="command-palette-footer">
+        <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
+        <span><kbd>Enter</kbd> Open</span>
+        <span><kbd>Esc</kbd> Close</span>
+      </footer>
+    </section>
+  </div>
+
   <div id="quickCaptureOverlay" class="quick-capture-overlay" aria-hidden="true">
     <section class="quick-capture-card" role="dialog" aria-modal="true" aria-labelledby="quickCaptureTitle">
       <header class="quick-capture-header">
@@ -3014,6 +3047,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o4"></script>
+  <script src="app.js?v=7o5"></script>
 </body>
 </html>

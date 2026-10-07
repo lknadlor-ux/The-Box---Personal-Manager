@@ -335,6 +335,9 @@ let projectsWorkspaceFilter = "all";
 let activityTypeFilter = "all";
 let activityRangeFilter = "30";
 let activitySearchTerm = "";
+let commandPaletteActiveIndex = 0;
+let commandPaletteItems = [];
+let commandPaletteLastQuery = "";
 let favoritesFilter = "all";
 let favoritesSearchTerm = "";
 let taskViewMode = localStorage.getItem(STORAGE.taskView) === "kanban" ? "kanban" : "list";
@@ -1418,6 +1421,437 @@ function handleFullscreenChange() {
   updateFullscreenUi();
 }
 
+
+
+const COMMAND_PALETTE_APPS = [
+  { app: "dashboard", icon: "⌂", label: "Home", keywords: "dashboard today home command center" },
+  { app: "tasks", icon: "✓", label: "Tasks", keywords: "tasks todo work checklist kanban" },
+  { app: "calendar", icon: "◫", label: "Calendar", keywords: "calendar events dates schedule" },
+  { app: "notes", icon: "✎", label: "Notes", keywords: "notes sticky writing" },
+  { app: "journal", icon: "☷", label: "Journal", keywords: "journal diary reflection writing" },
+  { app: "ourspace", icon: "♥", label: "Our Space", keywords: "plans memories partner dates trips" },
+  { app: "documents", icon: "▱", label: "Document Vault", keywords: "files documents vault storage compliance" },
+  { app: "projects", icon: "◆", label: "Projects", keywords: "projects outcomes grouped tasks" },
+  { app: "favorites", icon: "★", label: "Favorites", keywords: "favorites pinned sticky important" },
+  { app: "activity", icon: "↺", label: "Activity", keywords: "activity timeline history recent changes" },
+  { app: "finance", icon: "₱", label: "Finance", keywords: "finance income expenses money" },
+  { app: "focus", icon: "◉", label: "Focus", keywords: "focus timer pomodoro" },
+  { app: "assistant", icon: "◇", label: "Assistant", keywords: "assistant helper" },
+  { app: "templates", icon: "▤", label: "Templates", keywords: "templates compliance reusable" },
+  { app: "reminders", icon: "♢", label: "Reminders", keywords: "reminders alerts due expiry" },
+  { app: "backup", icon: "↥", label: "Backup", keywords: "backup restore export recovery" },
+  { app: "pharmacy", icon: "Rx", label: "Pharmacy", keywords: "pharmacy workspace medicine" },
+  { app: "clinic", icon: "+", label: "Clinic", keywords: "clinic workspace" },
+  { app: "sk", icon: "SK", label: "SK", keywords: "sk barangay youth workspace" }
+];
+
+function isCommandPaletteOpen() {
+  return $("commandPaletteOverlay")?.classList.contains("open");
+}
+
+function getCommandPaletteActions() {
+  return [
+    {
+      key: "action-quick-capture",
+      type: "action",
+      icon: "＋",
+      title: "Quick Capture",
+      description: "Capture a Task, Note, Event, Journal entry, or Our Space plan",
+      keywords: "new capture add inbox",
+      run: () => openQuickCapture()
+    },
+    {
+      key: "action-new-task",
+      type: "action",
+      icon: "✓",
+      title: "New Task",
+      description: "Open the Task Composer",
+      keywords: "task todo add new",
+      run: () => {
+        openApp("tasks");
+        openTaskModal({ text: "", workspace: "personal", priority: "normal" }, "command");
+      }
+    },
+    {
+      key: "action-new-note",
+      type: "action",
+      icon: "✎",
+      title: "New Note",
+      description: "Create a blank note",
+      keywords: "note sticky writing add new",
+      run: () => {
+        openApp("notes");
+        createNewNoteItem();
+      }
+    },
+    {
+      key: "action-new-journal",
+      type: "action",
+      icon: "☷",
+      title: "New Journal Entry",
+      description: "Start writing today's journal entry",
+      keywords: "journal diary reflection add new",
+      run: () => {
+        openApp("journal");
+        newJournalEntry();
+      }
+    },
+    {
+      key: "action-new-plan",
+      type: "action",
+      icon: "♥",
+      title: "New Our Space Plan",
+      description: "Start a new shared plan",
+      keywords: "our space plan date trip memory add new",
+      run: () => {
+        openApp("ourspace");
+        resetOurSpaceEditor();
+        $("ourSpaceTitle").focus();
+      }
+    },
+    {
+      key: "action-theme",
+      type: "action",
+      icon: "☾",
+      title: "Toggle Theme",
+      description: "Switch between dark and light appearance",
+      keywords: "theme dark light appearance",
+      run: () => $("themeButton").click()
+    },
+    {
+      key: "action-fullscreen",
+      type: "action",
+      icon: "⛶",
+      title: "Toggle Full Screen",
+      description: "Enter or exit The Box full-screen workspace",
+      keywords: "fullscreen full screen immersive",
+      run: () => toggleBoxFullscreen()
+    },
+    {
+      key: "action-reminders",
+      type: "action",
+      icon: "♢",
+      title: "Open Reminders",
+      description: "Review upcoming task, event, and document reminders",
+      keywords: "reminders alerts notifications",
+      run: () => openApp("reminders")
+    }
+  ];
+}
+
+function getCommandPaletteContentItems() {
+  const items = [];
+
+  tasks.forEach((task) => {
+    items.push({
+      key: `task-${task.id}`,
+      type: "task",
+      icon: task.completed ? "✓" : "○",
+      title: task.text || "Untitled task",
+      description: [
+        task.project ? `◆ ${task.project}` : "",
+        task.workspace || "personal",
+        task.dueDate ? getDashboardTaskDueLabel(task) : ""
+      ].filter(Boolean).join(" · "),
+      keywords: `${task.text || ""} ${task.details || ""} ${task.project || ""} ${(task.tags || []).join(" ")}`,
+      run: () => {
+        openApp("tasks");
+        openTaskModal(task, "tasks", task.id);
+      }
+    });
+  });
+
+  events.forEach((eventItem) => {
+    items.push({
+      key: `event-${eventItem.id}`,
+      type: "event",
+      icon: "◫",
+      title: eventItem.title || "Untitled event",
+      description: [
+        eventItem.date ? formatTaskDate(eventItem.date) : "",
+        eventItem.workspace || "personal"
+      ].filter(Boolean).join(" · "),
+      keywords: `${eventItem.title || ""} ${eventItem.workspace || ""} ${eventItem.date || ""}`,
+      run: () => {
+        if (eventItem.date) {
+          const date = new Date(`${eventItem.date}T00:00:00`);
+          shownMonth = date.getMonth();
+          shownYear = date.getFullYear();
+        }
+        openApp("calendar");
+        renderCalendar();
+        renderEvents();
+      }
+    });
+  });
+
+  noteItems.forEach((note) => {
+    items.push({
+      key: `note-${note.id}`,
+      type: "note",
+      icon: note.sticky ? "★" : "✎",
+      title: note.title || "Untitled note",
+      description: getNotePreview(note, 90),
+      keywords: `${note.title || ""} ${note.content || ""}`,
+      run: () => {
+        openApp("notes");
+        selectNoteItem(note.id);
+      }
+    });
+  });
+
+  journalEntries.forEach((entry) => {
+    items.push({
+      key: `journal-${entry.id}`,
+      type: "journal",
+      icon: entry.favorite ? "★" : "☷",
+      title: entry.title || "Untitled journal entry",
+      description: formatJournalDate(entry.entry_date),
+      keywords: `${entry.title || ""} ${entry.content || ""} ${(entry.tags || []).join(" ")}`,
+      run: () => {
+        openApp("journal");
+        selectJournalEntry(entry.id, { bypassDirtyCheck: true });
+      }
+    });
+  });
+
+  ourSpacePlans.forEach((plan) => {
+    items.push({
+      key: `ourspace-${plan.id}`,
+      type: "ourspace",
+      icon: getOurSpaceCategoryIcon(plan.category),
+      title: plan.title || "Untitled plan",
+      description: [
+        plan.category || "Other",
+        getOurSpaceStatusLabel(plan.status),
+        plan.place || ""
+      ].filter(Boolean).join(" · "),
+      keywords: `${plan.title || ""} ${plan.notes || ""} ${plan.favorite_memory || ""} ${plan.place || ""}`,
+      run: () => {
+        openApp("ourspace");
+        selectOurSpacePlan(plan.id);
+      }
+    });
+  });
+
+  documents
+    .filter((documentItem) => !documentItem.deleted_at)
+    .forEach((documentItem) => {
+      items.push({
+        key: `file-${documentItem.id}`,
+        type: "file",
+        icon: getDocumentTypeLabel(documentItem),
+        title: documentItem.name || "Untitled file",
+        description: [
+          documentItem.folder || "Documents",
+          formatBytes(Number(documentItem.size_bytes || 0))
+        ].filter(Boolean).join(" · "),
+        keywords: `${documentItem.name || ""} ${documentItem.folder || ""} ${documentItem.details || ""} ${(getDocumentTags(documentItem) || []).join(" ")}`,
+        run: () => {
+          openApp("documents");
+          openDocumentPreview(documentItem);
+        }
+      });
+    });
+
+  getProjectRecords().forEach((project) => {
+    items.push({
+      key: `project-${project.key}`,
+      type: "project",
+      icon: "◆",
+      title: project.name,
+      description: `${project.open} open · ${project.progress}% complete`,
+      keywords: `${project.name} ${project.tasks.map((task) => task.text).join(" ")}`,
+      run: () => {
+        selectedProjectName = project.name;
+        openApp("projects");
+        renderProjectsHub();
+      }
+    });
+  });
+
+  financeEntries.forEach((entry) => {
+    items.push({
+      key: `finance-${entry.id}`,
+      type: "finance",
+      icon: entry.type === "income" ? "＋" : "−",
+      title: entry.description || "Finance entry",
+      description: `${entry.workspace || "personal"} · ${formatMoney(entry.amount)}`,
+      keywords: `${entry.description || ""} ${entry.workspace || ""} ${entry.type || ""}`,
+      run: () => openApp("finance")
+    });
+  });
+
+  return items;
+}
+
+function getCommandPaletteTypeLabel(type) {
+  return {
+    app: "App",
+    action: "Action",
+    task: "Task",
+    event: "Event",
+    note: "Note",
+    journal: "Journal",
+    ourspace: "Our Space",
+    file: "File",
+    project: "Project",
+    finance: "Finance"
+  }[type] || "Result";
+}
+
+function getCommandPaletteItems(query = "") {
+  const normalizedQuery = String(query || "").trim().toLocaleLowerCase();
+
+  const apps = COMMAND_PALETTE_APPS
+    .filter((app) => document.querySelector(`[data-app-window="${app.app}"]`))
+    .map((app) => ({
+      key: `app-${app.app}`,
+      type: "app",
+      icon: app.icon,
+      title: app.label,
+      description: "Open app",
+      keywords: `${app.label} ${app.keywords}`,
+      run: () => openApp(app.app)
+    }));
+
+  const actions = getCommandPaletteActions();
+  const content = getCommandPaletteContentItems();
+
+  const source = normalizedQuery
+    ? [...actions, ...apps, ...content]
+    : [...actions.slice(0, 5), ...apps.slice(0, 10)];
+
+  if (!normalizedQuery) return source.slice(0, 18);
+
+  const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+
+  return source
+    .map((item) => {
+      const haystack =
+        `${item.title} ${item.description || ""} ${item.keywords || ""} ${getCommandPaletteTypeLabel(item.type)}`
+          .toLocaleLowerCase();
+
+      let score = 0;
+      tokens.forEach((token) => {
+        if (item.title.toLocaleLowerCase().startsWith(token)) score += 14;
+        else if (item.title.toLocaleLowerCase().includes(token)) score += 9;
+        if (haystack.includes(token)) score += 3;
+      });
+
+      if (item.type === "action") score += 2;
+      if (item.type === "app") score += 1;
+
+      return { item, score };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(({ item }) => item)
+    .slice(0, 36);
+}
+
+function renderCommandPalette() {
+  const results = $("commandPaletteResults");
+  if (!results) return;
+
+  const query = $("commandPaletteInput").value;
+  commandPaletteLastQuery = query;
+  commandPaletteItems = getCommandPaletteItems(query);
+
+  if (commandPaletteActiveIndex >= commandPaletteItems.length) {
+    commandPaletteActiveIndex = Math.max(0, commandPaletteItems.length - 1);
+  }
+
+  $("commandPaletteSummary").textContent = query.trim()
+    ? `${commandPaletteItems.length} result${commandPaletteItems.length === 1 ? "" : "s"}`
+    : "Apps, actions, and your content.";
+
+  if (!commandPaletteItems.length) {
+    results.innerHTML = `
+      <div class="command-palette-empty">
+        <span>⌕</span>
+        <strong>No matches</strong>
+        <p>Try another app, task, note, project, file, or action.</p>
+      </div>
+    `;
+    return;
+  }
+
+  results.innerHTML = commandPaletteItems.map((item, index) => `
+    <button class="command-palette-result ${index === commandPaletteActiveIndex ? "active" : ""}"
+      type="button"
+      role="option"
+      aria-selected="${index === commandPaletteActiveIndex ? "true" : "false"}"
+      data-command-index="${index}">
+      <span class="command-result-icon">${escapeHtml(item.icon || "◇")}</span>
+      <span class="command-result-copy">
+        <small>${escapeHtml(getCommandPaletteTypeLabel(item.type))}</small>
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.description || "Open")}</p>
+      </span>
+      <span class="command-result-enter" aria-hidden="true">↵</span>
+    </button>
+  `).join("");
+
+  results.querySelectorAll("[data-command-index]").forEach((button) => {
+    button.addEventListener("pointerenter", () => {
+      commandPaletteActiveIndex = Number(button.dataset.commandIndex) || 0;
+      renderCommandPalette();
+    });
+    button.addEventListener("click", () => {
+      runCommandPaletteItem(Number(button.dataset.commandIndex) || 0);
+    });
+  });
+
+  const active = results.querySelector(".command-palette-result.active");
+  active?.scrollIntoView({ block: "nearest" });
+}
+
+function openCommandPalette(initialQuery = "") {
+  closeLauncher();
+
+  const overlay = $("commandPaletteOverlay");
+  overlay.classList.add("open");
+  overlay.setAttribute("aria-hidden", "false");
+  document.documentElement.classList.add("command-palette-open");
+
+  $("commandPaletteInput").value = String(initialQuery || "");
+  commandPaletteActiveIndex = 0;
+  renderCommandPalette();
+
+  window.setTimeout(() => {
+    $("commandPaletteInput").focus();
+    $("commandPaletteInput").select();
+  }, 30);
+
+  if (window.BoxCloud?.isReady() && !documents.length && !documentsLoading) {
+    loadDocuments({ silent: true }).then(() => {
+      if (isCommandPaletteOpen()) renderCommandPalette();
+    });
+  }
+}
+
+function closeCommandPalette() {
+  $("commandPaletteOverlay").classList.remove("open");
+  $("commandPaletteOverlay").setAttribute("aria-hidden", "true");
+  document.documentElement.classList.remove("command-palette-open");
+  $("globalSearch").value = "";
+}
+
+function runCommandPaletteItem(index = commandPaletteActiveIndex) {
+  const item = commandPaletteItems[index];
+  if (!item) return;
+  closeCommandPalette();
+  item.run();
+}
+
+function moveCommandPaletteSelection(direction) {
+  if (!commandPaletteItems.length) return;
+  commandPaletteActiveIndex =
+    (commandPaletteActiveIndex + direction + commandPaletteItems.length) %
+    commandPaletteItems.length;
+  renderCommandPalette();
+}
 
 function getQuickCaptureFirstLine(text) {
   return String(text || "")
@@ -6208,6 +6642,7 @@ async function loadDocuments({ silent = false } = {}) {
   renderFavoritesHub();
   renderProjectsHub();
   renderActivityTimeline();
+  if (isCommandPaletteOpen()) renderCommandPalette();
 }
 
 async function uploadSelectedDocuments() {
@@ -8709,7 +9144,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.4-Free";
+const BACKUP_APP_VERSION = "7O.5-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -10249,6 +10684,18 @@ $("themeButton").addEventListener("click", () => {
   restoreTheme();
 });
 
+$("mobileCommandButton").addEventListener("click", () => openCommandPalette());
+$("closeCommandPaletteButton").addEventListener("click", closeCommandPalette);
+
+$("commandPaletteInput").addEventListener("input", () => {
+  commandPaletteActiveIndex = 0;
+  renderCommandPalette();
+});
+
+$("commandPaletteOverlay").addEventListener("pointerdown", (event) => {
+  if (event.target === $("commandPaletteOverlay")) closeCommandPalette();
+});
+
 $("quickCaptureButton").addEventListener("click", () => openQuickCapture());
 $("mobileQuickCaptureButton").addEventListener("click", () => openQuickCapture());
 $("closeQuickCaptureButton").addEventListener("click", closeQuickCapture);
@@ -10276,6 +10723,44 @@ $("quickCaptureOverlay").addEventListener("pointerdown", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  const commandShortcut =
+    (event.ctrlKey || event.metaKey) &&
+    !event.shiftKey &&
+    event.key.toLocaleLowerCase() === "k";
+
+  if (commandShortcut) {
+    event.preventDefault();
+    if (isCommandPaletteOpen()) closeCommandPalette();
+    else openCommandPalette();
+    return;
+  }
+
+  if (isCommandPaletteOpen()) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      moveCommandPaletteSelection(1);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      moveCommandPaletteSelection(-1);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      runCommandPaletteItem();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeCommandPalette();
+      return;
+    }
+  }
+
   const shortcut =
     (event.ctrlKey || event.metaKey) &&
     event.shiftKey &&
@@ -10469,11 +10954,14 @@ $("taskListViewButton").addEventListener("click", () => setTaskViewMode("list"))
 $("taskKanbanViewButton").addEventListener("click", () => setTaskViewMode("kanban"));
 $("taskModalRecurrence").addEventListener("change", updateTaskRecurrenceControls);
 
-$("globalSearch").addEventListener("input", (event) => {
-  searchTerm = event.target.value.trim();
-  renderTasks();
+$("globalSearch").addEventListener("focus", (event) => {
+  const initialQuery = event.target.value.trim();
+  openCommandPalette(initialQuery);
+  event.target.blur();
+});
 
-  if (searchTerm) openApp("tasks");
+$("globalSearch").addEventListener("click", (event) => {
+  openCommandPalette(event.target.value.trim());
 });
 
 $("calendarTodayButton").addEventListener("click", () => {
