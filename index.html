@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o7">
+  <link rel="stylesheet" href="style.css?v=7o8">
 </head>
 <body>
   <div class="desktop-shell">
@@ -257,6 +257,12 @@
           <small>Local productivity help</small>
         </button>
 
+        <button class="app-tile today-app-tile" data-open-app="today">
+          <span class="app-icon">☀</span>
+          <strong>Today</strong>
+          <small>Focus the day in one view</small>
+        </button>
+
         <button class="app-tile weekly-review-app-tile" data-open-app="weeklyreview">
           <span class="app-icon">◷</span>
           <strong>Weekly Review</strong>
@@ -372,6 +378,11 @@
         <button class="desktop-icon" data-open-app="calendar">
           <span>◫</span>
           <strong>Calendar</strong>
+        </button>
+
+        <button class="desktop-icon" data-open-app="today">
+          <span>☀</span>
+          <strong>Today</strong>
         </button>
 
         <button class="desktop-icon" data-open-app="weeklyreview">
@@ -899,6 +910,132 @@
             </section>
           </div>
         </article>
+
+        <article class="app-window today-app-window" data-app-window="today" style="--x: 8%; --y: 5%; --w: 82%; --h: 86%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>☀</span><strong>Today</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content today-window">
+            <section class="today-hero">
+              <div>
+                <small>DAILY PLANNER</small>
+                <h2 id="todayPlannerGreeting">Your day, in focus.</h2>
+                <p id="todayPlannerDate">Today</p>
+              </div>
+
+              <div class="today-hero-actions">
+                <button id="todayQuickCaptureButton" class="primary-button" type="button">＋ Capture</button>
+                <button id="todayNewTaskButton" class="secondary-button" type="button">＋ Task</button>
+                <button id="todayNewEventButton" class="secondary-button" type="button">＋ Event</button>
+                <button id="todayFocusButton" class="secondary-button" type="button">Focus</button>
+              </div>
+            </section>
+
+            <section class="today-summary" aria-label="Today summary">
+              <div><strong id="todayOverdueCount">0</strong><span>Overdue</span></div>
+              <div><strong id="todayDueCount">0</strong><span>Due today</span></div>
+              <div><strong id="todayEventCount">0</strong><span>Events today</span></div>
+              <div><strong id="todayUrgentCount">0</strong><span>Urgent</span></div>
+              <div><strong id="todayFinanceNet">₱0.00</strong><span>Today net</span></div>
+            </section>
+
+            <section class="today-main-grid">
+              <article class="today-panel today-priority-panel">
+                <div class="today-panel-heading">
+                  <div><small>FIRST UP</small><strong>What deserves attention</strong></div>
+                  <button id="todayOpenTasksButton" type="button">Tasks</button>
+                </div>
+                <div id="todayPriorityList" class="today-item-list"></div>
+                <p id="todayPriorityEmpty" class="empty-state">Nothing pressing. Your task queue is clear.</p>
+              </article>
+
+              <article class="today-panel today-schedule-panel">
+                <div class="today-panel-heading">
+                  <div><small>TODAY</small><strong>Schedule</strong></div>
+                  <button id="todayOpenCalendarButton" type="button">Calendar</button>
+                </div>
+                <div id="todayScheduleList" class="today-item-list"></div>
+                <p id="todayScheduleEmpty" class="empty-state">Nothing dated for today.</p>
+              </article>
+
+              <article class="today-panel">
+                <div class="today-panel-heading">
+                  <div><small>CARRY OVER</small><strong>Overdue work</strong></div>
+                  <button id="todayOpenOverdueButton" type="button">View tasks</button>
+                </div>
+                <div id="todayOverdueList" class="today-item-list"></div>
+                <p id="todayOverdueEmpty" class="empty-state">No overdue tasks.</p>
+              </article>
+
+              <article class="today-panel">
+                <div class="today-panel-heading">
+                  <div><small>WORKLOAD</small><strong>Workspace balance</strong></div>
+                  <button id="todayOpenWorkspacesButton" type="button">Workspaces</button>
+                </div>
+                <div id="todayWorkspaceList" class="today-workspace-list"></div>
+              </article>
+
+              <article class="today-panel today-panel-wide">
+                <div class="today-panel-heading">
+                  <div><small>PERSONAL CHECK-IN</small><strong>Journal & shared plans</strong></div>
+                  <div class="today-inline-actions">
+                    <button id="todayJournalButton" type="button">Journal</button>
+                    <button id="todayOurSpaceButton" type="button">Our Space</button>
+                  </div>
+                </div>
+
+                <div class="today-checkin-grid">
+                  <button id="todayJournalCard" class="today-checkin-card journal" type="button">
+                    <span>☷</span>
+                    <div>
+                      <small>JOURNAL</small>
+                      <strong id="todayJournalStatus">No entry yet</strong>
+                      <p id="todayJournalPreview">Write something about today.</p>
+                    </div>
+                  </button>
+
+                  <button id="todayOurSpaceCard" class="today-checkin-card ourspace" type="button">
+                    <span>♥</span>
+                    <div>
+                      <small>OUR SPACE</small>
+                      <strong id="todayOurSpaceStatus">Nothing scheduled today</strong>
+                      <p id="todayOurSpacePreview">Plans with today's target date will appear here.</p>
+                    </div>
+                  </button>
+                </div>
+              </article>
+
+              <article class="today-panel">
+                <div class="today-panel-heading">
+                  <div><small>END-OF-DAY SIGNAL</small><strong>Progress today*</strong></div>
+                  <button id="todayOpenActivityButton" type="button">Activity</button>
+                </div>
+                <div class="today-progress-grid">
+                  <div><strong id="todayCompletedCount">0</strong><span>Completed*</span></div>
+                  <div><strong id="todayActivityCount">0</strong><span>Updated today</span></div>
+                  <div><strong id="todayFocusMinutes">0</strong><span>Focus minutes</span></div>
+                </div>
+                <p class="today-disclaimer">* Completed means completed Tasks whose latest update happened today.</p>
+              </article>
+
+              <article class="today-panel">
+                <div class="today-panel-heading">
+                  <div><small>NEXT</small><strong>Tomorrow & beyond</strong></div>
+                  <button id="todayOpenWeeklyReviewButton" type="button">Weekly Review</button>
+                </div>
+                <div id="todayNextList" class="today-item-list"></div>
+                <p id="todayNextEmpty" class="empty-state">No dated tasks or events in the next few days.</p>
+              </article>
+            </section>
+          </div>
+        </article>
+
 
         <article class="app-window weekly-review-app-window" data-app-window="weeklyreview" style="--x: 7%; --y: 5%; --w: 84%; --h: 86%;">
           <div class="window-titlebar">
@@ -2637,6 +2774,10 @@
         <span class="dock-icon" aria-hidden="true">▤</span>
         <span class="dock-label">Templates</span>
       </button>
+      <button class="dock-item" data-open-app="today" title="Today" aria-label="Today">
+        <span class="dock-icon" aria-hidden="true">☀</span>
+        <span class="dock-label">Today</span>
+      </button>
       <button class="dock-item" data-open-app="weeklyreview" title="Weekly Review" aria-label="Weekly Review">
         <span class="dock-icon" aria-hidden="true">◷</span>
         <span class="dock-label">Review</span>
@@ -3297,6 +3438,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o7"></script>
+  <script src="app.js?v=7o8"></script>
 </body>
 </html>

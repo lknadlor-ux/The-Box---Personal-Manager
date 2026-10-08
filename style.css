@@ -18140,3 +18140,513 @@ html.phone-ui .weekly-review-item-copy small {
 html.phone-ui .weekly-review-item-meta {
   max-width: 100px;
 }
+
+
+/* ==========================================================================
+   Phase 7O.8 — Today Planner
+   ========================================================================== */
+
+.today-window {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.today-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 19px 20px;
+  border: 1px solid rgba(245,199,109,.16);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 0 0, rgba(245,199,109,.12), transparent 34%),
+    radial-gradient(circle at 100% 15%, rgba(127,140,255,.05), transparent 24%),
+    rgba(255,255,255,.014);
+}
+
+.today-hero small,
+.today-hero h2,
+.today-hero p {
+  display: block;
+}
+
+.today-hero small {
+  color: var(--warning);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.today-hero h2 {
+  margin: 4px 0 5px;
+  font-size: clamp(24px, 3vw, 38px);
+  font-weight: 730;
+  line-height: 1.05;
+  letter-spacing: -.045em;
+}
+
+.today-hero p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 10px;
+}
+
+.today-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.today-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.today-summary > div {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,.014);
+}
+
+.today-summary strong,
+.today-summary span {
+  display: block;
+}
+
+.today-summary strong {
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 730;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-summary span {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 7px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.today-main-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.today-panel {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: rgba(255,255,255,.012);
+}
+
+.today-panel-wide {
+  grid-column: 1 / -1;
+}
+
+.today-panel-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
+}
+
+.today-panel-heading small,
+.today-panel-heading strong {
+  display: block;
+}
+
+.today-panel-heading small {
+  color: var(--accent);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.today-panel-heading strong {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.today-panel-heading button {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 7.5px;
+  font-weight: 700;
+}
+
+.today-inline-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.today-item-list {
+  display: grid;
+  gap: 5px;
+}
+
+.today-list-item {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.today-list-item:hover {
+  border-color: var(--border);
+  background: var(--surface-hover);
+}
+
+.today-item-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.today-list-item.urgent .today-item-icon,
+.today-list-item.overdue .today-item-icon {
+  background: rgba(255,133,141,.08);
+  color: var(--danger);
+}
+
+.today-list-item.important .today-item-icon {
+  background: rgba(245,199,109,.08);
+  color: var(--warning);
+}
+
+.today-list-item.ourspace .today-item-icon {
+  color: #f69bb1;
+}
+
+.today-item-copy {
+  min-width: 0;
+}
+
+.today-item-copy strong,
+.today-item-copy small {
+  display: block;
+}
+
+.today-item-copy strong {
+  overflow: hidden;
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-item-copy small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 7.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-item-meta {
+  max-width: 145px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 7.5px;
+  font-weight: 650;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-workspace-list {
+  display: grid;
+  gap: 5px;
+}
+
+.today-workspace-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.today-workspace-row:hover {
+  border-color: var(--border);
+  background: var(--surface-hover);
+}
+
+.today-workspace-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.today-workspace-copy {
+  min-width: 0;
+}
+
+.today-workspace-copy strong,
+.today-workspace-copy small {
+  display: block;
+}
+
+.today-workspace-copy strong {
+  font-size: 9.5px;
+}
+
+.today-workspace-copy small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 7.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-workspace-count {
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.today-checkin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.today-checkin-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 94px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--text);
+  text-align: left;
+}
+
+.today-checkin-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.today-checkin-card > span {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: rgba(255,255,255,.025);
+  color: var(--accent);
+  font-size: 15px;
+}
+
+.today-checkin-card.ourspace > span {
+  color: #f69bb1;
+}
+
+.today-checkin-card small,
+.today-checkin-card strong,
+.today-checkin-card p {
+  display: block;
+}
+
+.today-checkin-card small {
+  color: var(--text-muted);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+
+.today-checkin-card strong {
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-checkin-card p {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 8px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.today-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.today-progress-grid > div {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.today-progress-grid strong,
+.today-progress-grid span {
+  display: block;
+}
+
+.today-progress-grid strong {
+  font-size: 16px;
+}
+
+.today-progress-grid span {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
+.today-disclaimer {
+  margin: 8px 1px 0;
+  color: var(--text-muted);
+  font-size: 7px;
+  line-height: 1.4;
+}
+
+.app-window.window-narrow .today-hero,
+.app-window.window-compact .today-hero {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.app-window.window-narrow .today-summary,
+.app-window.window-compact .today-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.app-window.window-narrow .today-main-grid,
+.app-window.window-compact .today-main-grid {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-narrow .today-panel-wide,
+.app-window.window-compact .today-panel-wide {
+  grid-column: auto;
+}
+
+html.phone-ui .today-window {
+  gap: 10px;
+}
+
+html.phone-ui .today-hero {
+  align-items: flex-start;
+  flex-direction: column;
+  padding: 15px;
+  border-radius: 16px;
+}
+
+html.phone-ui .today-hero h2 {
+  font-size: 25px;
+}
+
+html.phone-ui .today-hero-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+}
+
+html.phone-ui .today-hero-actions .primary-button {
+  grid-column: 1 / -1;
+}
+
+html.phone-ui .today-hero-actions button {
+  width: 100%;
+  min-height: 44px;
+}
+
+html.phone-ui .today-summary {
+  grid-template-columns: 1fr 1fr !important;
+}
+
+html.phone-ui .today-summary > div:last-child {
+  grid-column: 1 / -1;
+}
+
+html.phone-ui .today-main-grid {
+  grid-template-columns: 1fr !important;
+}
+
+html.phone-ui .today-panel-wide {
+  grid-column: auto;
+}
+
+html.phone-ui .today-list-item,
+html.phone-ui .today-workspace-row {
+  min-height: 60px;
+}
+
+html.phone-ui .today-item-copy strong,
+html.phone-ui .today-item-copy small,
+html.phone-ui .today-workspace-copy small {
+  white-space: normal;
+}
+
+html.phone-ui .today-item-meta {
+  max-width: 92px;
+}
+
+html.phone-ui .today-checkin-grid {
+  grid-template-columns: 1fr;
+}
+
+html.phone-ui .today-progress-grid {
+  grid-template-columns: 1fr 1fr 1fr;
+}

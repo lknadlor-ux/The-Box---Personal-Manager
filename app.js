@@ -1434,6 +1434,7 @@ const COMMAND_PALETTE_APPS = [
   { app: "documents", icon: "▱", label: "Document Vault", keywords: "files documents vault storage compliance" },
   { app: "projects", icon: "◆", label: "Projects", keywords: "projects outcomes grouped tasks" },
   { app: "favorites", icon: "★", label: "Favorites", keywords: "favorites pinned sticky important" },
+  { app: "today", icon: "☀", label: "Today", keywords: "today daily planner agenda priorities focus" },
   { app: "weeklyreview", icon: "◷", label: "Weekly Review", keywords: "weekly review planning recap wins overdue upcoming" },
   { app: "workspaces", icon: "▦", label: "Workspaces", keywords: "workspaces personal pharmacy clinic sk contexts" },
   { app: "activity", icon: "↺", label: "Activity", keywords: "activity timeline history recent changes" },
@@ -1462,6 +1463,15 @@ function getCommandPaletteActions() {
       description: "Capture a Task, Note, Event, Journal entry, or Our Space plan",
       keywords: "new capture add inbox",
       run: () => openQuickCapture()
+    },
+    {
+      key: "action-today",
+      type: "action",
+      icon: "☀",
+      title: "Open Today",
+      description: "See overdue work, today's schedule, priorities, and what comes next",
+      keywords: "today daily planner agenda priorities focus",
+      run: () => openApp("today")
     },
     {
       key: "action-weekly-review",
@@ -2319,6 +2329,10 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "today") {
+    renderTodayPlanner();
   }
 
   if (appName === "weeklyreview") {
@@ -6678,6 +6692,7 @@ async function loadDocuments({ silent = false } = {}) {
   renderActivityTimeline();
   renderWorkspacesHub();
   renderWeeklyReview();
+  renderTodayPlanner();
   if (isCommandPaletteOpen()) renderCommandPalette();
 }
 
@@ -9180,7 +9195,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.7-Free";
+const BACKUP_APP_VERSION = "7O.8-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9691,6 +9706,327 @@ async function refreshAppFiles() {
 
 
 
+
+
+function isTimestampToday(value) {
+  const timestamp = getActivityTimestamp(value);
+  if (!timestamp) return false;
+  const date = new Date(timestamp);
+  return getWeeklyReviewDateKey(date) === getLocalDateKey();
+}
+
+function getTodayPriorityTasks() {
+  const today = getLocalDateKey();
+  const rank = { urgent: 0, important: 1, normal: 2 };
+
+  return tasks
+    .filter((task) => !task.completed)
+    .sort((a, b) => {
+      const aOverdue = a.dueDate && a.dueDate < today ? 0 : 1;
+      const bOverdue = b.dueDate && b.dueDate < today ? 0 : 1;
+      if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+
+      const aToday = a.dueDate === today ? 0 : 1;
+      const bToday = b.dueDate === today ? 0 : 1;
+      if (aToday !== bToday) return aToday - bToday;
+
+      const priorityDiff = (rank[a.priority] ?? 3) - (rank[b.priority] ?? 3);
+      if (priorityDiff) return priorityDiff;
+
+      if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+      if (a.dueDate) return -1;
+      if (b.dueDate) return 1;
+
+      return String(b.updatedAt || b.createdAt || "")
+        .localeCompare(String(a.updatedAt || a.createdAt || ""));
+    })
+    .slice(0, 5);
+}
+
+function getTodayScheduleItems() {
+  const today = getLocalDateKey();
+
+  const eventItems = events
+    .filter((eventItem) => eventItem.date === today)
+    .map((eventItem) => ({
+      kind: "event",
+      id: String(eventItem.id),
+      title: eventItem.title || "Untitled event",
+      meta: eventItem.workspace || "personal",
+      icon: "◫"
+    }));
+
+  const taskItems = tasks
+    .filter((task) => !task.completed && task.dueDate === today)
+    .map((task) => ({
+      kind: "task",
+      id: String(task.id),
+      title: task.text || "Untitled task",
+      meta: [
+        task.workspace || "personal",
+        task.project ? `◆ ${task.project}` : "",
+        task.priority || "normal"
+      ].filter(Boolean).join(" · "),
+      icon: "✓"
+    }));
+
+  const planItems = ourSpacePlans
+    .filter((plan) => plan.status !== "done" && plan.target_date === today)
+    .map((plan) => ({
+      kind: "ourspace",
+      id: String(plan.id),
+      title: plan.title || "Untitled plan",
+      meta: [
+        plan.category || "Other",
+        plan.place || ""
+      ].filter(Boolean).join(" · "),
+      icon: getOurSpaceCategoryIcon(plan.category)
+    }));
+
+  return [...eventItems, ...taskItems, ...planItems];
+}
+
+function getTodayNextItems() {
+  const today = new Date(`${getLocalDateKey()}T00:00:00`);
+  const end = new Date(today);
+  end.setDate(end.getDate() + 4);
+  const todayKey = getLocalDateKey();
+
+  const taskItems = tasks
+    .filter((task) => {
+      if (task.completed || !task.dueDate || task.dueDate <= todayKey) return false;
+      const date = new Date(`${task.dueDate}T00:00:00`);
+      return date <= end;
+    })
+    .map((task) => ({
+      kind: "task",
+      id: String(task.id),
+      date: task.dueDate,
+      title: task.text || "Untitled task",
+      meta: task.workspace || "personal"
+    }));
+
+  const eventItems = events
+    .filter((eventItem) => {
+      if (!eventItem.date || eventItem.date <= todayKey) return false;
+      const date = new Date(`${eventItem.date}T00:00:00`);
+      return date <= end;
+    })
+    .map((eventItem) => ({
+      kind: "event",
+      id: String(eventItem.id),
+      date: eventItem.date,
+      title: eventItem.title || "Untitled event",
+      meta: eventItem.workspace || "personal"
+    }));
+
+  return [...taskItems, ...eventItems]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 7);
+}
+
+function openTodayItem(kind, id) {
+  if (kind === "task") {
+    const task = tasks.find((item) => String(item.id) === String(id));
+    if (!task) return;
+    openApp("tasks");
+    openTaskModal(task, "tasks", task.id);
+    return;
+  }
+
+  if (kind === "event") {
+    const eventItem = events.find((item) => String(item.id) === String(id));
+    if (!eventItem) return;
+    const date = new Date(`${eventItem.date}T00:00:00`);
+    shownMonth = date.getMonth();
+    shownYear = date.getFullYear();
+    openApp("calendar");
+    renderCalendar();
+    renderEvents();
+    return;
+  }
+
+  if (kind === "ourspace") {
+    openApp("ourspace");
+    selectOurSpacePlan(id);
+  }
+}
+
+function renderTodayPlanner() {
+  if (!$("todayPriorityList")) return;
+
+  const now = new Date();
+  const today = getLocalDateKey();
+
+  $("todayPlannerGreeting").textContent = getDashboardGreeting();
+  $("todayPlannerDate").textContent = now.toLocaleDateString("en-PH", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+
+  const openTasks = tasks.filter((task) => !task.completed);
+  const overdue = openTasks.filter((task) => task.dueDate && task.dueDate < today);
+  const dueToday = openTasks.filter((task) => task.dueDate === today);
+  const urgent = openTasks.filter((task) => task.priority === "urgent");
+  const todayEvents = events.filter((eventItem) => eventItem.date === today);
+
+  const todayFinance = financeEntries.filter((entry) => isTimestampToday(entry.createdAt));
+  const todayIncome = todayFinance
+    .filter((entry) => entry.type === "income")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const todayExpenses = todayFinance
+    .filter((entry) => entry.type === "expense")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+
+  $("todayOverdueCount").textContent = String(overdue.length);
+  $("todayDueCount").textContent = String(dueToday.length);
+  $("todayEventCount").textContent = String(todayEvents.length);
+  $("todayUrgentCount").textContent = String(urgent.length);
+  $("todayFinanceNet").textContent = formatMoney(todayIncome - todayExpenses);
+
+  const priorities = getTodayPriorityTasks();
+  $("todayPriorityEmpty").hidden = priorities.length > 0;
+  $("todayPriorityList").innerHTML = priorities.map((task) => `
+    <button class="today-list-item task ${escapeHtml(task.priority || "normal")}" type="button"
+      data-today-kind="task" data-today-id="${escapeHtml(String(task.id))}">
+      <span class="today-item-icon">${task.priority === "urgent" ? "!" : "✓"}</span>
+      <span class="today-item-copy">
+        <strong>${escapeHtml(task.text || "Untitled task")}</strong>
+        <small>
+          ${escapeHtml(task.workspace || "personal")}
+          ${task.project ? ` · ◆ ${escapeHtml(task.project)}` : ""}
+        </small>
+      </span>
+      <span class="today-item-meta">${escapeHtml(getDashboardTaskDueLabel(task) || getTaskStatusLabel(task.status))}</span>
+    </button>
+  `).join("");
+
+  const schedule = getTodayScheduleItems();
+  $("todayScheduleEmpty").hidden = schedule.length > 0;
+  $("todayScheduleList").innerHTML = schedule.map((item) => `
+    <button class="today-list-item schedule ${escapeHtml(item.kind)}" type="button"
+      data-today-kind="${escapeHtml(item.kind)}" data-today-id="${escapeHtml(item.id)}">
+      <span class="today-item-icon">${escapeHtml(item.icon)}</span>
+      <span class="today-item-copy">
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.meta || "")}</small>
+      </span>
+      <span class="today-item-meta">Today</span>
+    </button>
+  `).join("");
+
+  const overdueVisible = [...overdue]
+    .sort((a, b) => {
+      if (a.dueDate !== b.dueDate) return String(a.dueDate).localeCompare(String(b.dueDate));
+      return a.priority === "urgent" ? -1 : 1;
+    })
+    .slice(0, 6);
+
+  $("todayOverdueEmpty").hidden = overdueVisible.length > 0;
+  $("todayOverdueList").innerHTML = overdueVisible.map((task) => `
+    <button class="today-list-item overdue" type="button"
+      data-today-kind="task" data-today-id="${escapeHtml(String(task.id))}">
+      <span class="today-item-icon">!</span>
+      <span class="today-item-copy">
+        <strong>${escapeHtml(task.text || "Untitled task")}</strong>
+        <small>${escapeHtml(task.workspace || "personal")}${task.project ? ` · ◆ ${escapeHtml(task.project)}` : ""}</small>
+      </span>
+      <span class="today-item-meta">${escapeHtml(getDueDateInfo(task)?.label || "Overdue")}</span>
+    </button>
+  `).join("");
+
+  document.querySelectorAll("#todayPriorityList [data-today-kind], #todayScheduleList [data-today-kind], #todayOverdueList [data-today-kind]")
+    .forEach((button) => {
+      button.addEventListener("click", () =>
+        openTodayItem(button.dataset.todayKind, button.dataset.todayId)
+      );
+    });
+
+  const workspaceRows = WORKSPACE_HUB_DEFINITIONS.map((definition) => ({
+    definition,
+    data: getWorkspaceHubData(definition.key)
+  }));
+
+  $("todayWorkspaceList").innerHTML = workspaceRows.map(({ definition, data }) => `
+    <button class="today-workspace-row" type="button"
+      data-today-workspace="${escapeHtml(definition.key)}">
+      <span class="today-workspace-icon">${escapeHtml(definition.icon)}</span>
+      <span class="today-workspace-copy">
+        <strong>${escapeHtml(definition.label)}</strong>
+        <small>${data.openTasks.length} open · ${data.urgentTasks.length} urgent · ${data.upcomingEvents.length} upcoming</small>
+      </span>
+      <span class="today-workspace-count">${data.openTasks.length}</span>
+    </button>
+  `).join("");
+
+  $("todayWorkspaceList").querySelectorAll("[data-today-workspace]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedWorkspaceHub = button.dataset.todayWorkspace;
+      openApp("workspaces");
+      renderWorkspacesHub();
+    });
+  });
+
+  const todayJournal = journalEntries.find((entry) => entry.entry_date === today);
+  $("todayJournalStatus").textContent = todayJournal
+    ? (todayJournal.title || "Journal entry saved")
+    : "No entry yet";
+  $("todayJournalPreview").textContent = todayJournal
+    ? String(todayJournal.content || "Entry saved.").replace(/\s+/g, " ").trim().slice(0, 130)
+    : "Write something about today.";
+
+  const todayPlans = ourSpacePlans.filter(
+    (plan) => plan.status !== "done" && plan.target_date === today
+  );
+  const firstPlan = todayPlans[0];
+  $("todayOurSpaceStatus").textContent = firstPlan
+    ? (firstPlan.title || "Plan scheduled today")
+    : "Nothing scheduled today";
+  $("todayOurSpacePreview").textContent = firstPlan
+    ? [
+        firstPlan.category || "Other",
+        firstPlan.place || "",
+        todayPlans.length > 1 ? `+${todayPlans.length - 1} more` : ""
+      ].filter(Boolean).join(" · ")
+    : "Plans with today's target date will appear here.";
+  $("todayOurSpaceCard").dataset.planId = firstPlan?.id || "";
+
+  const completedToday = tasks.filter(
+    (task) => task.completed && isTimestampToday(task.updatedAt || task.createdAt)
+  );
+  const activityToday = getActivityItems().filter((item) =>
+    isTimestampToday(item.timestamp)
+  );
+
+  $("todayCompletedCount").textContent = String(completedToday.length);
+  $("todayActivityCount").textContent = String(activityToday.length);
+  $("todayFocusMinutes").textContent = String(
+    Number(localStorage.getItem(STORAGE.focusTotal) || 0)
+  );
+
+  const nextItems = getTodayNextItems();
+  $("todayNextEmpty").hidden = nextItems.length > 0;
+  $("todayNextList").innerHTML = nextItems.map((item) => `
+    <button class="today-list-item next ${escapeHtml(item.kind)}" type="button"
+      data-today-next-kind="${escapeHtml(item.kind)}"
+      data-today-next-id="${escapeHtml(item.id)}">
+      <span class="today-item-icon">${item.kind === "task" ? "✓" : "◫"}</span>
+      <span class="today-item-copy">
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.meta || "")}</small>
+      </span>
+      <span class="today-item-meta">${escapeHtml(formatTaskDate(item.date))}</span>
+    </button>
+  `).join("");
+
+  $("todayNextList").querySelectorAll("[data-today-next-kind]").forEach((button) => {
+    button.addEventListener("click", () =>
+      openTodayItem(button.dataset.todayNextKind, button.dataset.todayNextId)
+    );
+  });
+}
 
 function getWeeklyReviewBounds() {
   const now = new Date();
@@ -11395,6 +11731,59 @@ $("weeklyReviewViewProjectsButton").addEventListener("click", () => openApp("pro
 $("weeklyReviewViewWorkspacesButton").addEventListener("click", () => openApp("workspaces"));
 $("weeklyReviewViewFinanceButton").addEventListener("click", () => openApp("finance"));
 $("weeklyReviewViewVaultButton").addEventListener("click", () => openApp("documents"));
+
+$("todayQuickCaptureButton").addEventListener("click", () => openQuickCapture());
+
+$("todayNewTaskButton").addEventListener("click", () => {
+  openApp("tasks");
+  openTaskModal({
+    text: "",
+    workspace: "personal",
+    priority: "normal",
+    dueDate: getLocalDateKey(),
+    status: "todo"
+  }, "today");
+});
+
+$("todayNewEventButton").addEventListener("click", () => {
+  openApp("calendar");
+  selectCalendarDate(getLocalDateKey());
+});
+
+$("todayFocusButton").addEventListener("click", () => openApp("focus"));
+$("todayOpenTasksButton").addEventListener("click", () => openApp("tasks"));
+$("todayOpenCalendarButton").addEventListener("click", () => openApp("calendar"));
+
+$("todayOpenOverdueButton").addEventListener("click", () => {
+  activeFilter = "open";
+  document.querySelectorAll(".filter").forEach((button) => {
+    button.classList.toggle("active", button.dataset.filter === "open");
+  });
+  openApp("tasks");
+  renderTasks();
+});
+
+$("todayOpenWorkspacesButton").addEventListener("click", () => openApp("workspaces"));
+$("todayOpenActivityButton").addEventListener("click", () => openApp("activity"));
+$("todayOpenWeeklyReviewButton").addEventListener("click", () => openApp("weeklyreview"));
+
+$("todayJournalButton").addEventListener("click", () => {
+  openApp("journal");
+  showJournalToday();
+});
+
+$("todayJournalCard").addEventListener("click", () => {
+  openApp("journal");
+  showJournalToday();
+});
+
+$("todayOurSpaceButton").addEventListener("click", () => openApp("ourspace"));
+
+$("todayOurSpaceCard").addEventListener("click", () => {
+  const planId = $("todayOurSpaceCard").dataset.planId;
+  openApp("ourspace");
+  if (planId) selectOurSpacePlan(planId);
+});
 
 $("projectCreateForm").addEventListener("submit", (event) => {
   event.preventDefault();
