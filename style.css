@@ -17749,3 +17749,394 @@ html.phone-ui .workspace-item-copy strong,
 html.phone-ui .workspace-item-copy small {
   white-space: normal;
 }
+
+
+/* ==========================================================================
+   Phase 7O.7 — Weekly Review
+   ========================================================================== */
+
+.weekly-review-window {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.weekly-review-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 19px 20px;
+  border: 1px solid rgba(127,140,255,.18);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 0 0, rgba(127,140,255,.13), transparent 36%),
+    radial-gradient(circle at 100% 10%, rgba(115,215,164,.05), transparent 25%),
+    rgba(255,255,255,.014);
+}
+
+.weekly-review-hero small,
+.weekly-review-hero h2,
+.weekly-review-hero p {
+  display: block;
+}
+
+.weekly-review-hero small {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.weekly-review-hero h2 {
+  margin: 4px 0 5px;
+  font-size: clamp(24px, 3vw, 38px);
+  font-weight: 730;
+  line-height: 1.05;
+  letter-spacing: -.045em;
+}
+
+.weekly-review-hero p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 10px;
+}
+
+.weekly-review-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.weekly-review-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.weekly-review-summary > div {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,.014);
+}
+
+.weekly-review-summary strong,
+.weekly-review-summary span {
+  display: block;
+}
+
+.weekly-review-summary strong {
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 730;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weekly-review-summary span {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 7px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.weekly-review-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 7.5px;
+}
+
+.weekly-review-note button {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 7.5px;
+  font-weight: 700;
+}
+
+.weekly-review-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.weekly-review-panel {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: rgba(255,255,255,.012);
+}
+
+.weekly-review-panel-wide {
+  grid-column: 1 / -1;
+}
+
+.weekly-review-panel-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
+}
+
+.weekly-review-panel-heading small,
+.weekly-review-panel-heading strong {
+  display: block;
+}
+
+.weekly-review-panel-heading small {
+  color: var(--accent);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.weekly-review-panel-heading strong {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.weekly-review-panel-heading button {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 7.5px;
+  font-weight: 700;
+}
+
+.weekly-review-list {
+  display: grid;
+  gap: 5px;
+}
+
+.weekly-review-upcoming-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.weekly-review-item {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.weekly-review-item:hover {
+  border-color: var(--border);
+  background: var(--surface-hover);
+}
+
+.weekly-review-item-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.weekly-review-item.win .weekly-review-item-icon {
+  background: rgba(115,215,164,.08);
+  color: var(--success);
+}
+
+.weekly-review-item.attention .weekly-review-item-icon,
+.weekly-review-item.compliance.expired .weekly-review-item-icon {
+  background: rgba(255,133,141,.08);
+  color: var(--danger);
+}
+
+.weekly-review-item.compliance.expiring .weekly-review-item-icon {
+  background: rgba(245,199,109,.08);
+  color: var(--warning);
+}
+
+.weekly-review-item-copy {
+  min-width: 0;
+}
+
+.weekly-review-item-copy strong,
+.weekly-review-item-copy small {
+  display: block;
+}
+
+.weekly-review-item-copy strong {
+  overflow: hidden;
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weekly-review-item-copy small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 7.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weekly-review-item-meta {
+  max-width: 150px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 7.5px;
+  font-weight: 650;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weekly-review-finance {
+  display: grid;
+  gap: 7px;
+}
+
+.weekly-review-finance > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.weekly-review-finance span {
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+.weekly-review-finance strong {
+  font-size: 10.5px;
+}
+
+.weekly-review-finance .net {
+  border-color: rgba(127,140,255,.18);
+  background: var(--accent-soft);
+}
+
+.app-window.window-narrow .weekly-review-hero,
+.app-window.window-compact .weekly-review-hero {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.app-window.window-narrow .weekly-review-summary,
+.app-window.window-compact .weekly-review-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.app-window.window-narrow .weekly-review-grid,
+.app-window.window-compact .weekly-review-grid {
+  grid-template-columns: 1fr;
+}
+
+.app-window.window-narrow .weekly-review-panel-wide,
+.app-window.window-compact .weekly-review-panel-wide {
+  grid-column: auto;
+}
+
+.app-window.window-narrow .weekly-review-upcoming-list,
+.app-window.window-compact .weekly-review-upcoming-list {
+  grid-template-columns: 1fr;
+}
+
+html.tablet-ui .weekly-review-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+html.phone-ui .weekly-review-window {
+  gap: 10px;
+}
+
+html.phone-ui .weekly-review-hero {
+  align-items: flex-start;
+  flex-direction: column;
+  padding: 15px;
+  border-radius: 16px;
+}
+
+html.phone-ui .weekly-review-hero h2 {
+  font-size: 25px;
+}
+
+html.phone-ui .weekly-review-hero-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+}
+
+html.phone-ui .weekly-review-hero-actions .primary-button {
+  grid-column: 1 / -1;
+}
+
+html.phone-ui .weekly-review-hero-actions button {
+  width: 100%;
+  min-height: 44px;
+}
+
+html.phone-ui .weekly-review-summary {
+  grid-template-columns: 1fr 1fr !important;
+}
+
+html.phone-ui .weekly-review-summary > div:last-child {
+  grid-column: 1 / -1;
+}
+
+html.phone-ui .weekly-review-note {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+html.phone-ui .weekly-review-grid {
+  grid-template-columns: 1fr !important;
+}
+
+html.phone-ui .weekly-review-panel-wide {
+  grid-column: auto;
+}
+
+html.phone-ui .weekly-review-upcoming-list {
+  grid-template-columns: 1fr;
+}
+
+html.phone-ui .weekly-review-item {
+  min-height: 60px;
+}
+
+html.phone-ui .weekly-review-item-copy strong,
+html.phone-ui .weekly-review-item-copy small {
+  white-space: normal;
+}
+
+html.phone-ui .weekly-review-item-meta {
+  max-width: 100px;
+}

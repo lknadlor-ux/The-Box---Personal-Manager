@@ -1434,6 +1434,7 @@ const COMMAND_PALETTE_APPS = [
   { app: "documents", icon: "▱", label: "Document Vault", keywords: "files documents vault storage compliance" },
   { app: "projects", icon: "◆", label: "Projects", keywords: "projects outcomes grouped tasks" },
   { app: "favorites", icon: "★", label: "Favorites", keywords: "favorites pinned sticky important" },
+  { app: "weeklyreview", icon: "◷", label: "Weekly Review", keywords: "weekly review planning recap wins overdue upcoming" },
   { app: "workspaces", icon: "▦", label: "Workspaces", keywords: "workspaces personal pharmacy clinic sk contexts" },
   { app: "activity", icon: "↺", label: "Activity", keywords: "activity timeline history recent changes" },
   { app: "finance", icon: "₱", label: "Finance", keywords: "finance income expenses money" },
@@ -1461,6 +1462,15 @@ function getCommandPaletteActions() {
       description: "Capture a Task, Note, Event, Journal entry, or Our Space plan",
       keywords: "new capture add inbox",
       run: () => openQuickCapture()
+    },
+    {
+      key: "action-weekly-review",
+      type: "action",
+      icon: "◷",
+      title: "Open Weekly Review",
+      description: "Review wins, overdue work, projects, finance, and the next 7 days",
+      keywords: "weekly review planning recap wins overdue upcoming",
+      run: () => openApp("weeklyreview")
     },
     {
       key: "action-workspaces",
@@ -2309,6 +2319,13 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "weeklyreview") {
+    renderWeeklyReview();
+    if (window.BoxCloud?.isReady() && !documents.length && !documentsLoading) {
+      loadDocuments({ silent: true }).then(() => renderWeeklyReview());
+    }
   }
 
   if (appName === "workspaces") {
@@ -6660,6 +6677,7 @@ async function loadDocuments({ silent = false } = {}) {
   renderProjectsHub();
   renderActivityTimeline();
   renderWorkspacesHub();
+  renderWeeklyReview();
   if (isCommandPaletteOpen()) renderCommandPalette();
 }
 
@@ -9162,7 +9180,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.6-Free";
+const BACKUP_APP_VERSION = "7O.7-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9672,6 +9690,349 @@ async function refreshAppFiles() {
 
 
 
+
+
+function getWeeklyReviewBounds() {
+  const now = new Date();
+  const start = new Date(now);
+  const day = start.getDay();
+  const daysFromMonday = day === 0 ? 6 : day - 1;
+  start.setDate(start.getDate() - daysFromMonday);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
+}
+
+function getWeeklyReviewDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function isTimestampInCurrentReviewWeek(value) {
+  const timestamp = getActivityTimestamp(value);
+  if (!timestamp) return false;
+  const { start, end } = getWeeklyReviewBounds();
+  return timestamp >= start.getTime() && timestamp <= end.getTime();
+}
+
+function isDateKeyInCurrentReviewWeek(dateKey) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ""))) return false;
+  const date = new Date(`${dateKey}T00:00:00`);
+  const { start, end } = getWeeklyReviewBounds();
+  return date >= start && date <= end;
+}
+
+function getWeeklyReviewUpcomingItems() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const end = new Date(today);
+  end.setDate(end.getDate() + 7);
+  end.setHours(23, 59, 59, 999);
+
+  const taskItems = tasks
+    .filter((task) => {
+      if (task.completed || !task.dueDate) return false;
+      const due = new Date(`${task.dueDate}T00:00:00`);
+      return due >= today && due <= end;
+    })
+    .map((task) => ({
+      kind: "task",
+      id: String(task.id),
+      date: task.dueDate,
+      title: task.text || "Untitled task",
+      meta: [
+        task.workspace || "personal",
+        task.project ? `◆ ${task.project}` : "",
+        task.priority || "normal"
+      ].filter(Boolean).join(" · ")
+    }));
+
+  const eventItems = events
+    .filter((eventItem) => {
+      if (!eventItem.date) return false;
+      const date = new Date(`${eventItem.date}T00:00:00`);
+      return date >= today && date <= end;
+    })
+    .map((eventItem) => ({
+      kind: "event",
+      id: String(eventItem.id),
+      date: eventItem.date,
+      title: eventItem.title || "Untitled event",
+      meta: eventItem.workspace || "personal"
+    }));
+
+  return [...taskItems, ...eventItems]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 10);
+}
+
+function getWeeklyReviewAttentionTasks() {
+  const today = getLocalDateKey();
+  return tasks
+    .filter((task) => !task.completed)
+    .filter((task) =>
+      (task.dueDate && task.dueDate < today) ||
+      task.priority === "urgent"
+    )
+    .sort((a, b) => {
+      const aOverdue = a.dueDate && a.dueDate < today ? 0 : 1;
+      const bOverdue = b.dueDate && b.dueDate < today ? 0 : 1;
+      if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+      if (a.priority !== b.priority) return a.priority === "urgent" ? -1 : 1;
+      if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+      if (a.dueDate) return -1;
+      if (b.dueDate) return 1;
+      return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+    })
+    .slice(0, 8);
+}
+
+function getWeeklyReviewComplianceItems() {
+  return documents
+    .filter((documentItem) => !documentItem.deleted_at)
+    .map((documentItem) => ({
+      documentItem,
+      compliance: getDocumentCompliance(documentItem)
+    }))
+    .filter(({ compliance }) =>
+      ["expired", "expiring"].includes(compliance.key)
+    )
+    .sort((a, b) => {
+      const aDays = a.compliance.days ?? 999999;
+      const bDays = b.compliance.days ?? 999999;
+      return aDays - bDays;
+    })
+    .slice(0, 6);
+}
+
+function openWeeklyReviewTask(taskId) {
+  const task = tasks.find((item) => String(item.id) === String(taskId));
+  if (!task) return;
+  openApp("tasks");
+  openTaskModal(task, "tasks", task.id);
+}
+
+function openWeeklyReviewUpcomingItem(kind, id) {
+  if (kind === "task") {
+    openWeeklyReviewTask(id);
+    return;
+  }
+
+  const eventItem = events.find((item) => String(item.id) === String(id));
+  if (!eventItem) return;
+  const date = new Date(`${eventItem.date}T00:00:00`);
+  shownMonth = date.getMonth();
+  shownYear = date.getFullYear();
+  openApp("calendar");
+  renderCalendar();
+  renderEvents();
+}
+
+function renderWeeklyReview() {
+  if (!$("weeklyReviewWinsList")) return;
+
+  const { start, end } = getWeeklyReviewBounds();
+  const rangeFormatter = new Intl.DateTimeFormat("en-PH", {
+    month: "short",
+    day: "numeric"
+  });
+
+  $("weeklyReviewRange").textContent =
+    `${rangeFormatter.format(start)} – ${rangeFormatter.format(end)}`;
+
+  const doneThisWeek = tasks
+    .filter((task) =>
+      task.completed && isTimestampInCurrentReviewWeek(task.updatedAt || task.createdAt)
+    )
+    .sort((a, b) =>
+      String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""))
+    )
+    .slice(0, 8);
+
+  const attention = getWeeklyReviewAttentionTasks();
+  const weekEvents = events.filter((eventItem) =>
+    isDateKeyInCurrentReviewWeek(eventItem.date)
+  );
+  const activeProjects = getProjectRecords().filter((project) => project.open > 0);
+  const upcoming = getWeeklyReviewUpcomingItems();
+
+  const weekFinance = financeEntries.filter((entry) =>
+    isTimestampInCurrentReviewWeek(entry.createdAt)
+  );
+  const weekIncome = weekFinance
+    .filter((entry) => entry.type === "income")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const weekExpenses = weekFinance
+    .filter((entry) => entry.type === "expense")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const weekNet = weekIncome - weekExpenses;
+
+  $("weeklyReviewDoneCount").textContent = String(doneThisWeek.length);
+  $("weeklyReviewOverdueCount").textContent = String(
+    tasks.filter((task) =>
+      !task.completed && task.dueDate && task.dueDate < getLocalDateKey()
+    ).length
+  );
+  $("weeklyReviewEventCount").textContent = String(weekEvents.length);
+  $("weeklyReviewFinanceNet").textContent = formatMoney(weekNet);
+  $("weeklyReviewProjectCount").textContent = String(activeProjects.length);
+
+  $("weeklyReviewIncome").textContent = formatMoney(weekIncome);
+  $("weeklyReviewExpenses").textContent = formatMoney(weekExpenses);
+  $("weeklyReviewNet").textContent = formatMoney(weekNet);
+
+  $("weeklyReviewWinsEmpty").hidden = doneThisWeek.length > 0;
+  $("weeklyReviewWinsList").innerHTML = doneThisWeek.map((task) => `
+    <button class="weekly-review-item win" type="button"
+      data-weekly-review-task="${escapeHtml(String(task.id))}">
+      <span class="weekly-review-item-icon">✓</span>
+      <span class="weekly-review-item-copy">
+        <strong>${escapeHtml(task.text || "Untitled task")}</strong>
+        <small>
+          ${escapeHtml(task.workspace || "personal")}
+          ${task.project ? ` · ◆ ${escapeHtml(task.project)}` : ""}
+        </small>
+      </span>
+      <span class="weekly-review-item-meta">${escapeHtml(formatTaskTimestamp(task.updatedAt || task.createdAt))}</span>
+    </button>
+  `).join("");
+
+  $("weeklyReviewWinsList").querySelectorAll("[data-weekly-review-task]").forEach((button) => {
+    button.addEventListener("click", () => openWeeklyReviewTask(button.dataset.weeklyReviewTask));
+  });
+
+  $("weeklyReviewAttentionEmpty").hidden = attention.length > 0;
+  $("weeklyReviewAttentionList").innerHTML = attention.map((task) => {
+    const due = getDueDateInfo(task);
+    return `
+      <button class="weekly-review-item attention" type="button"
+        data-weekly-review-attention="${escapeHtml(String(task.id))}">
+        <span class="weekly-review-item-icon">${task.priority === "urgent" ? "!" : "○"}</span>
+        <span class="weekly-review-item-copy">
+          <strong>${escapeHtml(task.text || "Untitled task")}</strong>
+          <small>
+            ${escapeHtml(task.workspace || "personal")}
+            ${task.project ? ` · ◆ ${escapeHtml(task.project)}` : ""}
+          </small>
+        </span>
+        <span class="weekly-review-item-meta">${escapeHtml(due?.label || "Urgent")}</span>
+      </button>
+    `;
+  }).join("");
+
+  $("weeklyReviewAttentionList").querySelectorAll("[data-weekly-review-attention]").forEach((button) => {
+    button.addEventListener("click", () => openWeeklyReviewTask(button.dataset.weeklyReviewAttention));
+  });
+
+  $("weeklyReviewUpcomingEmpty").hidden = upcoming.length > 0;
+  $("weeklyReviewUpcomingList").innerHTML = upcoming.map((item) => `
+    <button class="weekly-review-item upcoming ${escapeHtml(item.kind)}" type="button"
+      data-weekly-review-kind="${escapeHtml(item.kind)}"
+      data-weekly-review-upcoming="${escapeHtml(item.id)}">
+      <span class="weekly-review-item-icon">${item.kind === "task" ? "✓" : "◫"}</span>
+      <span class="weekly-review-item-copy">
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.meta || "")}</small>
+      </span>
+      <span class="weekly-review-item-meta">${escapeHtml(formatTaskDate(item.date))}</span>
+    </button>
+  `).join("");
+
+  $("weeklyReviewUpcomingList").querySelectorAll("[data-weekly-review-upcoming]").forEach((button) => {
+    button.addEventListener("click", () =>
+      openWeeklyReviewUpcomingItem(
+        button.dataset.weeklyReviewKind,
+        button.dataset.weeklyReviewUpcoming
+      )
+    );
+  });
+
+  const projectPulse = [...activeProjects]
+    .sort((a, b) => {
+      if (a.urgent !== b.urgent) return b.urgent - a.urgent;
+      if (a.open !== b.open) return b.open - a.open;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, 6);
+
+  $("weeklyReviewProjectsEmpty").hidden = projectPulse.length > 0;
+  $("weeklyReviewProjectList").innerHTML = projectPulse.map((project) => `
+    <button class="weekly-review-item project" type="button"
+      data-weekly-review-project="${escapeHtml(project.name)}">
+      <span class="weekly-review-item-icon">◆</span>
+      <span class="weekly-review-item-copy">
+        <strong>${escapeHtml(project.name)}</strong>
+        <small>${project.open} open · ${project.done} done${project.urgent ? ` · ${project.urgent} urgent` : ""}</small>
+      </span>
+      <span class="weekly-review-item-meta">${project.progress}%</span>
+    </button>
+  `).join("");
+
+  $("weeklyReviewProjectList").querySelectorAll("[data-weekly-review-project]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedProjectName = button.dataset.weeklyReviewProject;
+      openApp("projects");
+      renderProjectsHub();
+    });
+  });
+
+  const workspaceRows = WORKSPACE_HUB_DEFINITIONS.map((definition) => ({
+    definition,
+    data: getWorkspaceHubData(definition.key)
+  }));
+
+  $("weeklyReviewWorkspaceList").innerHTML = workspaceRows.map(({ definition, data }) => `
+    <button class="weekly-review-item workspace" type="button"
+      data-weekly-review-workspace="${escapeHtml(definition.key)}">
+      <span class="weekly-review-item-icon">${escapeHtml(definition.icon)}</span>
+      <span class="weekly-review-item-copy">
+        <strong>${escapeHtml(definition.label)}</strong>
+        <small>${data.openTasks.length} open · ${data.urgentTasks.length} urgent · ${data.upcomingEvents.length} upcoming</small>
+      </span>
+      <span class="weekly-review-item-meta">${escapeHtml(formatMoney(data.balance))}</span>
+    </button>
+  `).join("");
+
+  $("weeklyReviewWorkspaceList").querySelectorAll("[data-weekly-review-workspace]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedWorkspaceHub = button.dataset.weeklyReviewWorkspace;
+      openApp("workspaces");
+      renderWorkspacesHub();
+    });
+  });
+
+  const complianceItems = getWeeklyReviewComplianceItems();
+  $("weeklyReviewComplianceEmpty").hidden = complianceItems.length > 0;
+  $("weeklyReviewComplianceList").innerHTML = complianceItems.map(({ documentItem, compliance }) => `
+    <button class="weekly-review-item compliance ${escapeHtml(compliance.key)}" type="button"
+      data-weekly-review-document="${escapeHtml(String(documentItem.id))}">
+      <span class="weekly-review-item-icon">${compliance.key === "expired" ? "!" : "⌛"}</span>
+      <span class="weekly-review-item-copy">
+        <strong>${escapeHtml(documentItem.name || "Untitled file")}</strong>
+        <small>${escapeHtml(documentItem.folder || "Documents")}</small>
+      </span>
+      <span class="weekly-review-item-meta">${escapeHtml(compliance.label)}</span>
+    </button>
+  `).join("");
+
+  $("weeklyReviewComplianceList").querySelectorAll("[data-weekly-review-document]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const documentItem = documents.find(
+        (item) => String(item.id) === button.dataset.weeklyReviewDocument
+      );
+      if (!documentItem) return;
+      openApp("documents");
+      openDocumentPreview(documentItem);
+    });
+  });
+}
 
 const WORKSPACE_HUB_DEFINITIONS = [
   {
@@ -11005,6 +11366,35 @@ $("workspaceViewProjectsButton").addEventListener("click", () => {
   openApp("projects");
   renderProjectsHub();
 });
+
+$("weeklyReviewOpenTasksButton").addEventListener("click", () => openApp("tasks"));
+$("weeklyReviewOpenCalendarButton").addEventListener("click", () => openApp("calendar"));
+$("weeklyReviewQuickCaptureButton").addEventListener("click", () => openQuickCapture());
+$("weeklyReviewOpenActivityButton").addEventListener("click", () => openApp("activity"));
+
+$("weeklyReviewViewDoneTasksButton").addEventListener("click", () => {
+  activeFilter = "done";
+  document.querySelectorAll(".filter").forEach((button) => {
+    button.classList.toggle("active", button.dataset.filter === "done");
+  });
+  openApp("tasks");
+  renderTasks();
+});
+
+$("weeklyReviewViewAttentionButton").addEventListener("click", () => {
+  activeFilter = "open";
+  document.querySelectorAll(".filter").forEach((button) => {
+    button.classList.toggle("active", button.dataset.filter === "open");
+  });
+  openApp("tasks");
+  renderTasks();
+});
+
+$("weeklyReviewViewCalendarButton").addEventListener("click", () => openApp("calendar"));
+$("weeklyReviewViewProjectsButton").addEventListener("click", () => openApp("projects"));
+$("weeklyReviewViewWorkspacesButton").addEventListener("click", () => openApp("workspaces"));
+$("weeklyReviewViewFinanceButton").addEventListener("click", () => openApp("finance"));
+$("weeklyReviewViewVaultButton").addEventListener("click", () => openApp("documents"));
 
 $("projectCreateForm").addEventListener("submit", (event) => {
   event.preventDefault();

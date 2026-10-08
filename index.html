@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o6">
+  <link rel="stylesheet" href="style.css?v=7o7">
 </head>
 <body>
   <div class="desktop-shell">
@@ -257,6 +257,12 @@
           <small>Local productivity help</small>
         </button>
 
+        <button class="app-tile weekly-review-app-tile" data-open-app="weeklyreview">
+          <span class="app-icon">◷</span>
+          <strong>Weekly Review</strong>
+          <small>Close loops and plan ahead</small>
+        </button>
+
         <button class="app-tile workspaces-app-tile" data-open-app="workspaces">
           <span class="app-icon">▦</span>
           <strong>Workspaces</strong>
@@ -366,6 +372,11 @@
         <button class="desktop-icon" data-open-app="calendar">
           <span>◫</span>
           <strong>Calendar</strong>
+        </button>
+
+        <button class="desktop-icon" data-open-app="weeklyreview">
+          <span>◷</span>
+          <strong>Weekly Review</strong>
         </button>
 
         <button class="desktop-icon" data-open-app="workspaces">
@@ -888,6 +899,129 @@
             </section>
           </div>
         </article>
+
+        <article class="app-window weekly-review-app-window" data-app-window="weeklyreview" style="--x: 7%; --y: 5%; --w: 84%; --h: 86%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>◷</span><strong>Weekly Review</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content weekly-review-window">
+            <section class="weekly-review-hero">
+              <div>
+                <small>WEEKLY REVIEW</small>
+                <h2>Close the loop. Plan what comes next.</h2>
+                <p id="weeklyReviewRange">This week</p>
+              </div>
+
+              <div class="weekly-review-hero-actions">
+                <button id="weeklyReviewOpenTasksButton" class="secondary-button" type="button">Tasks</button>
+                <button id="weeklyReviewOpenCalendarButton" class="secondary-button" type="button">Calendar</button>
+                <button id="weeklyReviewQuickCaptureButton" class="primary-button" type="button">＋ Capture</button>
+              </div>
+            </section>
+
+            <section class="weekly-review-summary" aria-label="Weekly summary">
+              <div>
+                <strong id="weeklyReviewDoneCount">0</strong>
+                <span>Done*</span>
+              </div>
+              <div>
+                <strong id="weeklyReviewOverdueCount">0</strong>
+                <span>Overdue</span>
+              </div>
+              <div>
+                <strong id="weeklyReviewEventCount">0</strong>
+                <span>Events this week</span>
+              </div>
+              <div>
+                <strong id="weeklyReviewFinanceNet">₱0.00</strong>
+                <span>Week net</span>
+              </div>
+              <div>
+                <strong id="weeklyReviewProjectCount">0</strong>
+                <span>Active projects</span>
+              </div>
+            </section>
+
+            <div class="weekly-review-note">
+              <span>* “Done” means completed tasks whose last update happened this week.</span>
+              <button id="weeklyReviewOpenActivityButton" type="button">Open Activity</button>
+            </div>
+
+            <section class="weekly-review-grid">
+              <article class="weekly-review-panel">
+                <div class="weekly-review-panel-heading">
+                  <div><small>WINS</small><strong>Completed this week</strong></div>
+                  <button id="weeklyReviewViewDoneTasksButton" type="button">View tasks</button>
+                </div>
+                <div id="weeklyReviewWinsList" class="weekly-review-list"></div>
+                <p id="weeklyReviewWinsEmpty" class="empty-state">No completed task activity this week yet.</p>
+              </article>
+
+              <article class="weekly-review-panel">
+                <div class="weekly-review-panel-heading">
+                  <div><small>ATTENTION</small><strong>Needs follow-up</strong></div>
+                  <button id="weeklyReviewViewAttentionButton" type="button">Open Tasks</button>
+                </div>
+                <div id="weeklyReviewAttentionList" class="weekly-review-list"></div>
+                <p id="weeklyReviewAttentionEmpty" class="empty-state">Nothing overdue or urgent right now.</p>
+              </article>
+
+              <article class="weekly-review-panel weekly-review-panel-wide">
+                <div class="weekly-review-panel-heading">
+                  <div><small>NEXT 7 DAYS</small><strong>What is coming up</strong></div>
+                  <button id="weeklyReviewViewCalendarButton" type="button">Calendar</button>
+                </div>
+                <div id="weeklyReviewUpcomingList" class="weekly-review-list weekly-review-upcoming-list"></div>
+                <p id="weeklyReviewUpcomingEmpty" class="empty-state">No dated tasks or events in the next 7 days.</p>
+              </article>
+
+              <article class="weekly-review-panel">
+                <div class="weekly-review-panel-heading">
+                  <div><small>PROJECT PULSE</small><strong>Active outcomes</strong></div>
+                  <button id="weeklyReviewViewProjectsButton" type="button">Projects</button>
+                </div>
+                <div id="weeklyReviewProjectList" class="weekly-review-list"></div>
+                <p id="weeklyReviewProjectsEmpty" class="empty-state">No active projects yet.</p>
+              </article>
+
+              <article class="weekly-review-panel">
+                <div class="weekly-review-panel-heading">
+                  <div><small>WORKLOAD</small><strong>Workspace balance</strong></div>
+                  <button id="weeklyReviewViewWorkspacesButton" type="button">Workspaces</button>
+                </div>
+                <div id="weeklyReviewWorkspaceList" class="weekly-review-list"></div>
+              </article>
+
+              <article class="weekly-review-panel">
+                <div class="weekly-review-panel-heading">
+                  <div><small>FINANCE</small><strong>This week</strong></div>
+                  <button id="weeklyReviewViewFinanceButton" type="button">Finance</button>
+                </div>
+                <div class="weekly-review-finance">
+                  <div><span>Income</span><strong id="weeklyReviewIncome">₱0.00</strong></div>
+                  <div><span>Expenses</span><strong id="weeklyReviewExpenses">₱0.00</strong></div>
+                  <div class="net"><span>Net</span><strong id="weeklyReviewNet">₱0.00</strong></div>
+                </div>
+              </article>
+
+              <article class="weekly-review-panel">
+                <div class="weekly-review-panel-heading">
+                  <div><small>COMPLIANCE WATCH</small><strong>Vault deadlines</strong></div>
+                  <button id="weeklyReviewViewVaultButton" type="button">Vault</button>
+                </div>
+                <div id="weeklyReviewComplianceList" class="weekly-review-list"></div>
+                <p id="weeklyReviewComplianceEmpty" class="empty-state">No expired or near-expiry Vault items loaded.</p>
+              </article>
+            </section>
+          </div>
+        </article>
+
 
         <article class="app-window workspaces-app-window" data-app-window="workspaces" style="--x: 8%; --y: 6%; --w: 82%; --h: 84%;">
           <div class="window-titlebar">
@@ -2503,6 +2637,10 @@
         <span class="dock-icon" aria-hidden="true">▤</span>
         <span class="dock-label">Templates</span>
       </button>
+      <button class="dock-item" data-open-app="weeklyreview" title="Weekly Review" aria-label="Weekly Review">
+        <span class="dock-icon" aria-hidden="true">◷</span>
+        <span class="dock-label">Review</span>
+      </button>
       <button class="dock-item" data-open-app="workspaces" title="Workspaces" aria-label="Workspaces">
         <span class="dock-icon" aria-hidden="true">▦</span>
         <span class="dock-label">Workspaces</span>
@@ -3159,6 +3297,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o6"></script>
+  <script src="app.js?v=7o7"></script>
 </body>
 </html>
