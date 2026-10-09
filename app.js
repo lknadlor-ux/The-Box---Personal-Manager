@@ -339,6 +339,10 @@ let commandPaletteActiveIndex = 0;
 let commandPaletteItems = [];
 let commandPaletteLastQuery = "";
 let selectedWorkspaceHub = "personal";
+let agendaTypeFilter = "all";
+let agendaWorkspaceFilter = "all";
+let agendaRangeDays = 14;
+let agendaSearchTerm = "";
 let favoritesFilter = "all";
 let favoritesSearchTerm = "";
 let taskViewMode = localStorage.getItem(STORAGE.taskView) === "kanban" ? "kanban" : "list";
@@ -1434,6 +1438,7 @@ const COMMAND_PALETTE_APPS = [
   { app: "documents", icon: "▱", label: "Document Vault", keywords: "files documents vault storage compliance" },
   { app: "projects", icon: "◆", label: "Projects", keywords: "projects outcomes grouped tasks" },
   { app: "favorites", icon: "★", label: "Favorites", keywords: "favorites pinned sticky important" },
+  { app: "agenda", icon: "≡", label: "Agenda", keywords: "agenda timeline schedule due dates deadlines events plans" },
   { app: "today", icon: "☀", label: "Today", keywords: "today daily planner agenda priorities focus" },
   { app: "weeklyreview", icon: "◷", label: "Weekly Review", keywords: "weekly review planning recap wins overdue upcoming" },
   { app: "workspaces", icon: "▦", label: "Workspaces", keywords: "workspaces personal pharmacy clinic sk contexts" },
@@ -1463,6 +1468,15 @@ function getCommandPaletteActions() {
       description: "Capture a Task, Note, Event, Journal entry, or Our Space plan",
       keywords: "new capture add inbox",
       run: () => openQuickCapture()
+    },
+    {
+      key: "action-agenda",
+      type: "action",
+      icon: "≡",
+      title: "Open Agenda",
+      description: "View overdue work and upcoming tasks, events, plans, and Vault deadlines",
+      keywords: "agenda schedule dates deadlines upcoming overdue",
+      run: () => openApp("agenda")
     },
     {
       key: "action-today",
@@ -2329,6 +2343,13 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "agenda") {
+    renderAgenda();
+    if (window.BoxCloud?.isReady() && !documents.length && !documentsLoading) {
+      loadDocuments({ silent: true }).then(() => renderAgenda());
+    }
   }
 
   if (appName === "today") {
@@ -6693,6 +6714,7 @@ async function loadDocuments({ silent = false } = {}) {
   renderWorkspacesHub();
   renderWeeklyReview();
   renderTodayPlanner();
+  renderAgenda();
   if (isCommandPaletteOpen()) renderCommandPalette();
 }
 
@@ -9195,7 +9217,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.8-Free";
+const BACKUP_APP_VERSION = "7O.9-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9707,6 +9729,309 @@ async function refreshAppFiles() {
 
 
 
+
+
+function getAgendaDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function getAgendaItems() {
+  const items = [];
+
+  tasks
+    .filter((task) => !task.completed && task.dueDate)
+    .forEach((task) => {
+      items.push({
+        kind: "task",
+        id: String(task.id),
+        date: task.dueDate,
+        icon: task.priority === "urgent" ? "!" : "✓",
+        title: task.text || "Untitled task",
+        meta: [
+          task.workspace || "personal",
+          task.project ? `◆ ${task.project}` : "",
+          task.priority || "normal"
+        ].filter(Boolean).join(" · "),
+        workspace: task.workspace || "personal",
+        searchText: `${task.text || ""} ${task.details || ""} ${task.project || ""} ${(task.tags || []).join(" ")}`
+      });
+    });
+
+  events
+    .filter((eventItem) => eventItem.date)
+    .forEach((eventItem) => {
+      items.push({
+        kind: "event",
+        id: String(eventItem.id),
+        date: eventItem.date,
+        icon: "◫",
+        title: eventItem.title || "Untitled event",
+        meta: eventItem.workspace || "personal",
+        workspace: eventItem.workspace || "personal",
+        searchText: `${eventItem.title || ""} ${eventItem.workspace || ""}`
+      });
+    });
+
+  ourSpacePlans
+    .filter((plan) => plan.status !== "done" && plan.target_date)
+    .forEach((plan) => {
+      items.push({
+        kind: "ourspace",
+        id: String(plan.id),
+        date: plan.target_date,
+        icon: getOurSpaceCategoryIcon(plan.category),
+        title: plan.title || "Untitled plan",
+        meta: [
+          plan.category || "Other",
+          plan.place || "",
+          getOurSpaceStatusLabel(plan.status)
+        ].filter(Boolean).join(" · "),
+        workspace: "",
+        searchText: `${plan.title || ""} ${plan.notes || ""} ${plan.place || ""} ${plan.category || ""}`
+      });
+    });
+
+  documents
+    .filter((documentItem) => !documentItem.deleted_at && documentItem.expiry_date)
+    .forEach((documentItem) => {
+      const compliance = getDocumentCompliance(documentItem);
+      items.push({
+        kind: "document",
+        id: String(documentItem.id),
+        date: documentItem.expiry_date,
+        icon: compliance.key === "expired" ? "!" : "⌛",
+        title: documentItem.name || "Untitled file",
+        meta: [
+          documentItem.folder || "Documents",
+          compliance.label
+        ].filter(Boolean).join(" · "),
+        workspace: "",
+        searchText: `${documentItem.name || ""} ${documentItem.folder || ""} ${documentItem.details || ""} ${(getDocumentTags(documentItem) || []).join(" ")}`,
+        complianceKey: compliance.key
+      });
+    });
+
+  return items.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    const rank = { task: 0, event: 1, ourspace: 2, document: 3 };
+    return (rank[a.kind] ?? 9) - (rank[b.kind] ?? 9);
+  });
+}
+
+function getFilteredAgendaItems() {
+  const today = getLocalDateKey();
+  const end = new Date(`${today}T00:00:00`);
+  end.setDate(end.getDate() + Number(agendaRangeDays || 14));
+  const endKey = getAgendaDateKey(end);
+  const query = agendaSearchTerm.toLocaleLowerCase();
+
+  return getAgendaItems().filter((item) => {
+    const withinDateRange =
+      item.date < today ||
+      (item.date >= today && item.date <= endKey);
+    if (!withinDateRange) return false;
+
+    if (agendaTypeFilter !== "all" && item.kind !== agendaTypeFilter) return false;
+
+    if (agendaWorkspaceFilter !== "all") {
+      if (!["task", "event"].includes(item.kind)) return false;
+      if (item.workspace !== agendaWorkspaceFilter) return false;
+    }
+
+    if (query) {
+      const haystack = `${item.title} ${item.meta || ""} ${item.searchText || ""}`
+        .toLocaleLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+
+    return true;
+  });
+}
+
+function getAgendaGroupKey(item) {
+  const today = getLocalDateKey();
+  if (item.date < today) return "overdue";
+  return item.date;
+}
+
+function getAgendaGroupLabel(groupKey) {
+  if (groupKey === "overdue") return "Overdue";
+
+  const today = getLocalDateKey();
+  if (groupKey === today) return "Today";
+
+  const tomorrow = new Date(`${today}T00:00:00`);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowKey = getAgendaDateKey(tomorrow);
+  if (groupKey === tomorrowKey) return "Tomorrow";
+
+  const date = new Date(`${groupKey}T00:00:00`);
+  return date.toLocaleDateString("en-PH", {
+    weekday: "long",
+    month: "short",
+    day: "numeric"
+  });
+}
+
+function getAgendaKindLabel(kind) {
+  return {
+    task: "Task",
+    event: "Event",
+    ourspace: "Our Space",
+    document: "Vault"
+  }[kind] || "Item";
+}
+
+function getAgendaDateMeta(item) {
+  const today = getLocalDateKey();
+  if (item.date < today) {
+    if (item.kind === "document") {
+      return getDocumentCompliance(
+        documents.find((documentItem) => String(documentItem.id) === String(item.id)) || {}
+      ).label;
+    }
+    return getDueDateInfo(
+      tasks.find((task) => String(task.id) === String(item.id)) || { dueDate: item.date }
+    )?.label || formatTaskDate(item.date);
+  }
+
+  if (item.date === today) return "Today";
+  return formatTaskDate(item.date);
+}
+
+function openAgendaItem(kind, id) {
+  if (kind === "task") {
+    const task = tasks.find((item) => String(item.id) === String(id));
+    if (!task) return;
+    openApp("tasks");
+    openTaskModal(task, "tasks", task.id);
+    return;
+  }
+
+  if (kind === "event") {
+    const eventItem = events.find((item) => String(item.id) === String(id));
+    if (!eventItem) return;
+    const date = new Date(`${eventItem.date}T00:00:00`);
+    shownMonth = date.getMonth();
+    shownYear = date.getFullYear();
+    openApp("calendar");
+    renderCalendar();
+    renderEvents();
+    return;
+  }
+
+  if (kind === "ourspace") {
+    openApp("ourspace");
+    selectOurSpacePlan(id);
+    return;
+  }
+
+  if (kind === "document") {
+    const documentItem = documents.find((item) => String(item.id) === String(id));
+    openApp("documents");
+    if (documentItem) openDocumentPreview(documentItem);
+  }
+}
+
+function renderAgenda() {
+  if (!$("agendaTimeline")) return;
+
+  const all = getAgendaItems();
+  const visible = getFilteredAgendaItems();
+  const today = getLocalDateKey();
+
+  const sevenDaysOut = new Date(`${today}T00:00:00`);
+  sevenDaysOut.setDate(sevenDaysOut.getDate() + 7);
+  const sevenDaysOutKey = getAgendaDateKey(sevenDaysOut);
+
+  $("agendaOverdueCount").textContent = String(
+    all.filter((item) => item.date < today).length
+  );
+  $("agendaTodayCount").textContent = String(
+    all.filter((item) => item.date === today).length
+  );
+  $("agendaNextWeekCount").textContent = String(
+    all.filter((item) => item.date > today && item.date <= sevenDaysOutKey).length
+  );
+  $("agendaComplianceCount").textContent = String(
+    all.filter((item) =>
+      item.kind === "document" &&
+      ["expired", "expiring"].includes(item.complianceKey)
+    ).length
+  );
+
+  $("agendaSearchInput").value = agendaSearchTerm;
+  $("agendaTypeFilter").value = agendaTypeFilter;
+  $("agendaWorkspaceFilter").value = agendaWorkspaceFilter;
+  $("agendaRangeFilter").value = String(agendaRangeDays);
+
+  const rangeText = `Overdue + next ${agendaRangeDays} days`;
+  $("agendaRangeLabel").textContent = rangeText;
+  $("agendaHeading").textContent = rangeText;
+  $("agendaEyebrow").textContent =
+    agendaTypeFilter === "all"
+      ? "TIMELINE"
+      : `${getAgendaKindLabel(agendaTypeFilter).toUpperCase()} AGENDA`;
+  $("agendaResultCount").textContent =
+    `${visible.length} item${visible.length === 1 ? "" : "s"}`;
+  $("agendaEmptyState").hidden = visible.length > 0;
+
+  const grouped = new Map();
+  visible.forEach((item) => {
+    const key = getAgendaGroupKey(item);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(item);
+  });
+
+  const orderedKeys = Array.from(grouped.keys()).sort((a, b) => {
+    if (a === "overdue") return -1;
+    if (b === "overdue") return 1;
+    return a.localeCompare(b);
+  });
+
+  $("agendaTimeline").innerHTML = orderedKeys.map((key) => {
+    const items = grouped.get(key);
+    return `
+      <section class="agenda-day-group ${key === "overdue" ? "overdue" : ""}"
+        data-agenda-group="${escapeHtml(key)}">
+        <header class="agenda-day-heading">
+          <div>
+            <small>${key === "overdue" ? "NEEDS ATTENTION" : escapeHtml(formatTaskDate(key))}</small>
+            <strong>${escapeHtml(getAgendaGroupLabel(key))}</strong>
+          </div>
+          <span>${items.length} item${items.length === 1 ? "" : "s"}</span>
+        </header>
+
+        <div class="agenda-day-list">
+          ${items.map((item) => `
+            <button class="agenda-item ${escapeHtml(item.kind)} ${item.complianceKey ? escapeHtml(item.complianceKey) : ""}"
+              type="button"
+              data-agenda-kind="${escapeHtml(item.kind)}"
+              data-agenda-id="${escapeHtml(item.id)}">
+              <span class="agenda-item-icon">${escapeHtml(item.icon)}</span>
+              <span class="agenda-item-copy">
+                <small>${escapeHtml(getAgendaKindLabel(item.kind))}</small>
+                <strong>${escapeHtml(item.title)}</strong>
+                <p>${escapeHtml(item.meta || "Open item")}</p>
+              </span>
+              <span class="agenda-item-date">${escapeHtml(getAgendaDateMeta(item))}</span>
+            </button>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }).join("");
+
+  $("agendaTimeline").querySelectorAll("[data-agenda-kind]").forEach((button) => {
+    button.addEventListener("click", () =>
+      openAgendaItem(button.dataset.agendaKind, button.dataset.agendaId)
+    );
+  });
+}
 
 function isTimestampToday(value) {
   const timestamp = getActivityTimestamp(value);
@@ -11784,6 +12109,42 @@ $("todayOurSpaceCard").addEventListener("click", () => {
   openApp("ourspace");
   if (planId) selectOurSpacePlan(planId);
 });
+
+$("agendaSearchInput").addEventListener("input", (event) => {
+  agendaSearchTerm = event.target.value.trim();
+  renderAgenda();
+});
+
+$("agendaTypeFilter").addEventListener("change", (event) => {
+  agendaTypeFilter = event.target.value;
+  renderAgenda();
+});
+
+$("agendaWorkspaceFilter").addEventListener("change", (event) => {
+  agendaWorkspaceFilter = event.target.value;
+  renderAgenda();
+});
+
+$("agendaRangeFilter").addEventListener("change", (event) => {
+  agendaRangeDays = Number(event.target.value) || 14;
+  renderAgenda();
+});
+
+$("agendaTodayButton").addEventListener("click", () => {
+  agendaTypeFilter = "all";
+  agendaWorkspaceFilter = "all";
+  agendaSearchTerm = "";
+  renderAgenda();
+  const todayGroup = document.querySelector(`[data-agenda-group="${getLocalDateKey()}"]`);
+  if (todayGroup) {
+    todayGroup.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else {
+    showToast("No dated items today");
+  }
+});
+
+$("agendaQuickCaptureButton").addEventListener("click", () => openQuickCapture());
+$("agendaCalendarButton").addEventListener("click", () => openApp("calendar"));
 
 $("projectCreateForm").addEventListener("submit", (event) => {
   event.preventDefault();

@@ -18650,3 +18650,441 @@ html.phone-ui .today-checkin-grid {
 html.phone-ui .today-progress-grid {
   grid-template-columns: 1fr 1fr 1fr;
 }
+
+
+/* ==========================================================================
+   Phase 7O.9 — Unified Agenda
+   ========================================================================== */
+
+.agenda-window {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agenda-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 19px 20px;
+  border: 1px solid rgba(127,140,255,.18);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 0 0, rgba(127,140,255,.13), transparent 36%),
+    radial-gradient(circle at 100% 20%, rgba(245,199,109,.05), transparent 24%),
+    rgba(255,255,255,.014);
+}
+
+.agenda-hero small,
+.agenda-hero h2,
+.agenda-hero p {
+  display: block;
+}
+
+.agenda-hero small {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.agenda-hero h2 {
+  margin: 4px 0 5px;
+  font-size: clamp(24px, 3vw, 38px);
+  font-weight: 730;
+  line-height: 1.05;
+  letter-spacing: -.045em;
+}
+
+.agenda-hero p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 10px;
+}
+
+.agenda-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.agenda-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.agenda-summary > div {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,.014);
+}
+
+.agenda-summary strong,
+.agenda-summary span {
+  display: block;
+}
+
+.agenda-summary strong {
+  font-size: 18px;
+  font-weight: 730;
+}
+
+.agenda-summary span {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 7px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.agenda-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 145px 155px 110px;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,.014);
+}
+
+.agenda-search {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-soft);
+}
+
+.agenda-search span {
+  color: var(--text-muted);
+}
+
+.agenda-search input {
+  min-width: 0;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.agenda-content {
+  flex: 1;
+  min-height: 0;
+  padding: 13px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: rgba(255,255,255,.014);
+}
+
+.agenda-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.agenda-section-heading small,
+.agenda-section-heading h3,
+.agenda-section-heading span {
+  display: block;
+}
+
+.agenda-section-heading small {
+  color: var(--accent);
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.agenda-section-heading h3 {
+  margin: 3px 0 0;
+  font-size: 14px;
+}
+
+.agenda-section-heading > span {
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+.agenda-timeline {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.agenda-day-group {
+  display: grid;
+  grid-template-columns: 125px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.agenda-day-heading {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  padding: 8px 0;
+}
+
+.agenda-day-heading small,
+.agenda-day-heading strong,
+.agenda-day-heading span {
+  display: block;
+}
+
+.agenda-day-heading small {
+  color: var(--text-muted);
+  font-size: 7px;
+  font-weight: 750;
+  letter-spacing: .06em;
+}
+
+.agenda-day-heading strong {
+  margin-top: 3px;
+  color: var(--text-soft);
+  font-size: 10px;
+}
+
+.agenda-day-heading > span {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 7.5px;
+}
+
+.agenda-day-group.overdue .agenda-day-heading small,
+.agenda-day-group.overdue .agenda-day-heading strong {
+  color: var(--danger);
+}
+
+.agenda-day-list {
+  position: relative;
+  display: grid;
+  gap: 6px;
+}
+
+.agenda-day-list::before {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 20px;
+  width: 1px;
+  background: var(--border);
+  content: "";
+}
+
+.agenda-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 78px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-solid);
+  color: var(--text);
+  text-align: left;
+}
+
+.agenda-item:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+}
+
+.agenda-item-icon {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-solid);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.agenda-item.ourspace .agenda-item-icon {
+  color: #f69bb1;
+}
+
+.agenda-item.document .agenda-item-icon {
+  color: var(--warning);
+}
+
+.agenda-item.document.expired .agenda-item-icon,
+.agenda-day-group.overdue .agenda-item.task .agenda-item-icon {
+  color: var(--danger);
+}
+
+.agenda-item-copy {
+  min-width: 0;
+}
+
+.agenda-item-copy small,
+.agenda-item-copy strong,
+.agenda-item-copy p {
+  display: block;
+}
+
+.agenda-item-copy small {
+  color: var(--text-muted);
+  font-size: 7px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.agenda-item-copy strong {
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-item-copy p {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 8.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-item-date {
+  max-width: 170px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 8px;
+  font-weight: 650;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-window.window-narrow .agenda-hero,
+.app-window.window-compact .agenda-hero {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.app-window.window-narrow .agenda-toolbar,
+.app-window.window-compact .agenda-toolbar {
+  grid-template-columns: 1fr 1fr;
+}
+
+.app-window.window-narrow .agenda-search,
+.app-window.window-compact .agenda-search {
+  grid-column: 1 / -1;
+}
+
+.app-window.window-narrow .agenda-day-group,
+.app-window.window-compact .agenda-day-group {
+  grid-template-columns: 1fr;
+  gap: 5px;
+}
+
+.app-window.window-narrow .agenda-day-heading,
+.app-window.window-compact .agenda-day-heading {
+  position: static;
+}
+
+html.phone-ui .agenda-window {
+  gap: 10px;
+}
+
+html.phone-ui .agenda-hero {
+  align-items: flex-start;
+  flex-direction: column;
+  padding: 15px;
+  border-radius: 16px;
+}
+
+html.phone-ui .agenda-hero h2 {
+  font-size: 25px;
+}
+
+html.phone-ui .agenda-hero-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+}
+
+html.phone-ui .agenda-hero-actions .primary-button {
+  grid-column: 1 / -1;
+}
+
+html.phone-ui .agenda-hero-actions button {
+  width: 100%;
+  min-height: 44px;
+}
+
+html.phone-ui .agenda-summary {
+  grid-template-columns: 1fr 1fr !important;
+}
+
+html.phone-ui .agenda-toolbar {
+  grid-template-columns: 1fr !important;
+  padding: 9px;
+  border-radius: 13px;
+}
+
+html.phone-ui .agenda-content {
+  padding: 10px;
+  overflow: visible;
+}
+
+html.phone-ui .agenda-day-group {
+  grid-template-columns: 1fr;
+  gap: 5px;
+}
+
+html.phone-ui .agenda-day-heading {
+  position: static;
+  padding: 5px 2px;
+}
+
+html.phone-ui .agenda-day-list::before {
+  left: 18px;
+}
+
+html.phone-ui .agenda-item {
+  grid-template-columns: 36px minmax(0, 1fr);
+  min-height: 82px;
+  padding: 9px;
+}
+
+html.phone-ui .agenda-item-icon {
+  width: 36px;
+  height: 36px;
+}
+
+html.phone-ui .agenda-item-date {
+  grid-column: 2;
+  max-width: none;
+  margin-top: -4px;
+  text-align: left;
+}
+
+html.phone-ui .agenda-item-copy strong,
+html.phone-ui .agenda-item-copy p {
+  white-space: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agenda-item:hover {
+    transform: none;
+  }
+}
