@@ -301,7 +301,14 @@ let goals = normalizeGoals(
     .filter(isGoalCloudRecord)
     .map(extractGoalFromCloudRecord)
 );
-let tasks = initialTaskCloudRecords.filter((item) => !isGoalCloudRecord(item));
+let routines = normalizeRoutines(
+  initialTaskCloudRecords
+    .filter(isRoutineCloudRecord)
+    .map(extractRoutineFromCloudRecord)
+);
+let tasks = initialTaskCloudRecords.filter(
+  (item) => !isGoalCloudRecord(item) && !isRoutineCloudRecord(item)
+);
 let events = loadJSON(STORAGE.events, []);
 let financeEntries = loadJSON(STORAGE.finance, []);
 let customTemplates = loadJSON(STORAGE.customTemplates, []);
@@ -357,6 +364,10 @@ let goalTaskPickerSearch = "";
 let goalDraftMilestones = [];
 let goalDraftLinkedProjects = [];
 let goalDraftLinkedTaskIds = [];
+let selectedRoutineId = null;
+let routineSearchTerm = "";
+let routineWorkspaceFilter = "all";
+let routineStateFilter = "all";
 let favoritesFilter = "all";
 let favoritesSearchTerm = "";
 let taskViewMode = localStorage.getItem(STORAGE.taskView) === "kanban" ? "kanban" : "list";
@@ -1457,6 +1468,7 @@ const COMMAND_PALETTE_APPS = [
   { app: "documents", icon: "▱", label: "Document Vault", keywords: "files documents vault storage compliance" },
   { app: "projects", icon: "◆", label: "Projects", keywords: "projects outcomes grouped tasks" },
   { app: "favorites", icon: "★", label: "Favorites", keywords: "favorites pinned sticky important" },
+  { app: "routines", icon: "↻", label: "Routines", keywords: "routines recurring habits repeat schedule consistency" },
   { app: "goals", icon: "◎", label: "Goals", keywords: "goals milestones outcomes targets progress" },
   { app: "agenda", icon: "≡", label: "Agenda", keywords: "agenda timeline schedule due dates deadlines events plans" },
   { app: "today", icon: "☀", label: "Today", keywords: "today daily planner agenda priorities focus" },
@@ -1488,6 +1500,18 @@ function getCommandPaletteActions() {
       description: "Capture a Task, Note, Event, Journal entry, or Our Space plan",
       keywords: "new capture add inbox",
       run: () => openQuickCapture()
+    },
+    {
+      key: "action-new-routine",
+      type: "action",
+      icon: "↻",
+      title: "New Routine",
+      description: "Create a recurring plan that generates today’s Task",
+      keywords: "routine recurring habit repeat schedule new",
+      run: () => {
+        openApp("routines");
+        resetRoutineEditor();
+      }
     },
     {
       key: "action-new-goal",
@@ -1731,6 +1755,24 @@ function getCommandPaletteContentItems() {
       });
     });
 
+  routines.forEach((routine) => {
+    const today = getLocalDateKey();
+    const dueToday = isRoutineScheduledOnDate(routine, today);
+    const todayTask = dueToday ? getRoutineTaskForDate(routine, today) : null;
+    items.push({
+      key: `routine-${routine.id}`,
+      type: "routine",
+      icon: "↻",
+      title: routine.title || "Untitled routine",
+      description: `${getRoutineScheduleLabel(routine)} · ${routine.workspace}${dueToday ? todayTask?.completed ? " · Done today" : " · Due today" : ""}`,
+      keywords: `${routine.title || ""} ${routine.details || ""} ${routine.project || ""} ${routine.workspace || ""} ${getRoutineScheduleLabel(routine)}`,
+      run: () => {
+        openApp("routines");
+        selectRoutine(routine.id);
+      }
+    });
+  });
+
   goals.forEach((goal) => {
     const status = getGoalDerivedStatus(goal);
     const progress = getGoalProgress(goal);
@@ -1785,6 +1827,7 @@ function getCommandPaletteTypeLabel(type) {
     action: "Action",
     task: "Task",
     goal: "Goal",
+    routine: "Routine",
     event: "Event",
     note: "Note",
     journal: "Journal",
@@ -1792,6 +1835,7 @@ function getCommandPaletteTypeLabel(type) {
     file: "File",
     project: "Project",
     goal: "Goal",
+    routine: "Routine",
     finance: "Finance"
   }[type] || "Result";
 }
@@ -2242,6 +2286,608 @@ function normalizeTaskRecurrence(value) {
 }
 
 
+
+function createRoutineId() {
+  if (window.crypto?.randomUUID) return `routine-${window.crypto.randomUUID()}`;
+  return `routine-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function isRoutineCloudRecord(record) {
+  return Boolean(record && typeof record === "object" && record.recordType === "routine");
+}
+
+function extractRoutineFromCloudRecord(record) {
+  if (!isRoutineCloudRecord(record)) return record;
+  return record.routine && typeof record.routine === "object" ? record.routine : record;
+}
+
+function normalizeRoutineDays(value) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(
+    value.map(Number).filter((day) => day >= 0 && day <= 6)
+  )).sort();
+}
+
+function normalizeRoutine(routine = {}) {
+  const now = new Date().toISOString();
+  const scheduleType = ["daily", "weekdays", "weekly", "custom"].includes(routine.scheduleType || routine.schedule_type)
+    ? (routine.scheduleType || routine.schedule_type)
+    : "daily";
+  let days = normalizeRoutineDays(routine.days);
+  if (scheduleType === "weekly" && !days.length) days = [new Date().getDay()];
+  if (scheduleType === "custom" && !days.length) days = [1, 2, 3, 4, 5];
+
+  return {
+    id: String(routine.id || createRoutineId()),
+    title: String(routine.title || "Untitled routine").trim().slice(0, 180),
+    workspace: ["personal", "pharmacy", "clinic", "sk"].includes(routine.workspace)
+      ? routine.workspace
+      : "personal",
+    state: routine.state === "paused" ? "paused" : "active",
+    scheduleType,
+    days,
+    preferredTime: /^\d{2}:\d{2}$/.test(routine.preferredTime || routine.preferred_time || "")
+      ? String(routine.preferredTime || routine.preferred_time).slice(0, 5)
+      : "",
+    startDate: /^\d{4}-\d{2}-\d{2}$/.test(routine.startDate || routine.start_date || "")
+      ? String(routine.startDate || routine.start_date).slice(0, 10)
+      : getLocalDateKey(),
+    priority: ["normal", "important", "urgent"].includes(routine.priority)
+      ? routine.priority
+      : "normal",
+    project: String(routine.project || "").trim().replace(/\s+/g, " ").slice(0, 80),
+    details: String(routine.details || "").slice(0, 5000),
+    createdAt: routine.createdAt || routine.created_at || now,
+    updatedAt: routine.updatedAt || routine.updated_at || routine.createdAt || routine.created_at || now
+  };
+}
+
+function normalizeRoutines(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value
+    .map(normalizeRoutine)
+    .filter((routine) => {
+      if (!routine.id || seen.has(routine.id)) return false;
+      seen.add(routine.id);
+      return true;
+    })
+    .slice(0, 500);
+}
+
+function routineToCloudRecord(routine) {
+  const normalized = normalizeRoutine(routine);
+  return {
+    id: normalized.id,
+    recordType: "routine",
+    routine: normalized
+  };
+}
+
+function getRoutineScheduleLabel(routine) {
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  if (routine.scheduleType === "daily") return "Daily";
+  if (routine.scheduleType === "weekdays") return "Weekdays";
+  if (routine.scheduleType === "weekly") {
+    return `Weekly · ${dayNames[routine.days[0] ?? 1]}`;
+  }
+  return routine.days.length
+    ? routine.days.map((day) => dayNames[day]).join(" · ")
+    : "Custom";
+}
+
+function isRoutineScheduledOnDate(routine, dateKey) {
+  if (routine.state !== "active") return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey || "")) return false;
+  if (routine.startDate && dateKey < routine.startDate) return false;
+
+  const date = new Date(`${dateKey}T00:00:00`);
+  const day = date.getDay();
+
+  if (routine.scheduleType === "daily") return true;
+  if (routine.scheduleType === "weekdays") return day >= 1 && day <= 5;
+  if (routine.scheduleType === "weekly") return routine.days.includes(day);
+  if (routine.scheduleType === "custom") return routine.days.includes(day);
+  return false;
+}
+
+function getRoutineTaskId(routine, dateKey) {
+  return `routine-task:${routine.id}:${dateKey}`;
+}
+
+function getRoutineTaskForDate(routine, dateKey = getLocalDateKey()) {
+  const deterministicId = getRoutineTaskId(routine, dateKey);
+  return tasks.find((task) =>
+    String(task.id) === deterministicId ||
+    (String(task.sourceRoutineId || "") === routine.id && task.routineDate === dateKey)
+  ) || null;
+}
+
+function createRoutineTaskForDate(routine, dateKey, { save = true } = {}) {
+  if (!isRoutineScheduledOnDate(routine, dateKey)) return null;
+
+  const existing = getRoutineTaskForDate(routine, dateKey);
+  if (existing) return existing;
+
+  const timestamp = new Date().toISOString();
+  const task = normalizeTask({
+    id: getRoutineTaskId(routine, dateKey),
+    text: routine.title,
+    details: routine.details,
+    dueDate: dateKey,
+    workspace: routine.workspace,
+    priority: routine.priority,
+    project: routine.project,
+    status: "todo",
+    completed: false,
+    tags: ["routine", routine.scheduleType],
+    subtasks: [],
+    recurrence: { type: "none", days: [] },
+    sourceRoutineId: routine.id,
+    routineDate: dateKey,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  });
+
+  tasks.unshift(task);
+  if (save) saveJSON(STORAGE.tasks, tasks);
+  return task;
+}
+
+function ensureScheduledRoutineTasks({ silent = false } = {}) {
+  const today = getLocalDateKey();
+  let created = 0;
+
+  routines.forEach((routine) => {
+    if (!isRoutineScheduledOnDate(routine, today)) return;
+    if (getRoutineTaskForDate(routine, today)) return;
+    createRoutineTaskForDate(routine, today, { save: false });
+    created += 1;
+  });
+
+  if (created) {
+    saveJSON(STORAGE.tasks, tasks);
+    if (!silent) {
+      showToast(`${created} routine Task${created === 1 ? "" : "s"} prepared for today`);
+    }
+  }
+
+  return created;
+}
+
+function getNextRoutineDate(routine, { afterToday = false, maxDays = 120 } = {}) {
+  const start = new Date(`${getLocalDateKey()}T00:00:00`);
+  if (afterToday) start.setDate(start.getDate() + 1);
+
+  for (let offset = 0; offset <= maxDays; offset += 1) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + offset);
+    const key = getAgendaDateKey(date);
+    if (isRoutineScheduledOnDate(routine, key)) return key;
+  }
+
+  return "";
+}
+
+function getRoutineCurrentStreak(routine) {
+  const today = getLocalDateKey();
+  let date = new Date(`${today}T00:00:00`);
+  const todayTask = getRoutineTaskForDate(routine, today);
+
+  if (isRoutineScheduledOnDate(routine, today) && (!todayTask || !todayTask.completed)) {
+    date.setDate(date.getDate() - 1);
+  }
+
+  let streak = 0;
+  let scheduledChecked = 0;
+
+  for (let offset = 0; offset < 180 && scheduledChecked < 90; offset += 1) {
+    const key = getAgendaDateKey(date);
+    if (routine.startDate && key < routine.startDate) break;
+
+    if (isRoutineScheduledOnDate(routine, key)) {
+      scheduledChecked += 1;
+      const task = getRoutineTaskForDate(routine, key);
+      if (task?.completed) streak += 1;
+      else break;
+    }
+
+    date.setDate(date.getDate() - 1);
+  }
+
+  return streak;
+}
+
+function getRoutineRecentScheduledDays(routine, limit = 7) {
+  const rows = [];
+  let date = new Date(`${getLocalDateKey()}T00:00:00`);
+
+  for (let offset = 0; offset < 120 && rows.length < limit; offset += 1) {
+    const key = getAgendaDateKey(date);
+    if (routine.startDate && key < routine.startDate) break;
+
+    if (isRoutineScheduledOnDate(routine, key)) {
+      const task = getRoutineTaskForDate(routine, key);
+      rows.push({
+        date: key,
+        completed: Boolean(task?.completed),
+        exists: Boolean(task)
+      });
+    }
+
+    date.setDate(date.getDate() - 1);
+  }
+
+  return rows;
+}
+
+function getFilteredRoutines() {
+  const query = routineSearchTerm.toLocaleLowerCase();
+
+  return [...routines]
+    .filter((routine) => {
+      if (routineWorkspaceFilter !== "all" && routine.workspace !== routineWorkspaceFilter) return false;
+      if (routineStateFilter !== "all" && routine.state !== routineStateFilter) return false;
+      if (query) {
+        const haystack = `${routine.title} ${routine.details} ${routine.project} ${routine.workspace} ${getRoutineScheduleLabel(routine)}`
+          .toLocaleLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.state !== b.state) return a.state === "active" ? -1 : 1;
+      const aToday = isRoutineScheduledOnDate(a, getLocalDateKey()) ? 0 : 1;
+      const bToday = isRoutineScheduledOnDate(b, getLocalDateKey()) ? 0 : 1;
+      if (aToday !== bToday) return aToday - bToday;
+      const aTime = a.preferredTime || "99:99";
+      const bTime = b.preferredTime || "99:99";
+      if (aTime !== bTime) return aTime.localeCompare(bTime);
+      return a.title.localeCompare(b.title);
+    });
+}
+
+function getSelectedRoutine() {
+  return routines.find((routine) => routine.id === selectedRoutineId) || null;
+}
+
+function setRoutineDayControls(scheduleType, days = []) {
+  const inputs = Array.from(document.querySelectorAll("[data-routine-day]"));
+
+  inputs.forEach((input) => {
+    const day = Number(input.dataset.routineDay);
+    if (scheduleType === "daily") input.checked = true;
+    else if (scheduleType === "weekdays") input.checked = day >= 1 && day <= 5;
+    else input.checked = days.includes(day);
+
+    input.disabled = ["daily", "weekdays"].includes(scheduleType);
+  });
+
+  $("routineDaysHint").textContent =
+    scheduleType === "daily"
+      ? "Daily routines run every day."
+      : scheduleType === "weekdays"
+        ? "Weekdays automatically run Monday through Friday."
+        : scheduleType === "weekly"
+          ? "Choose one day for this weekly routine."
+          : "Choose one or more custom days.";
+}
+
+function getRoutineDayControlValues() {
+  return Array.from(document.querySelectorAll("[data-routine-day]:checked"))
+    .map((input) => Number(input.dataset.routineDay));
+}
+
+function resetRoutineEditor() {
+  selectedRoutineId = null;
+  $("routineForm").reset();
+  $("routineWorkspace").value = "personal";
+  $("routineState").value = "active";
+  $("routineScheduleType").value = "daily";
+  $("routinePriority").value = "normal";
+  $("routineStartDate").value = getLocalDateKey();
+  $("routineEditorMode").textContent = "NEW ROUTINE";
+  $("routineEditorHeading").textContent = "Build a repeatable plan";
+  $("deleteRoutineButton").disabled = true;
+  setRoutineDayControls("daily", []);
+  renderRoutineEditorSupport();
+  renderRoutinesList();
+  window.setTimeout(() => $("routineTitle")?.focus(), 20);
+}
+
+function selectRoutine(routineId) {
+  const routine = routines.find((item) => item.id === routineId);
+  if (!routine) return;
+
+  selectedRoutineId = routine.id;
+  $("routineTitle").value = routine.title;
+  $("routineWorkspace").value = routine.workspace;
+  $("routineState").value = routine.state;
+  $("routineScheduleType").value = routine.scheduleType;
+  $("routinePreferredTime").value = routine.preferredTime || "";
+  $("routineStartDate").value = routine.startDate || getLocalDateKey();
+  $("routinePriority").value = routine.priority;
+  $("routineProject").value = routine.project || "";
+  $("routineDetails").value = routine.details || "";
+  $("routineEditorMode").textContent = "EDIT ROUTINE";
+  $("routineEditorHeading").textContent = routine.title;
+  $("deleteRoutineButton").disabled = false;
+
+  setRoutineDayControls(routine.scheduleType, routine.days);
+  renderRoutineEditorSupport();
+  renderRoutinesList();
+}
+
+function getRoutineEditorDraft() {
+  const scheduleType = $("routineScheduleType").value;
+  let days = getRoutineDayControlValues();
+  if (scheduleType === "daily") days = [0, 1, 2, 3, 4, 5, 6];
+  if (scheduleType === "weekdays") days = [1, 2, 3, 4, 5];
+  if (scheduleType === "weekly" && days.length > 1) days = [days[0]];
+
+  return normalizeRoutine({
+    id: selectedRoutineId || createRoutineId(),
+    title: $("routineTitle").value.trim(),
+    workspace: $("routineWorkspace").value,
+    state: $("routineState").value,
+    scheduleType,
+    days,
+    preferredTime: $("routinePreferredTime").value,
+    startDate: $("routineStartDate").value || getLocalDateKey(),
+    priority: $("routinePriority").value,
+    project: $("routineProject").value.trim(),
+    details: $("routineDetails").value.trim(),
+    createdAt: getSelectedRoutine()?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+}
+
+function renderRoutineProjectOptions() {
+  const datalist = $("routineProjectOptions");
+  if (!datalist) return;
+  datalist.innerHTML = getProjectRecords()
+    .map((project) => `<option value="${escapeHtml(project.name)}"></option>`)
+    .join("");
+}
+
+function renderRoutineTodayCard() {
+  const card = $("routineTodayTaskCard");
+  if (!card) return;
+
+  const routine = selectedRoutineId ? getSelectedRoutine() : null;
+  if (!routine) {
+    $("routineTodayBadge").textContent = "Not due today";
+    $("routineTodayBadge").className = "routine-today-badge";
+    $("routineStreakValue").textContent = "0-day streak";
+    $("routineTodayTaskStatus").textContent = "No Task today";
+    $("routineTodayTaskTitle").textContent = "Save this routine to activate today’s Task.";
+    $("routineTodayTaskMeta").textContent = "Generated Tasks appear in Tasks, Today, Agenda, and Projects.";
+    $("routineOpenTodayTaskButton").disabled = true;
+    $("routineCompleteTodayButton").disabled = true;
+    card.className = "routine-today-task-card empty";
+    return;
+  }
+
+  const today = getLocalDateKey();
+  const dueToday = isRoutineScheduledOnDate(routine, today);
+  const task = getRoutineTaskForDate(routine, today);
+  const streak = getRoutineCurrentStreak(routine);
+
+  $("routineStreakValue").textContent = `${streak}-day streak`;
+
+  if (!dueToday) {
+    const next = getNextRoutineDate(routine);
+    $("routineTodayBadge").textContent = "Not due today";
+    $("routineTodayBadge").className = "routine-today-badge";
+    $("routineTodayTaskStatus").textContent = next ? `Next · ${formatTaskDate(next)}` : "No upcoming date";
+    $("routineTodayTaskTitle").textContent = routine.title;
+    $("routineTodayTaskMeta").textContent = getRoutineScheduleLabel(routine);
+    $("routineOpenTodayTaskButton").disabled = true;
+    $("routineCompleteTodayButton").disabled = true;
+    card.className = "routine-today-task-card";
+    return;
+  }
+
+  $("routineTodayBadge").textContent = task?.completed ? "Done today" : "Due today";
+  $("routineTodayBadge").className = `routine-today-badge ${task?.completed ? "done" : "due"}`;
+  $("routineTodayTaskStatus").textContent = task?.completed ? "Completed" : "Open Task";
+  $("routineTodayTaskTitle").textContent = routine.title;
+  $("routineTodayTaskMeta").textContent = [
+    routine.preferredTime ? `Preferred ${routine.preferredTime}` : "",
+    routine.workspace,
+    routine.project ? `◆ ${routine.project}` : ""
+  ].filter(Boolean).join(" · ");
+  $("routineOpenTodayTaskButton").disabled = !task;
+  $("routineCompleteTodayButton").disabled = !task || task.completed;
+  $("routineCompleteTodayButton").textContent = task?.completed ? "Completed" : "Complete Today";
+  card.className = `routine-today-task-card ${task?.completed ? "done" : "due"}`;
+}
+
+function renderRoutineConsistency() {
+  const list = $("routineConsistencyList");
+  if (!list) return;
+
+  const routine = selectedRoutineId ? getSelectedRoutine() : null;
+  if (!routine) {
+    list.innerHTML = "";
+    $("routineConsistencySummary").textContent = "No history yet";
+    return;
+  }
+
+  const rows = getRoutineRecentScheduledDays(routine, 7);
+  const completed = rows.filter((row) => row.completed).length;
+  $("routineConsistencySummary").textContent =
+    rows.length ? `${completed}/${rows.length} completed` : "No scheduled history";
+
+  list.innerHTML = rows.map((row) => `
+    <div class="routine-consistency-day ${row.completed ? "done" : row.exists ? "open" : "missing"}">
+      <strong>${escapeHtml(new Date(`${row.date}T00:00:00`).toLocaleDateString("en-PH", { weekday: "short" }))}</strong>
+      <span>${escapeHtml(new Date(`${row.date}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric" }))}</span>
+      <em>${row.completed ? "✓" : row.exists ? "○" : "–"}</em>
+    </div>
+  `).join("");
+}
+
+function renderRoutineEditorSupport() {
+  renderRoutineProjectOptions();
+  renderRoutineTodayCard();
+  renderRoutineConsistency();
+}
+
+function renderRoutinesList() {
+  const list = $("routinesList");
+  if (!list) return;
+
+  const visible = getFilteredRoutines();
+  const today = getLocalDateKey();
+
+  $("routinesVisibleCount").textContent = String(visible.length);
+  $("routinesEmptyState").hidden = visible.length > 0;
+
+  list.innerHTML = visible.map((routine) => {
+    const dueToday = isRoutineScheduledOnDate(routine, today);
+    const task = dueToday ? getRoutineTaskForDate(routine, today) : null;
+    const streak = getRoutineCurrentStreak(routine);
+    const stateLabel = routine.state === "paused"
+      ? "Paused"
+      : task?.completed
+        ? "Done today"
+        : dueToday
+          ? "Due today"
+          : "Active";
+
+    return `
+      <button class="routine-list-card ${routine.id === selectedRoutineId ? "active" : ""} ${routine.state}"
+        type="button" data-routine-id="${escapeHtml(routine.id)}">
+        <span class="routine-list-icon">↻</span>
+        <span class="routine-list-copy">
+          <small>${escapeHtml(routine.workspace)} · ${escapeHtml(stateLabel)}</small>
+          <strong>${escapeHtml(routine.title)}</strong>
+          <span>${escapeHtml(getRoutineScheduleLabel(routine))}${routine.preferredTime ? ` · ${escapeHtml(routine.preferredTime)}` : ""}</span>
+        </span>
+        <span class="routine-list-streak">${streak}d</span>
+      </button>
+    `;
+  }).join("");
+
+  list.querySelectorAll("[data-routine-id]").forEach((button) => {
+    button.addEventListener("click", () => selectRoutine(button.dataset.routineId));
+  });
+}
+
+function renderRoutinesHub() {
+  if (!$("routinesList")) return;
+
+  const today = getLocalDateKey();
+  const active = routines.filter((routine) => routine.state === "active");
+  const dueToday = active.filter((routine) => isRoutineScheduledOnDate(routine, today));
+  const doneToday = dueToday.filter((routine) => getRoutineTaskForDate(routine, today)?.completed);
+  const bestStreak = active.reduce(
+    (max, routine) => Math.max(max, getRoutineCurrentStreak(routine)),
+    0
+  );
+
+  $("routinesActiveCount").textContent = String(active.length);
+  $("routinesDueTodayCount").textContent = String(dueToday.length);
+  $("routinesDoneTodayCount").textContent = String(doneToday.length);
+  $("routinesBestStreak").textContent = String(bestStreak);
+  $("routinesSearchInput").value = routineSearchTerm;
+  $("routinesWorkspaceFilter").value = routineWorkspaceFilter;
+  $("routinesStateFilter").value = routineStateFilter;
+
+  renderRoutinesList();
+  renderRoutineEditorSupport();
+}
+
+function saveRoutineFromEditor() {
+  const title = $("routineTitle").value.trim();
+  if (!title) {
+    showToast("Enter a routine title");
+    $("routineTitle").focus();
+    return false;
+  }
+
+  const draft = getRoutineEditorDraft();
+  if (["weekly", "custom"].includes(draft.scheduleType) && !draft.days.length) {
+    showToast("Choose at least one routine day");
+    return false;
+  }
+
+  const existingIndex = routines.findIndex((routine) => routine.id === selectedRoutineId);
+  if (existingIndex >= 0) {
+    draft.createdAt = routines[existingIndex].createdAt;
+    routines[existingIndex] = draft;
+  } else {
+    routines.unshift(draft);
+  }
+
+  selectedRoutineId = draft.id;
+  saveJSON(STORAGE.tasks, tasks);
+  ensureScheduledRoutineTasks({ silent: true });
+  renderAll();
+  selectRoutine(draft.id);
+  showToast(existingIndex >= 0 ? "Routine updated" : "Routine created");
+  return true;
+}
+
+function deleteSelectedRoutine() {
+  const routine = getSelectedRoutine();
+  if (!routine) return;
+
+  if (!window.confirm(
+    `Delete routine “${routine.title}”? Existing generated Tasks will be kept.`
+  )) return;
+
+  routines = routines.filter((item) => item.id !== routine.id);
+  saveJSON(STORAGE.tasks, tasks);
+  resetRoutineEditor();
+  renderAll();
+  showToast("Routine deleted; existing Tasks were kept");
+}
+
+function openSelectedRoutineTodayTask() {
+  const routine = getSelectedRoutine();
+  if (!routine) return;
+  const task = getRoutineTaskForDate(routine, getLocalDateKey());
+  if (!task) return;
+
+  openApp("tasks");
+  openTaskModal(task, "routines", task.id);
+}
+
+function completeSelectedRoutineToday() {
+  const routine = getSelectedRoutine();
+  if (!routine) return;
+
+  let task = getRoutineTaskForDate(routine, getLocalDateKey());
+  if (!task && isRoutineScheduledOnDate(routine, getLocalDateKey())) {
+    task = createRoutineTaskForDate(routine, getLocalDateKey());
+  }
+  if (!task || task.completed) return;
+
+  setTaskStatus(task, "done");
+  renderRoutinesHub();
+  showToast("Routine completed for today");
+}
+
+function getWeeklyRoutineStats(routine) {
+  const { start, end } = getWeeklyReviewBounds();
+  let scheduled = 0;
+  let completed = 0;
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    const key = getAgendaDateKey(cursor);
+    if (isRoutineScheduledOnDate(routine, key)) {
+      scheduled += 1;
+      if (getRoutineTaskForDate(routine, key)?.completed) completed += 1;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return { scheduled, completed };
+}
+
 function createGoalId() {
   if (window.crypto?.randomUUID) return `goal-${window.crypto.randomUUID()}`;
   return `goal-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -2338,10 +2984,11 @@ function goalToCloudRecord(goal) {
   };
 }
 
-function getTaskGoalCloudRecords(taskItems = tasks, goalItems = goals) {
+function getTaskGoalCloudRecords(taskItems = tasks, goalItems = goals, routineItems = routines) {
   return [
     ...taskItems.map((task) => ({ ...task })),
-    ...normalizeGoals(goalItems).map(goalToCloudRecord)
+    ...normalizeGoals(goalItems).map(goalToCloudRecord),
+    ...normalizeRoutines(routineItems).map(routineToCloudRecord)
   ];
 }
 
@@ -2830,6 +3477,10 @@ function normalizeTask(task = {}) {
     recurrenceSeriesId: task.recurrenceSeriesId || task.id || null,
     nextOccurrenceId: task.nextOccurrenceId || null,
     sourceOccurrenceId: task.sourceOccurrenceId || null,
+    sourceRoutineId: task.sourceRoutineId || null,
+    routineDate: /^\d{4}-\d{2}-\d{2}$/.test(task.routineDate || "")
+      ? task.routineDate
+      : "",
     createdAt,
     updatedAt: task.updatedAt || createdAt
   };
@@ -2838,6 +3489,7 @@ function normalizeTask(task = {}) {
 function normalizeData() {
   tasks = tasks.map(normalizeTask);
   goals = normalizeGoals(goals);
+  routines = normalizeRoutines(routines);
 
   events = events.map((event) => ({
     id: event.id || Date.now() + Math.random(),
@@ -2956,6 +3608,11 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "routines") {
+    ensureScheduledRoutineTasks({ silent: true });
+    renderRoutinesHub();
   }
 
   if (appName === "goals") {
@@ -7327,6 +7984,7 @@ async function loadDocuments({ silent = false } = {}) {
   renderDashboard();
   renderFavoritesHub();
   renderProjectsHub();
+  renderRoutinesHub();
   renderActivityTimeline();
   renderWorkspacesHub();
   renderWeeklyReview();
@@ -9834,7 +10492,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.10-Free";
+const BACKUP_APP_VERSION = "7O.11-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9878,6 +10536,7 @@ function buildLocalBackupData() {
   return {
     tasks: tasks.map((task) => ({ ...task })),
     goals: goals.map((goal) => ({ ...goal, linkedProjects: [...goal.linkedProjects], linkedTaskIds: [...goal.linkedTaskIds], milestones: goal.milestones.map((item) => ({ ...item })) })),
+    routines: routines.map((routine) => ({ ...routine, days: [...routine.days] })),
     events: events.map((event) => ({ ...event })),
     journalEntries: journalEntries.map((entry) => ({ ...entry, tags: [...entry.tags] })),
     ourSpacePlans: ourSpacePlans.map((plan) => ({
@@ -9998,6 +10657,7 @@ function renderBackupCenter() {
 
   $("backupTaskCount").textContent = String(tasks.length);
   $("backupGoalCount").textContent = String(goals.length);
+  $("backupRoutineCount").textContent = String(routines.length);
   $("backupEventCount").textContent = String(events.length);
   $("backupJournalCount").textContent = String(journalEntries.length);
   $("backupOurSpaceCount").textContent = String(ourSpacePlans.length);
@@ -10106,6 +10766,7 @@ function renderBackupImportPreview(backup, integrityResult) {
     <div class="backup-preview-counts">
       <small>${backup.data.tasks.length} tasks</small>
       <small>${backup.data.goals?.length || 0} goals</small>
+      <small>${backup.data.routines?.length || 0} routines</small>
       <small>${backup.data.events.length} events</small>
       <small>${backup.data.journalEntries?.length || 0} journal entries</small>
       <small>${backup.data.ourSpacePlans?.length || 0} Our Space plans</small>
@@ -10132,8 +10793,11 @@ async function loadBackupImportFile(file) {
     const parsed = validateBackupShape(JSON.parse(await file.text()));
     const integrityResult = await verifyBackupIntegrity(parsed);
     const hasGoals = Array.isArray(parsed.data.goals);
+    const hasRoutines = Array.isArray(parsed.data.routines);
     $("restoreBackupGoals").disabled = !hasGoals;
     $("restoreBackupGoals").checked = hasGoals;
+    $("restoreBackupRoutines").disabled = !hasRoutines;
+    $("restoreBackupRoutines").checked = hasRoutines;
     pendingBackupImport = parsed;
     renderBackupImportPreview(parsed, integrityResult);
     $("restoreBackupButton").disabled = false;
@@ -10205,6 +10869,7 @@ async function restoreSelectedBackup() {
   const selected = {
     tasks: $("restoreBackupTasks").checked,
     goals: $("restoreBackupGoals").checked,
+    routines: $("restoreBackupRoutines").checked,
     events: $("restoreBackupEvents").checked,
     journal: $("restoreBackupJournal").checked,
     ourSpace: $("restoreBackupOurSpace").checked,
@@ -10246,7 +10911,11 @@ async function restoreSelectedBackup() {
       goalDraftLinkedProjects = [];
       goalDraftLinkedTaskIds = [];
     }
-    if (selected.tasks || selected.goals) {
+    if (selected.routines) {
+      routines = normalizeRoutines(data.routines || []);
+      selectedRoutineId = null;
+    }
+    if (selected.tasks || selected.goals || selected.routines) {
       writeTaskGoalLocalRecords();
     }
     if (selected.events) {
@@ -10409,6 +11078,27 @@ function getAgendaItems() {
       });
     });
 
+  routines
+    .filter((routine) => routine.state === "active")
+    .forEach((routine) => {
+      const nextDate = getNextRoutineDate(routine, { afterToday: true, maxDays: 120 });
+      if (!nextDate) return;
+      items.push({
+        kind: "routine",
+        id: String(routine.id),
+        date: nextDate,
+        icon: "↻",
+        title: routine.title || "Untitled routine",
+        meta: [
+          routine.workspace || "personal",
+          getRoutineScheduleLabel(routine),
+          routine.preferredTime ? `Preferred ${routine.preferredTime}` : ""
+        ].filter(Boolean).join(" · "),
+        workspace: routine.workspace || "personal",
+        searchText: `${routine.title || ""} ${routine.details || ""} ${routine.project || ""} ${getRoutineScheduleLabel(routine)}`
+      });
+    });
+
   goals
     .filter((goal) =>
       goal.targetDate &&
@@ -10473,7 +11163,7 @@ function getAgendaItems() {
 
   return items.sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date);
-    const rank = { task: 0, goal: 1, event: 2, ourspace: 3, document: 4 };
+    const rank = { task: 0, routine: 1, goal: 2, event: 3, ourspace: 4, document: 5 };
     return (rank[a.kind] ?? 9) - (rank[b.kind] ?? 9);
   });
 }
@@ -10494,7 +11184,7 @@ function getFilteredAgendaItems() {
     if (agendaTypeFilter !== "all" && item.kind !== agendaTypeFilter) return false;
 
     if (agendaWorkspaceFilter !== "all") {
-      if (!["task", "event", "goal"].includes(item.kind)) return false;
+      if (!["task", "event", "goal", "routine"].includes(item.kind)) return false;
       if (item.workspace !== agendaWorkspaceFilter) return false;
     }
 
@@ -10565,6 +11255,12 @@ function openAgendaItem(kind, id) {
     if (!task) return;
     openApp("tasks");
     openTaskModal(task, "tasks", task.id);
+    return;
+  }
+
+  if (kind === "routine") {
+    openApp("routines");
+    selectRoutine(id);
     return;
   }
 
@@ -10931,6 +11627,45 @@ function renderTodayPlanner() {
       );
     });
 
+  const weeklyRoutinePulse = routines
+    .filter((routine) => routine.state === "active")
+    .map((routine) => ({
+      routine,
+      stats: getWeeklyRoutineStats(routine)
+    }))
+    .sort((a, b) => {
+      const aRate = a.stats.scheduled ? a.stats.completed / a.stats.scheduled : 1;
+      const bRate = b.stats.scheduled ? b.stats.completed / b.stats.scheduled : 1;
+      if (aRate !== bRate) return aRate - bRate;
+      return a.routine.title.localeCompare(b.routine.title);
+    })
+    .slice(0, 6);
+
+  $("weeklyReviewRoutinesEmpty").hidden = weeklyRoutinePulse.length > 0;
+  $("weeklyReviewRoutineList").innerHTML = weeklyRoutinePulse.map(({ routine, stats }) => {
+    const rate = stats.scheduled
+      ? Math.round((stats.completed / stats.scheduled) * 100)
+      : 100;
+    return `
+      <button class="weekly-review-item routine" type="button"
+        data-weekly-review-routine="${escapeHtml(routine.id)}">
+        <span class="weekly-review-item-icon">↻</span>
+        <span class="weekly-review-item-copy">
+          <strong>${escapeHtml(routine.title)}</strong>
+          <small>${escapeHtml(routine.workspace)} · ${stats.completed}/${stats.scheduled} scheduled days</small>
+        </span>
+        <span class="weekly-review-item-meta">${rate}%</span>
+      </button>
+    `;
+  }).join("");
+
+  $("weeklyReviewRoutineList").querySelectorAll("[data-weekly-review-routine]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openApp("routines");
+      selectRoutine(button.dataset.weeklyReviewRoutine);
+    });
+  });
+
   const workspaceRows = WORKSPACE_HUB_DEFINITIONS.map((definition) => ({
     definition,
     data: getWorkspaceHubData(definition.key)
@@ -10979,6 +11714,48 @@ function renderTodayPlanner() {
       ].filter(Boolean).join(" · ")
     : "Plans with today's target date will appear here.";
   $("todayOurSpaceCard").dataset.planId = firstPlan?.id || "";
+
+  const todayRoutines = routines
+    .filter((routine) => isRoutineScheduledOnDate(routine, today))
+    .sort((a, b) => (a.preferredTime || "99:99").localeCompare(b.preferredTime || "99:99"));
+
+  $("todayRoutineEmpty").hidden = todayRoutines.length > 0;
+  $("todayRoutineList").innerHTML = todayRoutines.map((routine) => {
+    const task = getRoutineTaskForDate(routine, today);
+    return `
+      <div class="today-routine-row ${task?.completed ? "done" : "open"}">
+        <button type="button" data-today-routine="${escapeHtml(routine.id)}">
+          <span class="today-routine-icon">↻</span>
+          <span class="today-routine-copy">
+            <strong>${escapeHtml(routine.title)}</strong>
+            <small>${escapeHtml(routine.workspace)}${routine.preferredTime ? ` · ${escapeHtml(routine.preferredTime)}` : ""} · ${getRoutineCurrentStreak(routine)}d streak</small>
+          </span>
+        </button>
+        <button class="today-routine-complete" type="button"
+          data-today-routine-complete="${escapeHtml(routine.id)}"
+          ${task?.completed ? "disabled" : ""}>
+          ${task?.completed ? "Done" : "Complete"}
+        </button>
+      </div>
+    `;
+  }).join("");
+
+  $("todayRoutineList").querySelectorAll("[data-today-routine]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openApp("routines");
+      selectRoutine(button.dataset.todayRoutine);
+    });
+  });
+
+  $("todayRoutineList").querySelectorAll("[data-today-routine-complete]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const routine = routines.find((item) => item.id === button.dataset.todayRoutineComplete);
+      if (!routine) return;
+      let task = getRoutineTaskForDate(routine, today);
+      if (!task) task = createRoutineTaskForDate(routine, today);
+      if (task && !task.completed) setTaskStatus(task, "done");
+    });
+  });
 
   const goalFocus = getGoalFocusCandidate();
   if (goalFocus) {
@@ -11459,6 +12236,9 @@ function getWorkspaceHubData(workspaceKey) {
     !["completed", "paused"].includes(getGoalDerivedStatus(goal))
   );
 
+  const workspaceRoutines = routines.filter((routine) => routine.workspace === workspaceKey);
+  const activeRoutines = workspaceRoutines.filter((routine) => routine.state === "active");
+
   const finance = financeEntries
     .filter((entry) => entry.workspace === workspaceKey)
     .sort((a, b) =>
@@ -11483,6 +12263,8 @@ function getWorkspaceHubData(workspaceKey) {
     activeProjects,
     goals: workspaceGoals,
     activeGoals,
+    routines: workspaceRoutines,
+    activeRoutines,
     finance,
     balance: income - expenses
   };
@@ -11612,7 +12394,7 @@ function renderWorkspacesHub() {
       <span class="workspace-hub-icon">${escapeHtml(definition.icon)}</span>
       <span class="workspace-hub-copy">
         <strong>${escapeHtml(definition.label)}</strong>
-        <small>${data.openTasks.length} open · ${data.upcomingEvents.length} upcoming</small>
+        <small>${data.openTasks.length} open · ${data.upcomingEvents.length} upcoming · ${data.activeRoutines.length} routines</small>
       </span>
       <span class="workspace-hub-badges">
         ${data.urgentTasks.length ? `<b>${data.urgentTasks.length} urgent</b>` : ""}
@@ -11742,6 +12524,33 @@ function renderWorkspacesHub() {
     });
   });
 
+  const routinesForWorkspace = data.activeRoutines
+    .sort((a, b) => a.title.localeCompare(b.title))
+    .slice(0, 5);
+  $("workspaceRoutineEmpty").hidden = routinesForWorkspace.length > 0;
+  $("workspaceRoutineList").innerHTML = routinesForWorkspace.map((routine) => {
+    const dueToday = isRoutineScheduledOnDate(routine, getLocalDateKey());
+    const todayTask = dueToday ? getRoutineTaskForDate(routine, getLocalDateKey()) : null;
+    return `
+      <button class="workspace-list-item routine ${todayTask?.completed ? "done" : dueToday ? "due" : ""}" type="button"
+        data-workspace-routine="${escapeHtml(routine.id)}">
+        <span class="workspace-item-mark">↻</span>
+        <span class="workspace-item-copy">
+          <strong>${escapeHtml(routine.title)}</strong>
+          <small>${escapeHtml(getRoutineScheduleLabel(routine))}${dueToday ? todayTask?.completed ? " · Done today" : " · Due today" : ""}</small>
+        </span>
+        <span class="workspace-item-progress">${getRoutineCurrentStreak(routine)}d</span>
+      </button>
+    `;
+  }).join("");
+
+  $("workspaceRoutineList").querySelectorAll("[data-workspace-routine]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openApp("routines");
+      selectRoutine(button.dataset.workspaceRoutine);
+    });
+  });
+
   $("workspaceFinanceEmpty").hidden = financeForWorkspace.length > 0;
   $("workspaceFinanceList").innerHTML = financeForWorkspace.map((entry) => `
     <button class="workspace-list-item finance ${escapeHtml(entry.type || "expense")}"
@@ -11782,6 +12591,23 @@ function getActivityItems() {
       ].filter(Boolean).join(" · "),
       timestamp: task.updatedAt || task.createdAt || "",
       searchText: `${task.text || ""} ${task.details || ""} ${task.project || ""} ${(task.tags || []).join(" ")}`
+    });
+  });
+
+  routines.forEach((routine) => {
+    items.push({
+      type: "routines",
+      id: String(routine.id),
+      icon: "↻",
+      title: routine.title || "Untitled routine",
+      action: routine.updatedAt !== routine.createdAt ? "Routine updated" : "Routine created",
+      meta: [
+        routine.workspace || "personal",
+        getRoutineScheduleLabel(routine),
+        routine.state
+      ].filter(Boolean).join(" · "),
+      timestamp: routine.updatedAt || routine.createdAt || "",
+      searchText: `${routine.title || ""} ${routine.details || ""} ${routine.project || ""} ${getRoutineScheduleLabel(routine)}`
     });
   });
 
@@ -11956,6 +12782,7 @@ function getActivityTypeLabel(type) {
   return {
     tasks: "Task",
     goals: "Goal",
+    routines: "Routine",
     notes: "Note",
     journal: "Journal",
     ourspace: "Our Space",
@@ -11969,6 +12796,12 @@ function openActivityItem(type, id) {
     const task = tasks.find((item) => String(item.id) === String(id));
     openApp("tasks");
     if (task) openTaskModal(task, "tasks", task.id);
+    return;
+  }
+
+  if (type === "routines") {
+    openApp("routines");
+    selectRoutine(id);
     return;
   }
 
@@ -12575,6 +13408,7 @@ function renderAll() {
   renderFavoritesHub();
   renderProjectsHub();
   renderGoalsHub();
+  renderRoutinesHub();
   renderActivityTimeline();
   renderWorkspacesHub();
   renderWeeklyReview();
@@ -12934,6 +13768,62 @@ $("agendaTodayButton").addEventListener("click", () => {
 
 $("agendaQuickCaptureButton").addEventListener("click", () => openQuickCapture());
 $("agendaCalendarButton").addEventListener("click", () => openApp("calendar"));
+
+$("routinesSearchInput").addEventListener("input", (event) => {
+  routineSearchTerm = event.target.value.trim();
+  renderRoutinesList();
+});
+
+$("routinesWorkspaceFilter").addEventListener("change", (event) => {
+  routineWorkspaceFilter = event.target.value;
+  renderRoutinesList();
+});
+
+$("routinesStateFilter").addEventListener("change", (event) => {
+  routineStateFilter = event.target.value;
+  renderRoutinesList();
+});
+
+$("newRoutineButton").addEventListener("click", resetRoutineEditor);
+$("resetRoutineButton").addEventListener("click", resetRoutineEditor);
+$("deleteRoutineButton").addEventListener("click", deleteSelectedRoutine);
+
+$("routineScheduleType").addEventListener("change", (event) => {
+  const currentDays = getRoutineDayControlValues();
+  setRoutineDayControls(event.target.value, currentDays);
+});
+
+document.querySelectorAll("[data-routine-day]").forEach((input) => {
+  input.addEventListener("change", () => {
+    if ($("routineScheduleType").value === "weekly" && input.checked) {
+      document.querySelectorAll("[data-routine-day]").forEach((other) => {
+        if (other !== input) other.checked = false;
+      });
+    }
+  });
+});
+
+$("routineForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveRoutineFromEditor();
+});
+
+$("refreshRoutinesTodayButton").addEventListener("click", () => {
+  ensureScheduledRoutineTasks({ silent: false });
+  renderAll();
+});
+
+$("routineOpenTodayTaskButton").addEventListener("click", openSelectedRoutineTodayTask);
+$("routineCompleteTodayButton").addEventListener("click", completeSelectedRoutineToday);
+
+$("todayOpenRoutinesButton").addEventListener("click", () => openApp("routines"));
+$("weeklyReviewViewRoutinesButton").addEventListener("click", () => openApp("routines"));
+
+$("workspaceViewRoutinesButton").addEventListener("click", () => {
+  routineWorkspaceFilter = selectedWorkspaceHub;
+  openApp("routines");
+  renderRoutinesHub();
+});
 
 $("goalsSearchInput").addEventListener("input", (event) => {
   goalSearchTerm = event.target.value.trim();
@@ -13886,10 +14776,15 @@ function updateAuthUI(session) {
 window.BoxOSCloudHydrate = function cloudHydrate(data) {
   if (Array.isArray(data.tasks)) {
     const cloudGoalRecords = data.tasks.filter(isGoalCloudRecord);
-    const cloudTaskRecords = data.tasks.filter((item) => !isGoalCloudRecord(item));
+    const cloudRoutineRecords = data.tasks.filter(isRoutineCloudRecord);
+    const cloudTaskRecords = data.tasks.filter(
+      (item) => !isGoalCloudRecord(item) && !isRoutineCloudRecord(item)
+    );
     tasks = cloudTaskRecords.map(normalizeTask);
     goals = normalizeGoals(cloudGoalRecords.map(extractGoalFromCloudRecord));
+    routines = normalizeRoutines(cloudRoutineRecords.map(extractRoutineFromCloudRecord));
     selectedGoalId = null;
+    selectedRoutineId = null;
   }
   if (Array.isArray(data.events)) events = data.events;
   if (Array.isArray(data.finance_entries)) financeEntries = data.finance_entries;
@@ -13953,6 +14848,7 @@ window.BoxOSCloudHydrate = function cloudHydrate(data) {
     if ($("ourSpaceTitle")) resetOurSpaceEditor();
   }
 
+  ensureScheduledRoutineTasks({ silent: true });
   writeTaskGoalLocalRecords();
   localStorage.setItem(STORAGE.events, JSON.stringify(events));
   localStorage.setItem(STORAGE.finance, JSON.stringify(financeEntries));
@@ -14068,6 +14964,7 @@ if ("serviceWorker" in navigator) {
 }
 
 normalizeData();
+ensureScheduledRoutineTasks({ silent: true });
 initializeWindowControls();
 restoreTheme();
 updateFullscreenUi();

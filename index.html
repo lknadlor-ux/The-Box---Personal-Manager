@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o10">
+  <link rel="stylesheet" href="style.css?v=7o11">
 </head>
 <body>
   <div class="desktop-shell">
@@ -257,6 +257,12 @@
           <small>Local productivity help</small>
         </button>
 
+        <button class="app-tile routines-app-tile" data-open-app="routines">
+          <span class="app-icon">↻</span>
+          <strong>Routines</strong>
+          <small>Recurring plans and habits</small>
+        </button>
+
         <button class="app-tile goals-app-tile" data-open-app="goals">
           <span class="app-icon">◎</span>
           <strong>Goals</strong>
@@ -390,6 +396,11 @@
         <button class="desktop-icon" data-open-app="calendar">
           <span>◫</span>
           <strong>Calendar</strong>
+        </button>
+
+        <button class="desktop-icon" data-open-app="routines">
+          <span>↻</span>
+          <strong>Routines</strong>
         </button>
 
         <button class="desktop-icon" data-open-app="goals">
@@ -933,6 +944,210 @@
           </div>
         </article>
 
+        <article class="app-window routines-app-window" data-app-window="routines" style="--x: 8%; --y: 5%; --w: 84%; --h: 87%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>↻</span><strong>Routines</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content routines-window">
+            <section class="routines-hero">
+              <div>
+                <small>ROUTINES &amp; RECURRING PLANS</small>
+                <h2>Turn repeatable work into a reliable system.</h2>
+                <p>Schedule recurring actions once. The Box creates today’s Task automatically when the routine is due.</p>
+              </div>
+
+              <div class="routines-summary" aria-label="Routine summary">
+                <div><strong id="routinesActiveCount">0</strong><span>Active</span></div>
+                <div><strong id="routinesDueTodayCount">0</strong><span>Due today</span></div>
+                <div><strong id="routinesDoneTodayCount">0</strong><span>Done today</span></div>
+                <div><strong id="routinesBestStreak">0</strong><span>Best streak</span></div>
+              </div>
+            </section>
+
+            <section class="routines-toolbar">
+              <label class="routines-search">
+                <span>⌕</span>
+                <input id="routinesSearchInput" type="search" placeholder="Search routines">
+              </label>
+
+              <select id="routinesWorkspaceFilter" aria-label="Filter routines by workspace">
+                <option value="all">All workspaces</option>
+                <option value="personal">Personal</option>
+                <option value="pharmacy">Pharmacy</option>
+                <option value="clinic">Clinic</option>
+                <option value="sk">SK</option>
+              </select>
+
+              <select id="routinesStateFilter" aria-label="Filter routines by state">
+                <option value="all">All states</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+              </select>
+
+              <button id="refreshRoutinesTodayButton" class="secondary-button" type="button">Refresh Today</button>
+              <button id="newRoutineButton" class="primary-button" type="button">＋ New Routine</button>
+            </section>
+
+            <section class="routines-layout">
+              <aside class="routines-sidebar">
+                <div class="routines-sidebar-heading">
+                  <div>
+                    <small>ROUTINE LIST</small>
+                    <strong>Your recurring plans</strong>
+                  </div>
+                  <span id="routinesVisibleCount">0</span>
+                </div>
+                <div id="routinesList" class="routines-list"></div>
+                <p id="routinesEmptyState" class="empty-state">No routines match this view.</p>
+              </aside>
+
+              <section class="routine-editor-shell">
+                <form id="routineForm" class="routine-form">
+                  <header class="routine-editor-header">
+                    <div>
+                      <small id="routineEditorMode">NEW ROUTINE</small>
+                      <h3 id="routineEditorHeading">Build a repeatable plan</h3>
+                      <p>When a routine is scheduled for today, The Box creates one deterministic Task for it.</p>
+                    </div>
+                    <div class="routine-editor-status">
+                      <span id="routineTodayBadge" class="routine-today-badge">Not due today</span>
+                      <strong id="routineStreakValue">0-day streak</strong>
+                    </div>
+                  </header>
+
+                  <div class="routine-fields-grid">
+                    <label class="routine-field routine-field-wide">
+                      Routine
+                      <input id="routineTitle" type="text" maxlength="180" placeholder="What should repeat?" required>
+                    </label>
+
+                    <label class="routine-field">
+                      Workspace
+                      <select id="routineWorkspace">
+                        <option value="personal">Personal</option>
+                        <option value="pharmacy">Pharmacy</option>
+                        <option value="clinic">Clinic</option>
+                        <option value="sk">SK</option>
+                      </select>
+                    </label>
+
+                    <label class="routine-field">
+                      State
+                      <select id="routineState">
+                        <option value="active">Active</option>
+                        <option value="paused">Paused</option>
+                      </select>
+                    </label>
+
+                    <label class="routine-field">
+                      Schedule
+                      <select id="routineScheduleType">
+                        <option value="daily">Daily</option>
+                        <option value="weekdays">Weekdays</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="custom">Custom days</option>
+                      </select>
+                    </label>
+
+                    <label class="routine-field">
+                      Preferred time <small>Optional</small>
+                      <input id="routinePreferredTime" type="time">
+                    </label>
+
+                    <label class="routine-field">
+                      Start date
+                      <input id="routineStartDate" type="date">
+                    </label>
+
+                    <label class="routine-field">
+                      Priority
+                      <select id="routinePriority">
+                        <option value="normal">Normal</option>
+                        <option value="important">Important</option>
+                        <option value="urgent">Urgent</option>
+                      </select>
+                    </label>
+
+                    <label class="routine-field routine-field-wide">
+                      Project <small>Optional</small>
+                      <input id="routineProject" type="text" maxlength="80" list="routineProjectOptions" placeholder="Link generated Tasks to a Project">
+                      <datalist id="routineProjectOptions"></datalist>
+                    </label>
+
+                    <fieldset id="routineDaysFieldset" class="routine-days-field routine-field-wide">
+                      <legend>Days</legend>
+                      <div class="routine-day-options">
+                        <label><input type="checkbox" data-routine-day="1"><span>Mon</span></label>
+                        <label><input type="checkbox" data-routine-day="2"><span>Tue</span></label>
+                        <label><input type="checkbox" data-routine-day="3"><span>Wed</span></label>
+                        <label><input type="checkbox" data-routine-day="4"><span>Thu</span></label>
+                        <label><input type="checkbox" data-routine-day="5"><span>Fri</span></label>
+                        <label><input type="checkbox" data-routine-day="6"><span>Sat</span></label>
+                        <label><input type="checkbox" data-routine-day="0"><span>Sun</span></label>
+                      </div>
+                      <small id="routineDaysHint">Daily routines run every day.</small>
+                    </fieldset>
+
+                    <label class="routine-field routine-field-wide">
+                      Details <small>Optional</small>
+                      <textarea id="routineDetails" maxlength="5000" placeholder="Instructions, context, or what “done” means."></textarea>
+                    </label>
+                  </div>
+
+                  <section class="routine-preview-section">
+                    <div class="routine-section-heading">
+                      <div>
+                        <small>TODAY</small>
+                        <strong>Routine Task</strong>
+                      </div>
+                      <span id="routineTodayTaskStatus">No Task today</span>
+                    </div>
+
+                    <div id="routineTodayTaskCard" class="routine-today-task-card empty">
+                      <span class="routine-task-icon">↻</span>
+                      <div>
+                        <strong id="routineTodayTaskTitle">Save this routine to activate today’s Task.</strong>
+                        <small id="routineTodayTaskMeta">Generated Tasks appear in Tasks, Today, Agenda, and Projects.</small>
+                      </div>
+                    </div>
+
+                    <div class="routine-today-actions">
+                      <button id="routineOpenTodayTaskButton" class="secondary-button" type="button" disabled>Open Task</button>
+                      <button id="routineCompleteTodayButton" class="primary-button" type="button" disabled>Complete Today</button>
+                    </div>
+                  </section>
+
+                  <section class="routine-preview-section">
+                    <div class="routine-section-heading">
+                      <div>
+                        <small>CONSISTENCY</small>
+                        <strong>Recent scheduled days</strong>
+                      </div>
+                      <span id="routineConsistencySummary">No history yet</span>
+                    </div>
+                    <div id="routineConsistencyList" class="routine-consistency-list"></div>
+                  </section>
+
+                  <footer class="routine-editor-actions">
+                    <button id="deleteRoutineButton" class="delete-button" type="button">Delete</button>
+                    <div>
+                      <button id="resetRoutineButton" class="secondary-button" type="button">New / Reset</button>
+                      <button id="saveRoutineButton" class="primary-button" type="submit">Save Routine</button>
+                    </div>
+                  </footer>
+                </form>
+              </section>
+            </section>
+          </div>
+        </article>
+
+
         <article class="app-window goals-app-window" data-app-window="goals" style="--x: 7%; --y: 5%; --w: 85%; --h: 87%;">
           <div class="window-titlebar">
             <div class="window-title"><span>◎</span><strong>Goals</strong></div>
@@ -1162,6 +1377,7 @@
                 <option value="all">All types</option>
                 <option value="task">Tasks</option>
                 <option value="goal">Goals</option>
+                <option value="routine">Routines</option>
                 <option value="event">Events</option>
                 <option value="ourspace">Our Space</option>
                 <option value="document">Vault deadlines</option>
@@ -1283,6 +1499,15 @@
                   </span>
                   <span id="todayGoalProgress">0%</span>
                 </button>
+              </article>
+
+              <article class="today-panel today-routines-panel">
+                <div class="today-panel-heading">
+                  <div><small>ROUTINES</small><strong>Scheduled today</strong></div>
+                  <button id="todayOpenRoutinesButton" type="button">Routines</button>
+                </div>
+                <div id="todayRoutineList" class="today-routine-list"></div>
+                <p id="todayRoutineEmpty" class="empty-state">No active routines are scheduled today.</p>
               </article>
 
               <article class="today-panel today-panel-wide">
@@ -1446,6 +1671,15 @@
 
               <article class="weekly-review-panel">
                 <div class="weekly-review-panel-heading">
+                  <div><small>ROUTINE CONSISTENCY</small><strong>Repeatable work</strong></div>
+                  <button id="weeklyReviewViewRoutinesButton" type="button">Routines</button>
+                </div>
+                <div id="weeklyReviewRoutineList" class="weekly-review-list"></div>
+                <p id="weeklyReviewRoutinesEmpty" class="empty-state">No active routines yet.</p>
+              </article>
+
+              <article class="weekly-review-panel">
+                <div class="weekly-review-panel-heading">
                   <div><small>WORKLOAD</small><strong>Workspace balance</strong></div>
                   <button id="weeklyReviewViewWorkspacesButton" type="button">Workspaces</button>
                 </div>
@@ -1570,6 +1804,15 @@
                   <p id="workspaceGoalEmpty" class="empty-state">No active goals in this workspace.</p>
                 </article>
 
+                <article class="workspace-panel workspace-routines-panel">
+                  <div class="workspace-panel-heading">
+                    <div><small>ROUTINES</small><strong>Recurring plans</strong></div>
+                    <button id="workspaceViewRoutinesButton" type="button">Routines</button>
+                  </div>
+                  <div id="workspaceRoutineList" class="workspace-item-list"></div>
+                  <p id="workspaceRoutineEmpty" class="empty-state">No active routines in this workspace.</p>
+                </article>
+
                 <article class="workspace-panel workspace-finance-panel">
                   <div class="workspace-panel-heading">
                     <div><small>FINANCE</small><strong>Recent entries</strong></div>
@@ -1620,6 +1863,7 @@
                 <option value="all">All sources</option>
                 <option value="tasks">Tasks</option>
                 <option value="goals">Goals</option>
+                <option value="routines">Routines</option>
                 <option value="notes">Notes</option>
                 <option value="journal">Journal</option>
                 <option value="ourspace">Our Space</option>
@@ -2914,6 +3158,7 @@
             <section class="backup-stats" aria-label="Backup data summary">
               <div><span>Tasks</span><strong id="backupTaskCount">0</strong></div>
               <div><span>Goals</span><strong id="backupGoalCount">0</strong></div>
+              <div><span>Routines</span><strong id="backupRoutineCount">0</strong></div>
               <div><span>Events</span><strong id="backupEventCount">0</strong></div>
               <div><span>Journal</span><strong id="backupJournalCount">0</strong></div>
               <div><span>Our Space</span><strong id="backupOurSpaceCount">0</strong></div>
@@ -2967,6 +3212,7 @@
                 <div class="backup-restore-options" aria-label="Restore options">
                   <label class="backup-check compact"><input id="restoreBackupTasks" type="checkbox" checked><span><strong>Tasks</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupGoals" type="checkbox" checked><span><strong>Goals</strong></span></label>
+                  <label class="backup-check compact"><input id="restoreBackupRoutines" type="checkbox" checked><span><strong>Routines</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupEvents" type="checkbox" checked><span><strong>Events</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupJournal" type="checkbox" checked><span><strong>Journal</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupOurSpace" type="checkbox" checked><span><strong>Our Space</strong></span></label>
@@ -3103,6 +3349,10 @@
       <button class="dock-item" data-open-app="templates" title="Templates and Reports" aria-label="Templates and Reports">
         <span class="dock-icon" aria-hidden="true">▤</span>
         <span class="dock-label">Templates</span>
+      </button>
+      <button class="dock-item" data-open-app="routines" title="Routines" aria-label="Routines">
+        <span class="dock-icon" aria-hidden="true">↻</span>
+        <span class="dock-label">Routines</span>
       </button>
       <button class="dock-item" data-open-app="goals" title="Goals" aria-label="Goals">
         <span class="dock-icon" aria-hidden="true">◎</span>
@@ -3776,6 +4026,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o10"></script>
+  <script src="app.js?v=7o11"></script>
 </body>
 </html>

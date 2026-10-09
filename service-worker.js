@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o10-goals-milestones";
+const CACHE_NAME = "the-box-os-phase-7o11-routines";
 
 const APP_FILES = [
   "./",
