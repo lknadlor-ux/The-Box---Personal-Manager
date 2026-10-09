@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o9">
+  <link rel="stylesheet" href="style.css?v=7o10">
 </head>
 <body>
   <div class="desktop-shell">
@@ -257,6 +257,12 @@
           <small>Local productivity help</small>
         </button>
 
+        <button class="app-tile goals-app-tile" data-open-app="goals">
+          <span class="app-icon">◎</span>
+          <strong>Goals</strong>
+          <small>Outcomes, milestones, progress</small>
+        </button>
+
         <button class="app-tile agenda-app-tile" data-open-app="agenda">
           <span class="app-icon">≡</span>
           <strong>Agenda</strong>
@@ -384,6 +390,11 @@
         <button class="desktop-icon" data-open-app="calendar">
           <span>◫</span>
           <strong>Calendar</strong>
+        </button>
+
+        <button class="desktop-icon" data-open-app="goals">
+          <span>◎</span>
+          <strong>Goals</strong>
         </button>
 
         <button class="desktop-icon" data-open-app="agenda">
@@ -922,6 +933,193 @@
           </div>
         </article>
 
+        <article class="app-window goals-app-window" data-app-window="goals" style="--x: 7%; --y: 5%; --w: 85%; --h: 87%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>◎</span><strong>Goals</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content goals-window">
+            <section class="goals-hero">
+              <div>
+                <small>GOALS &amp; MILESTONES</small>
+                <h2>Connect daily work to bigger outcomes.</h2>
+                <p>Link Projects, Tasks, and milestones so progress updates itself as the work gets done.</p>
+              </div>
+
+              <div class="goals-summary" aria-label="Goals summary">
+                <div><strong id="goalsActiveCount">0</strong><span>Active</span></div>
+                <div><strong id="goalsOnTrackCount">0</strong><span>On track</span></div>
+                <div><strong id="goalsAtRiskCount">0</strong><span>At risk</span></div>
+                <div><strong id="goalsCompletedCount">0</strong><span>Completed</span></div>
+              </div>
+            </section>
+
+            <section class="goals-toolbar">
+              <label class="goals-search">
+                <span>⌕</span>
+                <input id="goalsSearchInput" type="search" placeholder="Search goals">
+              </label>
+
+              <select id="goalsWorkspaceFilter" aria-label="Filter goals by workspace">
+                <option value="all">All workspaces</option>
+                <option value="personal">Personal</option>
+                <option value="pharmacy">Pharmacy</option>
+                <option value="clinic">Clinic</option>
+                <option value="sk">SK</option>
+              </select>
+
+              <select id="goalsStatusFilter" aria-label="Filter goals by status">
+                <option value="all">All statuses</option>
+                <option value="on-track">On track</option>
+                <option value="at-risk">At risk</option>
+                <option value="paused">Paused</option>
+                <option value="completed">Completed</option>
+              </select>
+
+              <button id="newGoalButton" class="primary-button" type="button">＋ New Goal</button>
+            </section>
+
+            <section class="goals-layout">
+              <aside class="goals-sidebar">
+                <div class="goals-sidebar-heading">
+                  <div>
+                    <small>GOAL LIST</small>
+                    <strong>Your outcomes</strong>
+                  </div>
+                  <span id="goalsVisibleCount">0</span>
+                </div>
+                <div id="goalsList" class="goals-list"></div>
+                <p id="goalsEmptyState" class="empty-state">No goals match this view.</p>
+              </aside>
+
+              <section class="goal-editor-shell">
+                <form id="goalForm" class="goal-form">
+                  <header class="goal-editor-header">
+                    <div>
+                      <small id="goalEditorMode">NEW GOAL</small>
+                      <h3 id="goalEditorHeading">Define an outcome</h3>
+                      <p>Progress is calculated from linked Tasks, linked Projects, and milestones.</p>
+                    </div>
+                    <div class="goal-editor-status">
+                      <span id="goalEditorStatusBadge" class="goal-status-badge on-track">On track</span>
+                      <strong id="goalEditorProgress">0%</strong>
+                    </div>
+                  </header>
+
+                  <div class="goal-progress-track" aria-label="Goal progress">
+                    <span id="goalEditorProgressBar"></span>
+                  </div>
+
+                  <div class="goal-fields-grid">
+                    <label class="goal-field goal-field-wide">
+                      Goal
+                      <input id="goalTitle" type="text" maxlength="180" placeholder="What outcome are you working toward?" required>
+                    </label>
+
+                    <label class="goal-field">
+                      Workspace
+                      <select id="goalWorkspace">
+                        <option value="personal">Personal</option>
+                        <option value="pharmacy">Pharmacy</option>
+                        <option value="clinic">Clinic</option>
+                        <option value="sk">SK</option>
+                      </select>
+                    </label>
+
+                    <label class="goal-field">
+                      Target date <small>Optional</small>
+                      <input id="goalTargetDate" type="date">
+                    </label>
+
+                    <label class="goal-field">
+                      State
+                      <select id="goalBaseStatus">
+                        <option value="active">Active</option>
+                        <option value="paused">Paused</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </label>
+
+                    <label class="goal-field">
+                      Priority
+                      <select id="goalPriority">
+                        <option value="normal">Normal</option>
+                        <option value="high">High</option>
+                      </select>
+                    </label>
+
+                    <label class="goal-field goal-field-wide">
+                      Description <small>Optional</small>
+                      <textarea id="goalDescription" maxlength="12000" placeholder="Why this matters, what success looks like, or important context."></textarea>
+                    </label>
+                  </div>
+
+                  <section class="goal-link-section">
+                    <div class="goal-section-heading">
+                      <div>
+                        <small>LINKED PROJECTS</small>
+                        <strong>Projects that move this goal forward</strong>
+                      </div>
+                      <span id="goalProjectLinkCount">0 linked</span>
+                    </div>
+                    <div id="goalProjectPicker" class="goal-picker-grid"></div>
+                    <p id="goalProjectPickerEmpty" class="empty-state">No Projects yet. Create a Project first, or link individual Tasks below.</p>
+                  </section>
+
+                  <section class="goal-link-section">
+                    <div class="goal-section-heading">
+                      <div>
+                        <small>LINKED TASKS</small>
+                        <strong>Specific next actions</strong>
+                      </div>
+                      <span id="goalTaskLinkCount">0 linked</span>
+                    </div>
+                    <label class="goal-task-search">
+                      <span>⌕</span>
+                      <input id="goalTaskSearchInput" type="search" placeholder="Filter Tasks">
+                    </label>
+                    <div id="goalTaskPicker" class="goal-picker-grid goal-task-picker"></div>
+                    <p id="goalTaskPickerEmpty" class="empty-state">No Tasks match this view.</p>
+                  </section>
+
+                  <section class="goal-link-section">
+                    <div class="goal-section-heading">
+                      <div>
+                        <small>MILESTONES</small>
+                        <strong>Break the outcome into checkpoints</strong>
+                      </div>
+                      <span id="goalMilestoneCount">0 milestones</span>
+                    </div>
+
+                    <div class="goal-milestone-create">
+                      <input id="goalMilestoneText" type="text" maxlength="180" placeholder="Add milestone">
+                      <input id="goalMilestoneDate" type="date" aria-label="Milestone target date">
+                      <button id="addGoalMilestoneButton" class="secondary-button" type="button">＋ Add</button>
+                    </div>
+
+                    <div id="goalMilestoneList" class="goal-milestone-list"></div>
+                    <p id="goalMilestoneEmpty" class="empty-state">No milestones yet.</p>
+                  </section>
+
+                  <footer class="goal-editor-actions">
+                    <button id="deleteGoalButton" class="delete-button" type="button">Delete</button>
+                    <div>
+                      <button id="resetGoalButton" class="secondary-button" type="button">New / Reset</button>
+                      <button id="saveGoalButton" class="primary-button" type="submit">Save Goal</button>
+                    </div>
+                  </footer>
+                </form>
+              </section>
+            </section>
+          </div>
+        </article>
+
+
         <article class="app-window agenda-app-window" data-app-window="agenda" style="--x: 9%; --y: 5%; --w: 80%; --h: 86%;">
           <div class="window-titlebar">
             <div class="window-title"><span>≡</span><strong>Agenda</strong></div>
@@ -963,6 +1161,7 @@
               <select id="agendaTypeFilter" aria-label="Filter agenda type">
                 <option value="all">All types</option>
                 <option value="task">Tasks</option>
+                <option value="goal">Goals</option>
                 <option value="event">Events</option>
                 <option value="ourspace">Our Space</option>
                 <option value="document">Vault deadlines</option>
@@ -1070,6 +1269,22 @@
                 <div id="todayWorkspaceList" class="today-workspace-list"></div>
               </article>
 
+              <article class="today-panel today-goal-panel">
+                <div class="today-panel-heading">
+                  <div><small>GOAL FOCUS</small><strong>Outcome to keep moving</strong></div>
+                  <button id="todayOpenGoalsButton" type="button">Goals</button>
+                </div>
+                <button id="todayGoalCard" class="today-goal-card" type="button">
+                  <span class="today-goal-icon">◎</span>
+                  <span class="today-goal-copy">
+                    <small id="todayGoalStatus">NO ACTIVE GOAL</small>
+                    <strong id="todayGoalTitle">Set a goal to connect today’s work to a bigger outcome.</strong>
+                    <span id="todayGoalMeta">Open Goals to get started.</span>
+                  </span>
+                  <span id="todayGoalProgress">0%</span>
+                </button>
+              </article>
+
               <article class="today-panel today-panel-wide">
                 <div class="today-panel-heading">
                   <div><small>PERSONAL CHECK-IN</small><strong>Journal & shared plans</strong></div>
@@ -1172,6 +1387,10 @@
                 <strong id="weeklyReviewProjectCount">0</strong>
                 <span>Active projects</span>
               </div>
+              <div>
+                <strong id="weeklyReviewGoalCount">0</strong>
+                <span>Active goals</span>
+              </div>
             </section>
 
             <div class="weekly-review-note">
@@ -1214,6 +1433,15 @@
                 </div>
                 <div id="weeklyReviewProjectList" class="weekly-review-list"></div>
                 <p id="weeklyReviewProjectsEmpty" class="empty-state">No active projects yet.</p>
+              </article>
+
+              <article class="weekly-review-panel">
+                <div class="weekly-review-panel-heading">
+                  <div><small>GOAL PULSE</small><strong>Big-picture progress</strong></div>
+                  <button id="weeklyReviewViewGoalsButton" type="button">Goals</button>
+                </div>
+                <div id="weeklyReviewGoalList" class="weekly-review-list"></div>
+                <p id="weeklyReviewGoalsEmpty" class="empty-state">No active goals yet.</p>
               </article>
 
               <article class="weekly-review-panel">
@@ -1301,6 +1529,7 @@
                 <div><strong id="workspaceDetailUrgentTasks">0</strong><span>Urgent</span></div>
                 <div><strong id="workspaceDetailUpcomingEvents">0</strong><span>Upcoming events</span></div>
                 <div><strong id="workspaceDetailActiveProjects">0</strong><span>Active projects</span></div>
+                <div><strong id="workspaceDetailActiveGoals">0</strong><span>Active goals</span></div>
                 <div><strong id="workspaceDetailBalance">₱0.00</strong><span>Finance balance</span></div>
               </div>
 
@@ -1330,6 +1559,15 @@
                   </div>
                   <div id="workspaceProjectList" class="workspace-item-list"></div>
                   <p id="workspaceProjectEmpty" class="empty-state">No active projects in this workspace.</p>
+                </article>
+
+                <article class="workspace-panel workspace-goals-panel">
+                  <div class="workspace-panel-heading">
+                    <div><small>GOALS</small><strong>Big-picture outcomes</strong></div>
+                    <button id="workspaceViewGoalsButton" type="button">Goals</button>
+                  </div>
+                  <div id="workspaceGoalList" class="workspace-item-list"></div>
+                  <p id="workspaceGoalEmpty" class="empty-state">No active goals in this workspace.</p>
                 </article>
 
                 <article class="workspace-panel workspace-finance-panel">
@@ -1381,6 +1619,7 @@
               <select id="activityTypeFilter" aria-label="Filter activity type">
                 <option value="all">All sources</option>
                 <option value="tasks">Tasks</option>
+                <option value="goals">Goals</option>
                 <option value="notes">Notes</option>
                 <option value="journal">Journal</option>
                 <option value="ourspace">Our Space</option>
@@ -2674,6 +2913,7 @@
 
             <section class="backup-stats" aria-label="Backup data summary">
               <div><span>Tasks</span><strong id="backupTaskCount">0</strong></div>
+              <div><span>Goals</span><strong id="backupGoalCount">0</strong></div>
               <div><span>Events</span><strong id="backupEventCount">0</strong></div>
               <div><span>Journal</span><strong id="backupJournalCount">0</strong></div>
               <div><span>Our Space</span><strong id="backupOurSpaceCount">0</strong></div>
@@ -2726,6 +2966,7 @@
 
                 <div class="backup-restore-options" aria-label="Restore options">
                   <label class="backup-check compact"><input id="restoreBackupTasks" type="checkbox" checked><span><strong>Tasks</strong></span></label>
+                  <label class="backup-check compact"><input id="restoreBackupGoals" type="checkbox" checked><span><strong>Goals</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupEvents" type="checkbox" checked><span><strong>Events</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupJournal" type="checkbox" checked><span><strong>Journal</strong></span></label>
                   <label class="backup-check compact"><input id="restoreBackupOurSpace" type="checkbox" checked><span><strong>Our Space</strong></span></label>
@@ -2862,6 +3103,10 @@
       <button class="dock-item" data-open-app="templates" title="Templates and Reports" aria-label="Templates and Reports">
         <span class="dock-icon" aria-hidden="true">▤</span>
         <span class="dock-label">Templates</span>
+      </button>
+      <button class="dock-item" data-open-app="goals" title="Goals" aria-label="Goals">
+        <span class="dock-icon" aria-hidden="true">◎</span>
+        <span class="dock-label">Goals</span>
       </button>
       <button class="dock-item" data-open-app="agenda" title="Agenda" aria-label="Agenda">
         <span class="dock-icon" aria-hidden="true">≡</span>
@@ -3531,6 +3776,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o9"></script>
+  <script src="app.js?v=7o10"></script>
 </body>
 </html>

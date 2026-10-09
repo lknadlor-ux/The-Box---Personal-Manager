@@ -295,7 +295,13 @@ const WEATHER_CODES = {
 
 const $ = (id) => document.getElementById(id);
 
-let tasks = loadJSON(STORAGE.tasks, []);
+const initialTaskCloudRecords = loadJSON(STORAGE.tasks, []);
+let goals = normalizeGoals(
+  initialTaskCloudRecords
+    .filter(isGoalCloudRecord)
+    .map(extractGoalFromCloudRecord)
+);
+let tasks = initialTaskCloudRecords.filter((item) => !isGoalCloudRecord(item));
 let events = loadJSON(STORAGE.events, []);
 let financeEntries = loadJSON(STORAGE.finance, []);
 let customTemplates = loadJSON(STORAGE.customTemplates, []);
@@ -343,6 +349,14 @@ let agendaTypeFilter = "all";
 let agendaWorkspaceFilter = "all";
 let agendaRangeDays = 14;
 let agendaSearchTerm = "";
+let selectedGoalId = null;
+let goalSearchTerm = "";
+let goalWorkspaceFilter = "all";
+let goalStatusFilter = "all";
+let goalTaskPickerSearch = "";
+let goalDraftMilestones = [];
+let goalDraftLinkedProjects = [];
+let goalDraftLinkedTaskIds = [];
 let favoritesFilter = "all";
 let favoritesSearchTerm = "";
 let taskViewMode = localStorage.getItem(STORAGE.taskView) === "kanban" ? "kanban" : "list";
@@ -948,7 +962,12 @@ function normalizeCustomTemplates(value) {
 }
 
 function saveJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  const storedValue =
+    key === STORAGE.tasks
+      ? getTaskGoalCloudRecords(value, goals)
+      : value;
+
+  localStorage.setItem(key, JSON.stringify(storedValue));
 
   if (window.BoxCloud?.isReady()) {
     const cloudCollections = {
@@ -959,7 +978,7 @@ function saveJSON(key, value) {
 
     const table = cloudCollections[key];
     if (table) {
-      window.BoxCloud.queueCollectionSync(table, value);
+      window.BoxCloud.queueCollectionSync(table, storedValue);
     }
   }
 }
@@ -1438,6 +1457,7 @@ const COMMAND_PALETTE_APPS = [
   { app: "documents", icon: "▱", label: "Document Vault", keywords: "files documents vault storage compliance" },
   { app: "projects", icon: "◆", label: "Projects", keywords: "projects outcomes grouped tasks" },
   { app: "favorites", icon: "★", label: "Favorites", keywords: "favorites pinned sticky important" },
+  { app: "goals", icon: "◎", label: "Goals", keywords: "goals milestones outcomes targets progress" },
   { app: "agenda", icon: "≡", label: "Agenda", keywords: "agenda timeline schedule due dates deadlines events plans" },
   { app: "today", icon: "☀", label: "Today", keywords: "today daily planner agenda priorities focus" },
   { app: "weeklyreview", icon: "◷", label: "Weekly Review", keywords: "weekly review planning recap wins overdue upcoming" },
@@ -1468,6 +1488,18 @@ function getCommandPaletteActions() {
       description: "Capture a Task, Note, Event, Journal entry, or Our Space plan",
       keywords: "new capture add inbox",
       run: () => openQuickCapture()
+    },
+    {
+      key: "action-new-goal",
+      type: "action",
+      icon: "◎",
+      title: "New Goal",
+      description: "Create a goal and connect Projects, Tasks, and milestones",
+      keywords: "goal milestone outcome target new",
+      run: () => {
+        openApp("goals");
+        resetGoalEditor();
+      }
     },
     {
       key: "action-agenda",
@@ -1699,6 +1731,23 @@ function getCommandPaletteContentItems() {
       });
     });
 
+  goals.forEach((goal) => {
+    const status = getGoalDerivedStatus(goal);
+    const progress = getGoalProgress(goal);
+    items.push({
+      key: `goal-${goal.id}`,
+      type: "goal",
+      icon: "◎",
+      title: goal.title || "Untitled goal",
+      description: `${getGoalStatusLabel(status)} · ${progress}%${goal.targetDate ? ` · ${formatGoalTargetDate(goal.targetDate)}` : ""}`,
+      keywords: `${goal.title || ""} ${goal.description || ""} ${goal.workspace || ""} ${(goal.linkedProjects || []).join(" ")} ${(goal.milestones || []).map((item) => item.text).join(" ")}`,
+      run: () => {
+        openApp("goals");
+        selectGoal(goal.id);
+      }
+    });
+  });
+
   getProjectRecords().forEach((project) => {
     items.push({
       key: `project-${project.key}`,
@@ -1735,12 +1784,14 @@ function getCommandPaletteTypeLabel(type) {
     app: "App",
     action: "Action",
     task: "Task",
+    goal: "Goal",
     event: "Event",
     note: "Note",
     journal: "Journal",
     ourspace: "Our Space",
     file: "File",
     project: "Project",
+    goal: "Goal",
     finance: "Finance"
   }[type] || "Result";
 }
@@ -2190,6 +2241,567 @@ function normalizeTaskRecurrence(value) {
   return { type, days };
 }
 
+
+function createGoalId() {
+  if (window.crypto?.randomUUID) return `goal-${window.crypto.randomUUID()}`;
+  return `goal-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function isGoalCloudRecord(record) {
+  return Boolean(record && typeof record === "object" && record.recordType === "goal");
+}
+
+function extractGoalFromCloudRecord(record) {
+  if (!isGoalCloudRecord(record)) return record;
+  return record.goal && typeof record.goal === "object" ? record.goal : record;
+}
+
+function normalizeGoalMilestones(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value
+    .map((item, index) => {
+      const id = String(item?.id || `milestone-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`);
+      return {
+        id,
+        text: String(item?.text || "").trim().slice(0, 180),
+        targetDate: /^\d{4}-\d{2}-\d{2}$/.test(item?.targetDate || item?.target_date || "")
+          ? String(item.targetDate || item.target_date).slice(0, 10)
+          : "",
+        completed: Boolean(item?.completed)
+      };
+    })
+    .filter((item) => {
+      if (!item.text || seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    })
+    .slice(0, 80);
+}
+
+function normalizeGoal(goal = {}) {
+  const now = new Date().toISOString();
+  const baseStatus = ["active", "paused", "completed"].includes(goal.baseStatus || goal.status)
+    ? (goal.baseStatus || goal.status)
+    : "active";
+  const workspace = ["personal", "pharmacy", "clinic", "sk"].includes(goal.workspace)
+    ? goal.workspace
+    : "personal";
+  const linkedProjects = Array.from(new Set(
+    (Array.isArray(goal.linkedProjects) ? goal.linkedProjects : [])
+      .map((item) => String(item || "").trim().replace(/\s+/g, " ").slice(0, 80))
+      .filter(Boolean)
+  )).slice(0, 50);
+  const linkedTaskIds = Array.from(new Set(
+    (Array.isArray(goal.linkedTaskIds) ? goal.linkedTaskIds : [])
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+  )).slice(0, 200);
+
+  return {
+    id: String(goal.id || createGoalId()),
+    title: String(goal.title || "Untitled goal").trim().slice(0, 180),
+    workspace,
+    targetDate: /^\d{4}-\d{2}-\d{2}$/.test(goal.targetDate || goal.target_date || "")
+      ? String(goal.targetDate || goal.target_date).slice(0, 10)
+      : "",
+    baseStatus,
+    priority: goal.priority === "high" ? "high" : "normal",
+    description: String(goal.description || "").slice(0, 12000),
+    linkedProjects,
+    linkedTaskIds,
+    milestones: normalizeGoalMilestones(goal.milestones),
+    createdAt: goal.createdAt || goal.created_at || now,
+    updatedAt: goal.updatedAt || goal.updated_at || goal.createdAt || goal.created_at || now
+  };
+}
+
+function normalizeGoals(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value
+    .map(normalizeGoal)
+    .filter((goal) => {
+      if (!goal.id || seen.has(goal.id)) return false;
+      seen.add(goal.id);
+      return true;
+    })
+    .slice(0, 500);
+}
+
+function goalToCloudRecord(goal) {
+  const normalized = normalizeGoal(goal);
+  return {
+    id: normalized.id,
+    recordType: "goal",
+    goal: normalized
+  };
+}
+
+function getTaskGoalCloudRecords(taskItems = tasks, goalItems = goals) {
+  return [
+    ...taskItems.map((task) => ({ ...task })),
+    ...normalizeGoals(goalItems).map(goalToCloudRecord)
+  ];
+}
+
+function writeTaskGoalLocalRecords() {
+  localStorage.setItem(
+    STORAGE.tasks,
+    JSON.stringify(getTaskGoalCloudRecords(tasks, goals))
+  );
+}
+
+function persistGoals() {
+  goals = normalizeGoals(goals);
+  saveJSON(STORAGE.tasks, tasks);
+}
+
+function getGoalLinkedTasks(goal) {
+  const linkedIds = new Set((goal.linkedTaskIds || []).map(String));
+  const linkedProjects = new Set(goal.linkedProjects || []);
+
+  const seen = new Set();
+  return tasks.filter((task) => {
+    const matches =
+      linkedIds.has(String(task.id)) ||
+      (task.project && linkedProjects.has(task.project));
+    if (!matches || seen.has(String(task.id))) return false;
+    seen.add(String(task.id));
+    return true;
+  });
+}
+
+function getGoalProgress(goal) {
+  if (goal.baseStatus === "completed") return 100;
+
+  const linkedTasks = getGoalLinkedTasks(goal);
+  const milestones = goal.milestones || [];
+  const total = linkedTasks.length + milestones.length;
+  if (!total) return 0;
+
+  const completed =
+    linkedTasks.filter((task) => task.completed).length +
+    milestones.filter((milestone) => milestone.completed).length;
+
+  return Math.round((completed / total) * 100);
+}
+
+function getGoalDerivedStatus(goal) {
+  const progress = getGoalProgress(goal);
+  if (goal.baseStatus === "completed" || progress >= 100) return "completed";
+  if (goal.baseStatus === "paused") return "paused";
+
+  if (goal.targetDate) {
+    const today = getLocalDateKey();
+    if (goal.targetDate < today) return "at-risk";
+
+    const due = new Date(`${goal.targetDate}T00:00:00`);
+    const now = new Date(`${today}T00:00:00`);
+    const days = Math.round((due - now) / 86400000);
+
+    if (days <= 14 && progress < 70) return "at-risk";
+  }
+
+  return "on-track";
+}
+
+function getGoalStatusLabel(status) {
+  return {
+    "on-track": "On track",
+    "at-risk": "At risk",
+    paused: "Paused",
+    completed: "Completed"
+  }[status] || "On track";
+}
+
+function formatGoalTargetDate(value) {
+  if (!value) return "No target date";
+  return new Date(`${value}T00:00:00`).toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+}
+
+function getSortedGoals(items = goals) {
+  const rank = { "at-risk": 0, "on-track": 1, paused: 2, completed: 3 };
+  return [...items].sort((a, b) => {
+    const aStatus = getGoalDerivedStatus(a);
+    const bStatus = getGoalDerivedStatus(b);
+    const statusDiff = (rank[aStatus] ?? 9) - (rank[bStatus] ?? 9);
+    if (statusDiff) return statusDiff;
+
+    const aDate = a.targetDate || "9999-12-31";
+    const bDate = b.targetDate || "9999-12-31";
+    if (aDate !== bDate) return aDate.localeCompare(bDate);
+
+    if (a.priority !== b.priority) return a.priority === "high" ? -1 : 1;
+    return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+  });
+}
+
+function getFilteredGoals() {
+  const query = goalSearchTerm.toLocaleLowerCase();
+  return getSortedGoals(goals.filter((goal) => {
+    if (goalWorkspaceFilter !== "all" && goal.workspace !== goalWorkspaceFilter) return false;
+
+    const status = getGoalDerivedStatus(goal);
+    if (goalStatusFilter !== "all" && status !== goalStatusFilter) return false;
+
+    if (query) {
+      const haystack = [
+        goal.title,
+        goal.description,
+        goal.workspace,
+        ...(goal.linkedProjects || []),
+        ...(goal.milestones || []).map((item) => item.text)
+      ].join(" ").toLocaleLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+
+    return true;
+  }));
+}
+
+function getSelectedGoal() {
+  return goals.find((goal) => goal.id === selectedGoalId) || null;
+}
+
+function resetGoalEditor() {
+  selectedGoalId = null;
+  goalDraftMilestones = [];
+  goalDraftLinkedProjects = [];
+  goalDraftLinkedTaskIds = [];
+  goalTaskPickerSearch = "";
+
+  $("goalForm").reset();
+  $("goalWorkspace").value = "personal";
+  $("goalBaseStatus").value = "active";
+  $("goalPriority").value = "normal";
+  $("goalTaskSearchInput").value = "";
+  $("goalEditorMode").textContent = "NEW GOAL";
+  $("goalEditorHeading").textContent = "Define an outcome";
+  $("deleteGoalButton").disabled = true;
+
+  renderGoalEditorSupport();
+  renderGoalsList();
+  window.setTimeout(() => $("goalTitle")?.focus(), 20);
+}
+
+function selectGoal(goalId) {
+  const goal = goals.find((item) => item.id === goalId);
+  if (!goal) return;
+
+  selectedGoalId = goal.id;
+  goalDraftMilestones = normalizeGoalMilestones(goal.milestones);
+  goalDraftLinkedProjects = [...goal.linkedProjects];
+  goalDraftLinkedTaskIds = [...goal.linkedTaskIds];
+  goalTaskPickerSearch = "";
+
+  $("goalTitle").value = goal.title;
+  $("goalWorkspace").value = goal.workspace;
+  $("goalTargetDate").value = goal.targetDate || "";
+  $("goalBaseStatus").value = goal.baseStatus;
+  $("goalPriority").value = goal.priority;
+  $("goalDescription").value = goal.description || "";
+  $("goalTaskSearchInput").value = "";
+  $("goalEditorMode").textContent = "EDIT GOAL";
+  $("goalEditorHeading").textContent = goal.title || "Goal";
+  $("deleteGoalButton").disabled = false;
+
+  renderGoalEditorSupport();
+  renderGoalsList();
+}
+
+function getGoalEditorDraft() {
+  return normalizeGoal({
+    id: selectedGoalId || createGoalId(),
+    title: $("goalTitle").value.trim(),
+    workspace: $("goalWorkspace").value,
+    targetDate: $("goalTargetDate").value,
+    baseStatus: $("goalBaseStatus").value,
+    priority: $("goalPriority").value,
+    description: $("goalDescription").value.trim(),
+    linkedProjects: goalDraftLinkedProjects,
+    linkedTaskIds: goalDraftLinkedTaskIds,
+    milestones: goalDraftMilestones,
+    createdAt: getSelectedGoal()?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+}
+
+function renderGoalProjectPicker() {
+  const picker = $("goalProjectPicker");
+  if (!picker) return;
+
+  const projects = getProjectRecords();
+  $("goalProjectPickerEmpty").hidden = projects.length > 0;
+  $("goalProjectLinkCount").textContent =
+    `${goalDraftLinkedProjects.length} linked`;
+
+  picker.innerHTML = projects.map((project) => {
+    const checked = goalDraftLinkedProjects.includes(project.name);
+    return `
+      <label class="goal-picker-option ${checked ? "selected" : ""}">
+        <input type="checkbox" data-goal-project="${escapeHtml(project.name)}" ${checked ? "checked" : ""}>
+        <span>
+          <strong>${escapeHtml(project.name)}</strong>
+          <small>${project.open} open · ${project.progress}% complete</small>
+        </span>
+      </label>
+    `;
+  }).join("");
+
+  picker.querySelectorAll("[data-goal-project]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const name = input.dataset.goalProject;
+      if (input.checked) {
+        if (!goalDraftLinkedProjects.includes(name)) goalDraftLinkedProjects.push(name);
+      } else {
+        goalDraftLinkedProjects = goalDraftLinkedProjects.filter((item) => item !== name);
+      }
+      renderGoalEditorSupport();
+    });
+  });
+}
+
+function renderGoalTaskPicker() {
+  const picker = $("goalTaskPicker");
+  if (!picker) return;
+
+  const query = goalTaskPickerSearch.toLocaleLowerCase();
+  const visible = [...tasks]
+    .filter((task) => {
+      if (!query) return true;
+      return `${task.text} ${task.details || ""} ${task.project || ""} ${(task.tags || []).join(" ")}`
+        .toLocaleLowerCase()
+        .includes(query);
+    })
+    .sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      if (a.priority !== b.priority) return a.priority === "urgent" ? -1 : 1;
+      return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+    })
+    .slice(0, 120);
+
+  $("goalTaskPickerEmpty").hidden = visible.length > 0;
+  $("goalTaskLinkCount").textContent =
+    `${goalDraftLinkedTaskIds.length} linked`;
+
+  picker.innerHTML = visible.map((task) => {
+    const id = String(task.id);
+    const checked = goalDraftLinkedTaskIds.includes(id);
+    return `
+      <label class="goal-picker-option task ${checked ? "selected" : ""}">
+        <input type="checkbox" data-goal-task="${escapeHtml(id)}" ${checked ? "checked" : ""}>
+        <span>
+          <strong>${escapeHtml(task.text || "Untitled task")}</strong>
+          <small>
+            ${escapeHtml(task.workspace || "personal")}
+            ${task.project ? ` · ◆ ${escapeHtml(task.project)}` : ""}
+            ${task.completed ? " · Done" : ""}
+          </small>
+        </span>
+      </label>
+    `;
+  }).join("");
+
+  picker.querySelectorAll("[data-goal-task]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const id = input.dataset.goalTask;
+      if (input.checked) {
+        if (!goalDraftLinkedTaskIds.includes(id)) goalDraftLinkedTaskIds.push(id);
+      } else {
+        goalDraftLinkedTaskIds = goalDraftLinkedTaskIds.filter((item) => item !== id);
+      }
+      renderGoalEditorSupport();
+    });
+  });
+}
+
+function renderGoalMilestones() {
+  const list = $("goalMilestoneList");
+  if (!list) return;
+
+  $("goalMilestoneCount").textContent =
+    `${goalDraftMilestones.length} milestone${goalDraftMilestones.length === 1 ? "" : "s"}`;
+  $("goalMilestoneEmpty").hidden = goalDraftMilestones.length > 0;
+
+  list.innerHTML = goalDraftMilestones.map((milestone) => `
+    <div class="goal-milestone-row ${milestone.completed ? "completed" : ""}">
+      <label>
+        <input type="checkbox" data-goal-milestone-toggle="${escapeHtml(milestone.id)}" ${milestone.completed ? "checked" : ""}>
+        <span>
+          <strong>${escapeHtml(milestone.text)}</strong>
+          <small>${milestone.targetDate ? escapeHtml(formatGoalTargetDate(milestone.targetDate)) : "No milestone date"}</small>
+        </span>
+      </label>
+      <button type="button" data-goal-milestone-remove="${escapeHtml(milestone.id)}" aria-label="Remove milestone">✕</button>
+    </div>
+  `).join("");
+
+  list.querySelectorAll("[data-goal-milestone-toggle]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const milestone = goalDraftMilestones.find(
+        (item) => item.id === input.dataset.goalMilestoneToggle
+      );
+      if (milestone) milestone.completed = input.checked;
+      renderGoalEditorSupport();
+    });
+  });
+
+  list.querySelectorAll("[data-goal-milestone-remove]").forEach((button) => {
+    button.addEventListener("click", () => {
+      goalDraftMilestones = goalDraftMilestones.filter(
+        (item) => item.id !== button.dataset.goalMilestoneRemove
+      );
+      renderGoalEditorSupport();
+    });
+  });
+}
+
+function renderGoalEditorProgress() {
+  const goal = getGoalEditorDraft();
+  const status = getGoalDerivedStatus(goal);
+  const progress = getGoalProgress(goal);
+
+  $("goalEditorStatusBadge").textContent = getGoalStatusLabel(status);
+  $("goalEditorStatusBadge").className = `goal-status-badge ${status}`;
+  $("goalEditorProgress").textContent = `${progress}%`;
+  $("goalEditorProgressBar").style.width = `${progress}%`;
+}
+
+function renderGoalEditorSupport() {
+  renderGoalProjectPicker();
+  renderGoalTaskPicker();
+  renderGoalMilestones();
+  renderGoalEditorProgress();
+}
+
+function renderGoalsList() {
+  const list = $("goalsList");
+  if (!list) return;
+
+  const visible = getFilteredGoals();
+  $("goalsVisibleCount").textContent = String(visible.length);
+  $("goalsEmptyState").hidden = visible.length > 0;
+
+  list.innerHTML = visible.map((goal) => {
+    const status = getGoalDerivedStatus(goal);
+    const progress = getGoalProgress(goal);
+    return `
+      <button class="goal-list-card ${goal.id === selectedGoalId ? "active" : ""} ${escapeHtml(status)}"
+        type="button" data-goal-id="${escapeHtml(goal.id)}">
+        <span class="goal-list-icon">◎</span>
+        <span class="goal-list-copy">
+          <small>${escapeHtml(goal.workspace)} · ${escapeHtml(getGoalStatusLabel(status))}</small>
+          <strong>${escapeHtml(goal.title)}</strong>
+          <span class="goal-list-progress"><i style="width:${progress}%"></i></span>
+          <em>${goal.targetDate ? escapeHtml(formatGoalTargetDate(goal.targetDate)) : "No target date"}</em>
+        </span>
+        <span class="goal-list-percent">${progress}%</span>
+      </button>
+    `;
+  }).join("");
+
+  list.querySelectorAll("[data-goal-id]").forEach((button) => {
+    button.addEventListener("click", () => selectGoal(button.dataset.goalId));
+  });
+}
+
+function renderGoalsHub() {
+  if (!$("goalsList")) return;
+
+  const statuses = goals.map((goal) => getGoalDerivedStatus(goal));
+  $("goalsActiveCount").textContent = String(
+    goals.filter((goal) => !["completed", "paused"].includes(getGoalDerivedStatus(goal))).length
+  );
+  $("goalsOnTrackCount").textContent = String(statuses.filter((status) => status === "on-track").length);
+  $("goalsAtRiskCount").textContent = String(statuses.filter((status) => status === "at-risk").length);
+  $("goalsCompletedCount").textContent = String(statuses.filter((status) => status === "completed").length);
+
+  $("goalsSearchInput").value = goalSearchTerm;
+  $("goalsWorkspaceFilter").value = goalWorkspaceFilter;
+  $("goalsStatusFilter").value = goalStatusFilter;
+
+  renderGoalsList();
+
+  if (selectedGoalId && !getSelectedGoal()) selectedGoalId = null;
+  if (selectedGoalId) {
+    const goal = getSelectedGoal();
+    if (goal && $("goalTitle").value !== goal.title && !$("goalTitle").matches(":focus")) {
+      selectGoal(goal.id);
+      return;
+    }
+  }
+
+  renderGoalEditorSupport();
+}
+
+function saveGoalFromEditor() {
+  const title = $("goalTitle").value.trim();
+  if (!title) {
+    showToast("Enter a goal title");
+    $("goalTitle").focus();
+    return false;
+  }
+
+  const draft = getGoalEditorDraft();
+  const existingIndex = goals.findIndex((goal) => goal.id === selectedGoalId);
+
+  if (existingIndex >= 0) {
+    draft.createdAt = goals[existingIndex].createdAt;
+    goals[existingIndex] = draft;
+  } else {
+    goals.unshift(draft);
+  }
+
+  selectedGoalId = draft.id;
+  persistGoals();
+  renderAll();
+  selectGoal(draft.id);
+  showToast(existingIndex >= 0 ? "Goal updated" : "Goal created");
+  return true;
+}
+
+function deleteSelectedGoal() {
+  const goal = getSelectedGoal();
+  if (!goal) return;
+  if (!window.confirm(`Delete goal “${goal.title}”? Linked Tasks and Projects will not be deleted.`)) return;
+
+  goals = goals.filter((item) => item.id !== goal.id);
+  persistGoals();
+  resetGoalEditor();
+  renderAll();
+  showToast("Goal deleted");
+}
+
+function addGoalMilestoneFromControls() {
+  const text = $("goalMilestoneText").value.trim();
+  if (!text) {
+    $("goalMilestoneText").focus();
+    return;
+  }
+
+  goalDraftMilestones.push({
+    id: `milestone-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    text: text.slice(0, 180),
+    targetDate: $("goalMilestoneDate").value,
+    completed: false
+  });
+
+  $("goalMilestoneText").value = "";
+  $("goalMilestoneDate").value = "";
+  renderGoalEditorSupport();
+}
+
+function getGoalFocusCandidate() {
+  return getSortedGoals(
+    goals.filter((goal) => !["completed", "paused"].includes(getGoalDerivedStatus(goal)))
+  )[0] || null;
+}
+
 function normalizeTask(task = {}) {
   const createdAt = task.createdAt || new Date().toISOString();
   const legacyCompleted = Boolean(task.completed);
@@ -2225,6 +2837,7 @@ function normalizeTask(task = {}) {
 
 function normalizeData() {
   tasks = tasks.map(normalizeTask);
+  goals = normalizeGoals(goals);
 
   events = events.map((event) => ({
     id: event.id || Date.now() + Math.random(),
@@ -2343,6 +2956,10 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "goals") {
+    renderGoalsHub();
   }
 
   if (appName === "agenda") {
@@ -9217,7 +9834,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.9-Free";
+const BACKUP_APP_VERSION = "7O.10-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -9260,6 +9877,7 @@ async function sha256Text(text) {
 function buildLocalBackupData() {
   return {
     tasks: tasks.map((task) => ({ ...task })),
+    goals: goals.map((goal) => ({ ...goal, linkedProjects: [...goal.linkedProjects], linkedTaskIds: [...goal.linkedTaskIds], milestones: goal.milestones.map((item) => ({ ...item })) })),
     events: events.map((event) => ({ ...event })),
     journalEntries: journalEntries.map((entry) => ({ ...entry, tags: [...entry.tags] })),
     ourSpacePlans: ourSpacePlans.map((plan) => ({
@@ -9379,6 +9997,7 @@ function renderBackupCenter() {
   if (!$("backupTaskCount")) return;
 
   $("backupTaskCount").textContent = String(tasks.length);
+  $("backupGoalCount").textContent = String(goals.length);
   $("backupEventCount").textContent = String(events.length);
   $("backupJournalCount").textContent = String(journalEntries.length);
   $("backupOurSpaceCount").textContent = String(ourSpacePlans.length);
@@ -9486,6 +10105,7 @@ function renderBackupImportPreview(backup, integrityResult) {
     <span>${created} · App ${escapeHtml(backup.appVersion || "Unknown")}</span>
     <div class="backup-preview-counts">
       <small>${backup.data.tasks.length} tasks</small>
+      <small>${backup.data.goals?.length || 0} goals</small>
       <small>${backup.data.events.length} events</small>
       <small>${backup.data.journalEntries?.length || 0} journal entries</small>
       <small>${backup.data.ourSpacePlans?.length || 0} Our Space plans</small>
@@ -9511,6 +10131,9 @@ async function loadBackupImportFile(file) {
   try {
     const parsed = validateBackupShape(JSON.parse(await file.text()));
     const integrityResult = await verifyBackupIntegrity(parsed);
+    const hasGoals = Array.isArray(parsed.data.goals);
+    $("restoreBackupGoals").disabled = !hasGoals;
+    $("restoreBackupGoals").checked = hasGoals;
     pendingBackupImport = parsed;
     renderBackupImportPreview(parsed, integrityResult);
     $("restoreBackupButton").disabled = false;
@@ -9581,6 +10204,7 @@ async function restoreSelectedBackup() {
 
   const selected = {
     tasks: $("restoreBackupTasks").checked,
+    goals: $("restoreBackupGoals").checked,
     events: $("restoreBackupEvents").checked,
     journal: $("restoreBackupJournal").checked,
     ourSpace: $("restoreBackupOurSpace").checked,
@@ -9614,7 +10238,16 @@ async function restoreSelectedBackup() {
     const data = pendingBackupImport.data;
     if (selected.tasks) {
       tasks = data.tasks.map(normalizeTask);
-      localStorage.setItem(STORAGE.tasks, JSON.stringify(tasks));
+    }
+    if (selected.goals) {
+      goals = normalizeGoals(data.goals || []);
+      selectedGoalId = null;
+      goalDraftMilestones = [];
+      goalDraftLinkedProjects = [];
+      goalDraftLinkedTaskIds = [];
+    }
+    if (selected.tasks || selected.goals) {
+      writeTaskGoalLocalRecords();
     }
     if (selected.events) {
       events = normalizeBackupEvents(data.events);
@@ -9776,6 +10409,29 @@ function getAgendaItems() {
       });
     });
 
+  goals
+    .filter((goal) =>
+      goal.targetDate &&
+      getGoalDerivedStatus(goal) !== "completed"
+    )
+    .forEach((goal) => {
+      const status = getGoalDerivedStatus(goal);
+      items.push({
+        kind: "goal",
+        id: String(goal.id),
+        date: goal.targetDate,
+        icon: "◎",
+        title: goal.title || "Untitled goal",
+        meta: [
+          goal.workspace || "personal",
+          getGoalStatusLabel(status),
+          `${getGoalProgress(goal)}%`
+        ].filter(Boolean).join(" · "),
+        workspace: goal.workspace || "personal",
+        searchText: `${goal.title || ""} ${goal.description || ""} ${(goal.linkedProjects || []).join(" ")} ${(goal.milestones || []).map((item) => item.text).join(" ")}`
+      });
+    });
+
   ourSpacePlans
     .filter((plan) => plan.status !== "done" && plan.target_date)
     .forEach((plan) => {
@@ -9817,7 +10473,7 @@ function getAgendaItems() {
 
   return items.sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date);
-    const rank = { task: 0, event: 1, ourspace: 2, document: 3 };
+    const rank = { task: 0, goal: 1, event: 2, ourspace: 3, document: 4 };
     return (rank[a.kind] ?? 9) - (rank[b.kind] ?? 9);
   });
 }
@@ -9838,7 +10494,7 @@ function getFilteredAgendaItems() {
     if (agendaTypeFilter !== "all" && item.kind !== agendaTypeFilter) return false;
 
     if (agendaWorkspaceFilter !== "all") {
-      if (!["task", "event"].includes(item.kind)) return false;
+      if (!["task", "event", "goal"].includes(item.kind)) return false;
       if (item.workspace !== agendaWorkspaceFilter) return false;
     }
 
@@ -9909,6 +10565,12 @@ function openAgendaItem(kind, id) {
     if (!task) return;
     openApp("tasks");
     openTaskModal(task, "tasks", task.id);
+    return;
+  }
+
+  if (kind === "goal") {
+    openApp("goals");
+    selectGoal(id);
     return;
   }
 
@@ -10318,6 +10980,29 @@ function renderTodayPlanner() {
     : "Plans with today's target date will appear here.";
   $("todayOurSpaceCard").dataset.planId = firstPlan?.id || "";
 
+  const goalFocus = getGoalFocusCandidate();
+  if (goalFocus) {
+    const status = getGoalDerivedStatus(goalFocus);
+    const progress = getGoalProgress(goalFocus);
+    $("todayGoalCard").dataset.goalId = goalFocus.id;
+    $("todayGoalStatus").textContent = getGoalStatusLabel(status).toUpperCase();
+    $("todayGoalTitle").textContent = goalFocus.title;
+    $("todayGoalMeta").textContent = [
+      `${progress}% complete`,
+      goalFocus.targetDate ? formatGoalTargetDate(goalFocus.targetDate) : "",
+      goalFocus.workspace
+    ].filter(Boolean).join(" · ");
+    $("todayGoalProgress").textContent = `${progress}%`;
+    $("todayGoalCard").className = `today-goal-card ${status}`;
+  } else {
+    $("todayGoalCard").dataset.goalId = "";
+    $("todayGoalStatus").textContent = "NO ACTIVE GOAL";
+    $("todayGoalTitle").textContent = "Set a goal to connect today’s work to a bigger outcome.";
+    $("todayGoalMeta").textContent = "Open Goals to get started.";
+    $("todayGoalProgress").textContent = "0%";
+    $("todayGoalCard").className = "today-goal-card";
+  }
+
   const completedToday = tasks.filter(
     (task) => task.completed && isTimestampToday(task.updatedAt || task.createdAt)
   );
@@ -10522,6 +11207,7 @@ function renderWeeklyReview() {
     isDateKeyInCurrentReviewWeek(eventItem.date)
   );
   const activeProjects = getProjectRecords().filter((project) => project.open > 0);
+  const activeGoals = getSortedGoals(goals.filter((goal) => !["completed", "paused"].includes(getGoalDerivedStatus(goal))));
   const upcoming = getWeeklyReviewUpcomingItems();
 
   const weekFinance = financeEntries.filter((entry) =>
@@ -10544,6 +11230,7 @@ function renderWeeklyReview() {
   $("weeklyReviewEventCount").textContent = String(weekEvents.length);
   $("weeklyReviewFinanceNet").textContent = formatMoney(weekNet);
   $("weeklyReviewProjectCount").textContent = String(activeProjects.length);
+  $("weeklyReviewGoalCount").textContent = String(activeGoals.length);
 
   $("weeklyReviewIncome").textContent = formatMoney(weekIncome);
   $("weeklyReviewExpenses").textContent = formatMoney(weekExpenses);
@@ -10641,6 +11328,31 @@ function renderWeeklyReview() {
       selectedProjectName = button.dataset.weeklyReviewProject;
       openApp("projects");
       renderProjectsHub();
+    });
+  });
+
+  const weeklyGoalPulse = activeGoals.slice(0, 6);
+  $("weeklyReviewGoalsEmpty").hidden = weeklyGoalPulse.length > 0;
+  $("weeklyReviewGoalList").innerHTML = weeklyGoalPulse.map((goal) => {
+    const status = getGoalDerivedStatus(goal);
+    const progress = getGoalProgress(goal);
+    return `
+      <button class="weekly-review-item goal ${escapeHtml(status)}" type="button"
+        data-weekly-review-goal="${escapeHtml(goal.id)}">
+        <span class="weekly-review-item-icon">◎</span>
+        <span class="weekly-review-item-copy">
+          <strong>${escapeHtml(goal.title)}</strong>
+          <small>${escapeHtml(goal.workspace)} · ${escapeHtml(getGoalStatusLabel(status))}${goal.targetDate ? ` · ${escapeHtml(formatGoalTargetDate(goal.targetDate))}` : ""}</small>
+        </span>
+        <span class="weekly-review-item-meta">${progress}%</span>
+      </button>
+    `;
+  }).join("");
+
+  $("weeklyReviewGoalList").querySelectorAll("[data-weekly-review-goal]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openApp("goals");
+      selectGoal(button.dataset.weeklyReviewGoal);
     });
   });
 
@@ -10742,6 +11454,11 @@ function getWorkspaceHubData(workspaceKey) {
     (task) => task.workspace === workspaceKey && !task.completed
   ));
 
+  const workspaceGoals = goals.filter((goal) => goal.workspace === workspaceKey);
+  const activeGoals = workspaceGoals.filter((goal) =>
+    !["completed", "paused"].includes(getGoalDerivedStatus(goal))
+  );
+
   const finance = financeEntries
     .filter((entry) => entry.workspace === workspaceKey)
     .sort((a, b) =>
@@ -10764,6 +11481,8 @@ function getWorkspaceHubData(workspaceKey) {
     upcomingEvents,
     projects,
     activeProjects,
+    goals: workspaceGoals,
+    activeGoals,
     finance,
     balance: income - expenses
   };
@@ -10921,6 +11640,7 @@ function renderWorkspacesHub() {
   $("workspaceDetailUrgentTasks").textContent = String(data.urgentTasks.length);
   $("workspaceDetailUpcomingEvents").textContent = String(data.upcomingEvents.length);
   $("workspaceDetailActiveProjects").textContent = String(data.activeProjects.length);
+  $("workspaceDetailActiveGoals").textContent = String(data.activeGoals.length);
   $("workspaceDetailBalance").textContent = formatMoney(data.balance);
 
   $("workspaceTaskEmpty").hidden = taskQueue.length > 0;
@@ -10998,6 +11718,30 @@ function renderWorkspacesHub() {
     });
   });
 
+  const goalsForWorkspace = getSortedGoals(data.activeGoals).slice(0, 5);
+  $("workspaceGoalEmpty").hidden = goalsForWorkspace.length > 0;
+  $("workspaceGoalList").innerHTML = goalsForWorkspace.map((goal) => {
+    const status = getGoalDerivedStatus(goal);
+    return `
+      <button class="workspace-list-item goal ${escapeHtml(status)}" type="button"
+        data-workspace-goal="${escapeHtml(goal.id)}">
+        <span class="workspace-item-mark">◎</span>
+        <span class="workspace-item-copy">
+          <strong>${escapeHtml(goal.title)}</strong>
+          <small>${escapeHtml(getGoalStatusLabel(status))} · ${getGoalProgress(goal)}%${goal.targetDate ? ` · ${escapeHtml(formatGoalTargetDate(goal.targetDate))}` : ""}</small>
+        </span>
+        <span class="workspace-item-progress">${getGoalProgress(goal)}%</span>
+      </button>
+    `;
+  }).join("");
+
+  $("workspaceGoalList").querySelectorAll("[data-workspace-goal]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openApp("goals");
+      selectGoal(button.dataset.workspaceGoal);
+    });
+  });
+
   $("workspaceFinanceEmpty").hidden = financeForWorkspace.length > 0;
   $("workspaceFinanceList").innerHTML = financeForWorkspace.map((entry) => `
     <button class="workspace-list-item finance ${escapeHtml(entry.type || "expense")}"
@@ -11038,6 +11782,24 @@ function getActivityItems() {
       ].filter(Boolean).join(" · "),
       timestamp: task.updatedAt || task.createdAt || "",
       searchText: `${task.text || ""} ${task.details || ""} ${task.project || ""} ${(task.tags || []).join(" ")}`
+    });
+  });
+
+  goals.forEach((goal) => {
+    const status = getGoalDerivedStatus(goal);
+    items.push({
+      type: "goals",
+      id: String(goal.id),
+      icon: "◎",
+      title: goal.title || "Untitled goal",
+      action: goal.updatedAt !== goal.createdAt ? "Goal updated" : "Goal created",
+      meta: [
+        goal.workspace || "personal",
+        getGoalStatusLabel(status),
+        `${getGoalProgress(goal)}%`
+      ].filter(Boolean).join(" · "),
+      timestamp: goal.updatedAt || goal.createdAt || "",
+      searchText: `${goal.title || ""} ${goal.description || ""} ${(goal.linkedProjects || []).join(" ")} ${(goal.milestones || []).map((item) => item.text).join(" ")}`
     });
   });
 
@@ -11193,6 +11955,7 @@ function formatActivityTime(timestamp) {
 function getActivityTypeLabel(type) {
   return {
     tasks: "Task",
+    goals: "Goal",
     notes: "Note",
     journal: "Journal",
     ourspace: "Our Space",
@@ -11206,6 +11969,12 @@ function openActivityItem(type, id) {
     const task = tasks.find((item) => String(item.id) === String(id));
     openApp("tasks");
     if (task) openTaskModal(task, "tasks", task.id);
+    return;
+  }
+
+  if (type === "goals") {
+    openApp("goals");
+    selectGoal(id);
     return;
   }
 
@@ -11534,8 +12303,16 @@ function renameSelectedProject() {
     }
   });
 
+  goals.forEach((goal) => {
+    if (!goal.linkedProjects.includes(project.name)) return;
+    goal.linkedProjects = goal.linkedProjects.map((name) =>
+      name === project.name ? cleanName : name
+    );
+    goal.updatedAt = new Date().toISOString();
+  });
+
   selectedProjectName = cleanName;
-  saveJSON(STORAGE.tasks, tasks);
+  persistGoals();
   renderAll();
   showToast("Project renamed");
 }
@@ -11555,8 +12332,14 @@ function clearSelectedProject() {
     }
   });
 
+  goals.forEach((goal) => {
+    if (!goal.linkedProjects.includes(project.name)) return;
+    goal.linkedProjects = goal.linkedProjects.filter((name) => name !== project.name);
+    goal.updatedAt = new Date().toISOString();
+  });
+
   selectedProjectName = "";
-  saveJSON(STORAGE.tasks, tasks);
+  persistGoals();
   renderAll();
   showToast("Project cleared; tasks were kept");
 }
@@ -11791,7 +12574,13 @@ function renderAll() {
   renderNotesCenter();
   renderFavoritesHub();
   renderProjectsHub();
+  renderGoalsHub();
   renderActivityTimeline();
+  renderWorkspacesHub();
+  renderWeeklyReview();
+  renderTodayPlanner();
+  renderAgenda();
+  if (isCommandPaletteOpen()) renderCommandPalette();
 }
 
 async function loadWeather() {
@@ -12145,6 +12934,64 @@ $("agendaTodayButton").addEventListener("click", () => {
 
 $("agendaQuickCaptureButton").addEventListener("click", () => openQuickCapture());
 $("agendaCalendarButton").addEventListener("click", () => openApp("calendar"));
+
+$("goalsSearchInput").addEventListener("input", (event) => {
+  goalSearchTerm = event.target.value.trim();
+  renderGoalsList();
+});
+
+$("goalsWorkspaceFilter").addEventListener("change", (event) => {
+  goalWorkspaceFilter = event.target.value;
+  renderGoalsList();
+});
+
+$("goalsStatusFilter").addEventListener("change", (event) => {
+  goalStatusFilter = event.target.value;
+  renderGoalsList();
+});
+
+$("newGoalButton").addEventListener("click", resetGoalEditor);
+$("resetGoalButton").addEventListener("click", resetGoalEditor);
+$("deleteGoalButton").addEventListener("click", deleteSelectedGoal);
+
+$("goalTaskSearchInput").addEventListener("input", (event) => {
+  goalTaskPickerSearch = event.target.value.trim();
+  renderGoalTaskPicker();
+});
+
+["goalWorkspace", "goalTargetDate", "goalBaseStatus", "goalPriority"].forEach((id) => {
+  $(id).addEventListener("change", renderGoalEditorProgress);
+});
+["goalTitle", "goalDescription"].forEach((id) => {
+  $(id).addEventListener("input", renderGoalEditorProgress);
+});
+
+$("addGoalMilestoneButton").addEventListener("click", addGoalMilestoneFromControls);
+$("goalMilestoneText").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  addGoalMilestoneFromControls();
+});
+
+$("goalForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveGoalFromEditor();
+});
+
+$("todayOpenGoalsButton").addEventListener("click", () => openApp("goals"));
+$("todayGoalCard").addEventListener("click", () => {
+  const goalId = $("todayGoalCard").dataset.goalId;
+  openApp("goals");
+  if (goalId) selectGoal(goalId);
+});
+
+$("weeklyReviewViewGoalsButton").addEventListener("click", () => openApp("goals"));
+
+$("workspaceViewGoalsButton").addEventListener("click", () => {
+  goalWorkspaceFilter = selectedWorkspaceHub;
+  openApp("goals");
+  renderGoalsHub();
+});
 
 $("projectCreateForm").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -13037,7 +13884,13 @@ function updateAuthUI(session) {
 }
 
 window.BoxOSCloudHydrate = function cloudHydrate(data) {
-  if (Array.isArray(data.tasks)) tasks = data.tasks.map(normalizeTask);
+  if (Array.isArray(data.tasks)) {
+    const cloudGoalRecords = data.tasks.filter(isGoalCloudRecord);
+    const cloudTaskRecords = data.tasks.filter((item) => !isGoalCloudRecord(item));
+    tasks = cloudTaskRecords.map(normalizeTask);
+    goals = normalizeGoals(cloudGoalRecords.map(extractGoalFromCloudRecord));
+    selectedGoalId = null;
+  }
   if (Array.isArray(data.events)) events = data.events;
   if (Array.isArray(data.finance_entries)) financeEntries = data.finance_entries;
 
@@ -13100,7 +13953,7 @@ window.BoxOSCloudHydrate = function cloudHydrate(data) {
     if ($("ourSpaceTitle")) resetOurSpaceEditor();
   }
 
-  localStorage.setItem(STORAGE.tasks, JSON.stringify(tasks));
+  writeTaskGoalLocalRecords();
   localStorage.setItem(STORAGE.events, JSON.stringify(events));
   localStorage.setItem(STORAGE.finance, JSON.stringify(financeEntries));
   renderAll();
