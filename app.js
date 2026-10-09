@@ -151,6 +151,9 @@ function setViewModePreference(mode, { notify = true } = {}) {
   });
 
   updateViewModeControls();
+  if (typeof renderDesktopStickyNotes === "function") {
+    renderDesktopStickyNotes();
+  }
 
   if (notify && typeof showToast === "function") {
     const labels = {
@@ -1002,6 +1005,33 @@ function createNoteItemId() {
   return `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function normalizeStickyLayoutEntry(layout = {}) {
+  const finiteOrNull = (value) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+
+  return {
+    x: finiteOrNull(layout.x),
+    y: finiteOrNull(layout.y),
+    width: finiteOrNull(layout.width),
+    height: finiteOrNull(layout.height),
+    locked: Boolean(layout.locked),
+    z: Math.max(1, Math.min(999, Number(layout.z) || 1))
+  };
+}
+
+function normalizeStickyLayouts(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  const layouts = {};
+  ["windows", "tablet", "mobile"].forEach((mode) => {
+    if (source[mode] && typeof source[mode] === "object") {
+      layouts[mode] = normalizeStickyLayoutEntry(source[mode]);
+    }
+  });
+  return layouts;
+}
+
 function normalizeNoteItem(note = {}) {
   const now = new Date().toISOString();
   return {
@@ -1009,6 +1039,7 @@ function normalizeNoteItem(note = {}) {
     title: String(note.title || "").trim().slice(0, 180),
     content: String(note.content || "").slice(0, 250000),
     sticky: Boolean(note.sticky),
+    stickyLayouts: normalizeStickyLayouts(note.stickyLayouts),
     createdAt: note.createdAt || note.created_at || now,
     updatedAt: note.updatedAt || note.updated_at || note.createdAt || note.created_at || now
   };
@@ -1198,28 +1229,262 @@ function renderNotesEditor() {
   updateNoteEditorMeta(note);
 }
 
+function getStickyLayoutMode() {
+  return getEffectiveViewMode();
+}
+
+function getStickyNoteContainerRect() {
+  const container = $("desktopStickyNotes");
+  if (!container) return { width: 1000, height: 600 };
+  return {
+    width: Math.max(1, container.clientWidth || container.getBoundingClientRect().width || 1000),
+    height: Math.max(1, container.clientHeight || container.getBoundingClientRect().height || 600)
+  };
+}
+
+function getStickySizeLimits(mode, bounds) {
+  const minimumWidth = mode === "mobile" ? 160 : 180;
+  const minimumHeight = 100;
+  return {
+    minWidth: Math.min(minimumWidth, bounds.width),
+    minHeight: Math.min(minimumHeight, bounds.height),
+    maxWidth: Math.max(minimumWidth, Math.min(mode === "windows" ? 560 : 460, bounds.width - 12)),
+    maxHeight: Math.max(minimumHeight, Math.min(mode === "windows" ? 460 : 380, bounds.height - 12))
+  };
+}
+
+function getDefaultStickyLayout(index, mode, bounds) {
+  const limits = getStickySizeLimits(mode, bounds);
+
+  if (mode === "mobile") {
+    const width = Math.min(limits.maxWidth, Math.max(limits.minWidth, bounds.width - 24));
+    const height = Math.min(limits.maxHeight, 130);
+    const x = Math.max(0, Math.min(12 + (index % 3) * 10, bounds.width - width));
+    const yBase = Math.max(150, bounds.height - height - 14);
+    const y = Math.max(0, Math.min(yBase - (index % 5) * 24, bounds.height - height));
+    return { x, y, width, height, locked: false, z: index + 1 };
+  }
+
+  const width = Math.min(limits.maxWidth, mode === "tablet" ? 220 : 230);
+  const height = Math.min(limits.maxHeight, mode === "tablet" ? 136 : 140);
+  const leftPadding = mode === "tablet" ? 22 : 35;
+  const rightReserve = mode === "windows" ? 230 : 24;
+  const usableWidth = Math.max(width, bounds.width - leftPadding - rightReserve);
+  const columns = Math.max(1, Math.floor((usableWidth + 10) / (width + 10)));
+  const column = index % columns;
+  const row = Math.floor(index / columns);
+  const x = Math.max(0, Math.min(leftPadding + column * (width + 10), bounds.width - width));
+  const y = Math.max(0, Math.min(bounds.height - height - 14 - row * (height + 10), bounds.height - height));
+  return { x, y, width, height, locked: false, z: index + 1 };
+}
+
+function clampStickyLayout(layout, mode, bounds) {
+  const limits = getStickySizeLimits(mode, bounds);
+  const width = Math.max(limits.minWidth, Math.min(Number(layout.width) || limits.minWidth, limits.maxWidth, bounds.width));
+  const height = Math.max(limits.minHeight, Math.min(Number(layout.height) || limits.minHeight, limits.maxHeight, bounds.height));
+  const x = Math.max(0, Math.min(Number(layout.x) || 0, Math.max(0, bounds.width - width)));
+  const y = Math.max(0, Math.min(Number(layout.y) || 0, Math.max(0, bounds.height - height)));
+  return {
+    x,
+    y,
+    width,
+    height,
+    locked: Boolean(layout.locked),
+    z: Math.max(1, Math.min(999, Number(layout.z) || 1))
+  };
+}
+
+function getStickyLayoutForNote(note, index, mode, bounds) {
+  const saved = note.stickyLayouts?.[mode];
+  if (!saved || saved.x === null || saved.y === null || saved.width === null || saved.height === null) {
+    return clampStickyLayout(getDefaultStickyLayout(index, mode, bounds), mode, bounds);
+  }
+  return clampStickyLayout(saved, mode, bounds);
+}
+
+function setStickyLayoutForNote(note, mode, layout, { sync = true } = {}) {
+  note.stickyLayouts = normalizeStickyLayouts(note.stickyLayouts);
+  note.stickyLayouts[mode] = normalizeStickyLayoutEntry(layout);
+  if (sync) persistNoteItems();
+}
+
+function getTopStickyZ(mode) {
+  return noteItems.reduce((max, note) => {
+    const z = Number(note.stickyLayouts?.[mode]?.z || 0);
+    return Math.max(max, z);
+  }, 0);
+}
+
+function applyStickyCardLayout(card, layout) {
+  card.style.left = `${layout.x}px`;
+  card.style.top = `${layout.y}px`;
+  card.style.width = `${layout.width}px`;
+  card.style.height = `${layout.height}px`;
+  card.style.zIndex = String(layout.z || 1);
+  card.dataset.locked = layout.locked ? "true" : "false";
+  card.classList.toggle("locked", layout.locked);
+
+  const lockButton = card.querySelector("[data-sticky-lock]");
+  if (lockButton) {
+    lockButton.textContent = layout.locked ? "🔒" : "🔓";
+    lockButton.title = layout.locked ? "Unlock position and size" : "Lock position and size";
+    lockButton.setAttribute("aria-label", lockButton.title);
+  }
+}
+
+function beginStickyPointerInteraction(event, note, card, type) {
+  const mode = getStickyLayoutMode();
+  const bounds = getStickyNoteContainerRect();
+  let layout = getStickyLayoutForNote(note, 0, mode, bounds);
+  if (layout.locked) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const target = event.currentTarget;
+  target.setPointerCapture?.(event.pointerId);
+
+  layout = {
+    ...layout,
+    z: Math.min(999, getTopStickyZ(mode) + 1)
+  };
+  applyStickyCardLayout(card, layout);
+
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const startLayout = { ...layout };
+  document.documentElement.classList.add("sticky-layout-active");
+  card.classList.add(type === "move" ? "moving" : "resizing");
+
+  const move = (moveEvent) => {
+    if (moveEvent.pointerId !== event.pointerId) return;
+    moveEvent.preventDefault();
+
+    const dx = moveEvent.clientX - startX;
+    const dy = moveEvent.clientY - startY;
+    let next = { ...startLayout };
+
+    if (type === "move") {
+      next.x = startLayout.x + dx;
+      next.y = startLayout.y + dy;
+    } else {
+      next.width = startLayout.width + dx;
+      next.height = startLayout.height + dy;
+    }
+
+    next = clampStickyLayout(next, mode, bounds);
+    layout = next;
+    applyStickyCardLayout(card, layout);
+  };
+
+  const finish = (finishEvent) => {
+    if (finishEvent.pointerId !== event.pointerId) return;
+    target.removeEventListener("pointermove", move);
+    target.removeEventListener("pointerup", finish);
+    target.removeEventListener("pointercancel", finish);
+    target.releasePointerCapture?.(event.pointerId);
+    document.documentElement.classList.remove("sticky-layout-active");
+    card.classList.remove("moving", "resizing");
+    setStickyLayoutForNote(note, mode, layout, { sync: true });
+  };
+
+  target.addEventListener("pointermove", move, { passive: false });
+  target.addEventListener("pointerup", finish);
+  target.addEventListener("pointercancel", finish);
+}
+
+function toggleStickyNoteLock(noteId, card) {
+  const note = noteItems.find((item) => item.id === noteId);
+  if (!note) return;
+  const mode = getStickyLayoutMode();
+  const bounds = getStickyNoteContainerRect();
+  const stickyNotes = getSortedNoteItems(noteItems.filter((item) => item.sticky));
+  const index = Math.max(0, stickyNotes.findIndex((item) => item.id === note.id));
+  const layout = getStickyLayoutForNote(note, index, mode, bounds);
+  layout.locked = !layout.locked;
+  setStickyLayoutForNote(note, mode, layout, { sync: true });
+  applyStickyCardLayout(card, layout);
+  showToast(layout.locked ? "Sticky note locked" : "Sticky note unlocked");
+}
+
+function resetStickyNoteLayoutsForCurrentMode() {
+  const stickyNotes = noteItems.filter((note) => note.sticky);
+  if (!stickyNotes.length) {
+    showToast("No sticky notes to reset");
+    return;
+  }
+
+  const mode = getStickyLayoutMode();
+  if (!window.confirm(`Reset sticky note positions and sizes for ${mode} view?`)) return;
+
+  stickyNotes.forEach((note) => {
+    note.stickyLayouts = normalizeStickyLayouts(note.stickyLayouts);
+    delete note.stickyLayouts[mode];
+  });
+
+  persistNoteItems();
+  renderDesktopStickyNotes();
+  showToast("Sticky layout reset");
+}
+
 function renderDesktopStickyNotes() {
   const container = $("desktopStickyNotes");
   if (!container) return;
 
   const stickyNotes = getSortedNoteItems(noteItems.filter((note) => note.sticky));
   container.hidden = stickyNotes.length === 0;
+  container.innerHTML = "";
+  if (!stickyNotes.length) return;
 
-  container.innerHTML = stickyNotes.map((note) => `
-    <button class="desktop-sticky-note" type="button" data-desktop-sticky-note-id="${escapeHtml(note.id)}">
-      <span class="desktop-sticky-note-top">
-        <strong>${escapeHtml(note.title || "Untitled note")}</strong>
-        <span>▱</span>
-      </span>
-      <p>${escapeHtml(getNotePreview(note, 180))}</p>
-      <small>${escapeHtml(formatNoteUpdatedAt(note.updatedAt))}</small>
-    </button>
-  `).join("");
+  const mode = getStickyLayoutMode();
+  const bounds = getStickyNoteContainerRect();
 
-  container.querySelectorAll("[data-desktop-sticky-note-id]").forEach((button) => {
-    button.addEventListener("click", () => {
+  stickyNotes.forEach((note, index) => {
+    const layout = getStickyLayoutForNote(note, index, mode, bounds);
+    const card = document.createElement("article");
+    card.className = "desktop-sticky-note";
+    card.dataset.desktopStickyNoteId = note.id;
+    applyStickyCardLayout(card, layout);
+
+    card.innerHTML = `
+      <div class="desktop-sticky-note-top">
+        <div class="sticky-drag-handle" data-sticky-drag title="Drag to move">
+          <span class="sticky-drag-grip" aria-hidden="true">⋮⋮</span>
+          <strong>${escapeHtml(note.title || "Untitled note")}</strong>
+        </div>
+        <div class="sticky-note-controls">
+          <button class="sticky-lock-button" type="button" data-sticky-lock aria-label="Lock position and size">${layout.locked ? "🔒" : "🔓"}</button>
+        </div>
+      </div>
+      <button class="sticky-note-open" type="button" data-sticky-open>
+        <p>${escapeHtml(getNotePreview(note, 360))}</p>
+        <small>${escapeHtml(formatNoteUpdatedAt(note.updatedAt))}</small>
+      </button>
+      <span class="sticky-resize-handle" data-sticky-resize title="Drag to resize" aria-hidden="true">◢</span>
+    `;
+
+    container.appendChild(card);
+
+    card.querySelector("[data-sticky-open]").addEventListener("click", () => {
       openApp("notes");
-      selectNoteItem(button.dataset.desktopStickyNoteId);
+      selectNoteItem(note.id);
+    });
+
+    const lockButton = card.querySelector("[data-sticky-lock]");
+    lockButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleStickyNoteLock(note.id, card);
+    });
+
+    const dragHandle = card.querySelector("[data-sticky-drag]");
+    dragHandle.addEventListener("pointerdown", (event) => {
+      beginStickyPointerInteraction(event, note, card, "move");
+    });
+
+    const resizeHandle = card.querySelector("[data-sticky-resize]");
+    resizeHandle.addEventListener("pointerdown", (event) => {
+      beginStickyPointerInteraction(event, note, card, "resize");
     });
   });
 }
@@ -4698,6 +4963,10 @@ function handleViewportResize() {
     }
     updateWindowResponsiveState(windowElement);
   });
+
+  if (typeof renderDesktopStickyNotes === "function") {
+    renderDesktopStickyNotes();
+  }
 }
 
 window.addEventListener("resize", handleViewportResize);
@@ -10979,7 +11248,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.12-Free";
+const BACKUP_APP_VERSION = "7O.13-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -14783,6 +15052,7 @@ $("dashboardOurSpacePlan").addEventListener("click", () => {
 });
 
 $("newNoteButton").addEventListener("click", createNewNoteItem);
+$("resetStickyLayoutButton").addEventListener("click", resetStickyNoteLayoutsForCurrentMode);
 $("notesSearchInput").addEventListener("input", (event) => {
   notesSearchTerm = event.target.value.trim();
   renderNotesList();

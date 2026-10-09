@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o12-insights";
+const CACHE_NAME = "the-box-os-phase-7o13-sticky-note-layout";
 
 const APP_FILES = [
   "./",
