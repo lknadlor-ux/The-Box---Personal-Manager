@@ -368,6 +368,8 @@ let selectedRoutineId = null;
 let routineSearchTerm = "";
 let routineWorkspaceFilter = "all";
 let routineStateFilter = "all";
+let insightsRangeDays = 30;
+let insightsWorkspaceFilter = "all";
 let favoritesFilter = "all";
 let favoritesSearchTerm = "";
 let taskViewMode = localStorage.getItem(STORAGE.taskView) === "kanban" ? "kanban" : "list";
@@ -1468,6 +1470,7 @@ const COMMAND_PALETTE_APPS = [
   { app: "documents", icon: "▱", label: "Document Vault", keywords: "files documents vault storage compliance" },
   { app: "projects", icon: "◆", label: "Projects", keywords: "projects outcomes grouped tasks" },
   { app: "favorites", icon: "★", label: "Favorites", keywords: "favorites pinned sticky important" },
+  { app: "insights", icon: "⌁", label: "Insights", keywords: "insights analytics progress trends workload dashboard" },
   { app: "routines", icon: "↻", label: "Routines", keywords: "routines recurring habits repeat schedule consistency" },
   { app: "goals", icon: "◎", label: "Goals", keywords: "goals milestones outcomes targets progress" },
   { app: "agenda", icon: "≡", label: "Agenda", keywords: "agenda timeline schedule due dates deadlines events plans" },
@@ -1500,6 +1503,15 @@ function getCommandPaletteActions() {
       description: "Capture a Task, Note, Event, Journal entry, or Our Space plan",
       keywords: "new capture add inbox",
       run: () => openQuickCapture()
+    },
+    {
+      key: "action-insights",
+      type: "action",
+      icon: "⌁",
+      title: "Open Insights",
+      description: "Review progress, workload, goals, routines, Projects, and finance trends",
+      keywords: "insights analytics progress trends dashboard",
+      run: () => openApp("insights")
     },
     {
       key: "action-new-routine",
@@ -2286,6 +2298,476 @@ function normalizeTaskRecurrence(value) {
 }
 
 
+
+
+function getInsightsBounds(days = insightsRangeDays, previous = false) {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+
+  if (previous) {
+    end.setDate(end.getDate() - Number(days || 30));
+  }
+
+  const start = new Date(end);
+  start.setDate(start.getDate() - Number(days || 30) + 1);
+  start.setHours(0, 0, 0, 0);
+
+  return { start, end };
+}
+
+function isInsightsTimestampInRange(value, days = insightsRangeDays, previous = false) {
+  const timestamp = getActivityTimestamp(value);
+  if (!timestamp) return false;
+  const { start, end } = getInsightsBounds(days, previous);
+  return timestamp >= start.getTime() && timestamp <= end.getTime();
+}
+
+function matchesInsightsWorkspace(value) {
+  return insightsWorkspaceFilter === "all" || value === insightsWorkspaceFilter;
+}
+
+function getInsightsTaskCompletionItems(previous = false) {
+  return tasks.filter((task) =>
+    task.completed &&
+    matchesInsightsWorkspace(task.workspace || "personal") &&
+    isInsightsTimestampInRange(task.updatedAt || task.createdAt, insightsRangeDays, previous)
+  );
+}
+
+function getInsightsFinanceEntries(previous = false) {
+  return financeEntries.filter((entry) =>
+    matchesInsightsWorkspace(entry.workspace || "personal") &&
+    isInsightsTimestampInRange(entry.createdAt, insightsRangeDays, previous)
+  );
+}
+
+function getInsightsActivityWorkspace(item) {
+  if (item.type === "tasks") {
+    return tasks.find((task) => String(task.id) === String(item.id))?.workspace || "";
+  }
+  if (item.type === "goals") {
+    return goals.find((goal) => String(goal.id) === String(item.id))?.workspace || "";
+  }
+  if (item.type === "routines") {
+    return routines.find((routine) => String(routine.id) === String(item.id))?.workspace || "";
+  }
+  if (item.type === "finance") {
+    return financeEntries.find((entry) => String(entry.id) === String(item.id))?.workspace || "";
+  }
+  return "";
+}
+
+function getInsightsActivityItems(previous = false) {
+  return getActivityItems().filter((item) => {
+    if (!isInsightsTimestampInRange(item.timestamp, insightsRangeDays, previous)) return false;
+    if (insightsWorkspaceFilter === "all") return true;
+    return getInsightsActivityWorkspace(item) === insightsWorkspaceFilter;
+  });
+}
+
+function getInsightsGoals() {
+  return goals.filter((goal) => matchesInsightsWorkspace(goal.workspace || "personal"));
+}
+
+function getInsightsActiveGoals() {
+  return getInsightsGoals().filter((goal) =>
+    !["completed", "paused"].includes(getGoalDerivedStatus(goal))
+  );
+}
+
+function getInsightsRoutines() {
+  return routines.filter((routine) =>
+    routine.state === "active" &&
+    matchesInsightsWorkspace(routine.workspace || "personal")
+  );
+}
+
+function getInsightsProjects() {
+  return getProjectRecords().filter((project) =>
+    insightsWorkspaceFilter === "all" ||
+    project.workspaces.includes(insightsWorkspaceFilter)
+  );
+}
+
+function getInsightsRoutineStats(routine) {
+  const { start, end } = getInsightsBounds();
+  let scheduled = 0;
+  let completed = 0;
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    const key = getAgendaDateKey(cursor);
+    if (isRoutineScheduledOnDate(routine, key)) {
+      scheduled += 1;
+      if (getRoutineTaskForDate(routine, key)?.completed) completed += 1;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return {
+    scheduled,
+    completed,
+    rate: scheduled ? Math.round((completed / scheduled) * 100) : 0
+  };
+}
+
+function getInsightsRoutineSummary() {
+  const items = getInsightsRoutines().map((routine) => ({
+    routine,
+    stats: getInsightsRoutineStats(routine)
+  }));
+
+  const scheduled = items.reduce((sum, item) => sum + item.stats.scheduled, 0);
+  const completed = items.reduce((sum, item) => sum + item.stats.completed, 0);
+
+  return {
+    items,
+    scheduled,
+    completed,
+    rate: scheduled ? Math.round((completed / scheduled) * 100) : 0
+  };
+}
+
+function getInsightsDeltaLabel(current, previous, { money = false } = {}) {
+  const difference = Number(current || 0) - Number(previous || 0);
+  if (!difference) return "No change vs previous";
+
+  const prefix = difference > 0 ? "+" : "−";
+  const absolute = Math.abs(difference);
+
+  return money
+    ? `${prefix}${formatMoney(absolute)} vs previous`
+    : `${prefix}${absolute} vs previous`;
+}
+
+function getInsightsCompletionBuckets() {
+  const days = Number(insightsRangeDays || 30);
+  const bucketSize = days <= 14 ? 1 : days <= 30 ? 3 : 7;
+  const { start, end } = getInsightsBounds();
+  const completed = getInsightsTaskCompletionItems();
+  const buckets = [];
+
+  let cursor = new Date(start);
+  while (cursor <= end) {
+    const bucketStart = new Date(cursor);
+    const bucketEnd = new Date(cursor);
+    bucketEnd.setDate(bucketEnd.getDate() + bucketSize - 1);
+    if (bucketEnd > end) bucketEnd.setTime(end.getTime());
+    bucketEnd.setHours(23, 59, 59, 999);
+
+    const count = completed.filter((task) => {
+      const timestamp = getActivityTimestamp(task.updatedAt || task.createdAt);
+      return timestamp >= bucketStart.getTime() && timestamp <= bucketEnd.getTime();
+    }).length;
+
+    buckets.push({
+      start: new Date(bucketStart),
+      end: new Date(bucketEnd),
+      count
+    });
+
+    cursor = new Date(bucketEnd);
+    cursor.setDate(cursor.getDate() + 1);
+    cursor.setHours(0, 0, 0, 0);
+  }
+
+  return buckets;
+}
+
+function formatInsightsBucketLabel(bucket) {
+  const start = bucket.start.toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric"
+  });
+  const end = bucket.end.toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric"
+  });
+  return getAgendaDateKey(bucket.start) === getAgendaDateKey(bucket.end)
+    ? start
+    : `${start}–${end}`;
+}
+
+function openInsightsWorkspace(workspaceKey) {
+  selectedWorkspaceHub = workspaceKey;
+  openApp("workspaces");
+  renderWorkspacesHub();
+}
+
+function openInsightsGoalStatus(status) {
+  goalWorkspaceFilter = insightsWorkspaceFilter;
+  goalStatusFilter = status;
+  openApp("goals");
+  renderGoalsHub();
+}
+
+function openInsightsActivitySource(type) {
+  activityTypeFilter = type;
+  activityRangeFilter = String(insightsRangeDays);
+  activitySearchTerm = "";
+  openApp("activity");
+  renderActivityTimeline();
+}
+
+function renderInsights() {
+  if (!$("insightsCompletionTrend")) return;
+
+  const rangeLabel = `Last ${insightsRangeDays} days`;
+  const workspaceLabel = insightsWorkspaceFilter === "all"
+    ? "All workspaces"
+    : getWorkspaceHubDefinition(insightsWorkspaceFilter).label;
+
+  $("insightsRangeFilter").value = String(insightsRangeDays);
+  $("insightsWorkspaceFilter").value = insightsWorkspaceFilter;
+  $("insightsRangeLabel").textContent = `${rangeLabel} · ${workspaceLabel}`;
+
+  const currentCompleted = getInsightsTaskCompletionItems();
+  const previousCompleted = getInsightsTaskCompletionItems(true);
+  const currentActivity = getInsightsActivityItems();
+  const previousActivity = getInsightsActivityItems(true);
+  const currentFinance = getInsightsFinanceEntries();
+  const previousFinance = getInsightsFinanceEntries(true);
+
+  const income = currentFinance
+    .filter((entry) => entry.type === "income")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const expenses = currentFinance
+    .filter((entry) => entry.type === "expense")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const net = income - expenses;
+
+  const previousIncome = previousFinance
+    .filter((entry) => entry.type === "income")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const previousExpenses = previousFinance
+    .filter((entry) => entry.type === "expense")
+    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const previousNet = previousIncome - previousExpenses;
+
+  const activeGoals = getInsightsActiveGoals();
+  const goalAverage = activeGoals.length
+    ? Math.round(
+        activeGoals.reduce((sum, goal) => sum + getGoalProgress(goal), 0) /
+        activeGoals.length
+      )
+    : 0;
+  const goalStatuses = getInsightsGoals().map((goal) => getGoalDerivedStatus(goal));
+  const atRiskGoalCount = goalStatuses.filter((status) => status === "at-risk").length;
+
+  const routineSummary = getInsightsRoutineSummary();
+
+  $("insightsCompletedCount").textContent = String(currentCompleted.length);
+  $("insightsCompletedDelta").textContent =
+    getInsightsDeltaLabel(currentCompleted.length, previousCompleted.length);
+
+  $("insightsActivityCount").textContent = String(currentActivity.length);
+  $("insightsActivityDelta").textContent =
+    getInsightsDeltaLabel(currentActivity.length, previousActivity.length);
+
+  $("insightsFinanceNet").textContent = formatMoney(net);
+  $("insightsFinanceDelta").textContent =
+    getInsightsDeltaLabel(net, previousNet, { money: true });
+
+  $("insightsGoalAverage").textContent = `${goalAverage}%`;
+  $("insightsGoalHealth").textContent = activeGoals.length
+    ? `${atRiskGoalCount} at risk · ${activeGoals.length} active`
+    : "No active goals";
+
+  $("insightsRoutineRate").textContent = `${routineSummary.rate}%`;
+  $("insightsRoutineMeta").textContent = routineSummary.scheduled
+    ? `${routineSummary.completed}/${routineSummary.scheduled} scheduled days`
+    : "No scheduled days";
+
+  $("insightsIncome").textContent = formatMoney(income);
+  $("insightsExpenses").textContent = formatMoney(expenses);
+  $("insightsNet").textContent = formatMoney(net);
+
+  // Completion trend
+  const buckets = getInsightsCompletionBuckets();
+  const maxBucket = Math.max(1, ...buckets.map((bucket) => bucket.count));
+  $("insightsTrendSummary").textContent = currentCompleted.length
+    ? `${currentCompleted.length} completed-task update${currentCompleted.length === 1 ? "" : "s"}`
+    : "No completion activity";
+
+  $("insightsCompletionTrend").innerHTML = buckets.map((bucket) => {
+    const height = Math.round((bucket.count / maxBucket) * 100);
+    return `
+      <div class="insights-trend-column" title="${escapeHtml(formatInsightsBucketLabel(bucket))}: ${bucket.count}">
+        <span>${bucket.count || ""}</span>
+        <div><i style="height:${height}%"></i></div>
+        <small>${escapeHtml(formatInsightsBucketLabel(bucket))}</small>
+      </div>
+    `;
+  }).join("");
+
+  // Workspace pressure
+  const today = getLocalDateKey();
+  const workspaceRows = WORKSPACE_HUB_DEFINITIONS
+    .filter((definition) =>
+      insightsWorkspaceFilter === "all" || definition.key === insightsWorkspaceFilter
+    )
+    .map((definition) => {
+      const data = getWorkspaceHubData(definition.key);
+      const overdue = data.openTasks.filter((task) => task.dueDate && task.dueDate < today).length;
+      return { definition, data, overdue };
+    });
+
+  $("insightsWorkspaceList").innerHTML = workspaceRows.map(({ definition, data, overdue }) => `
+    <button class="insights-list-row workspace" type="button"
+      data-insights-workspace="${escapeHtml(definition.key)}">
+      <span class="insights-row-icon">${escapeHtml(definition.icon)}</span>
+      <span class="insights-row-copy">
+        <strong>${escapeHtml(definition.label)}</strong>
+        <small>${data.openTasks.length} open · ${data.urgentTasks.length} urgent · ${overdue} overdue</small>
+      </span>
+      <span class="insights-row-value">${data.activeGoals.length}G · ${data.activeRoutines.length}R</span>
+    </button>
+  `).join("");
+
+  $("insightsWorkspaceList").querySelectorAll("[data-insights-workspace]").forEach((button) => {
+    button.addEventListener("click", () =>
+      openInsightsWorkspace(button.dataset.insightsWorkspace)
+    );
+  });
+
+  // Goal health
+  const goalHealthRows = [
+    ["on-track", "On track"],
+    ["at-risk", "At risk"],
+    ["paused", "Paused"],
+    ["completed", "Completed"]
+  ].map(([status, label]) => ({
+    status,
+    label,
+    count: goalStatuses.filter((value) => value === status).length
+  }));
+
+  const maxGoalHealth = Math.max(1, ...goalHealthRows.map((row) => row.count));
+  $("insightsGoalHealthList").innerHTML = goalHealthRows.map((row) => `
+    <button class="insights-health-row ${escapeHtml(row.status)}" type="button"
+      data-insights-goal-status="${escapeHtml(row.status)}">
+      <span><strong>${escapeHtml(row.label)}</strong><small>${row.count} goal${row.count === 1 ? "" : "s"}</small></span>
+      <span class="insights-mini-track"><i style="width:${Math.round((row.count / maxGoalHealth) * 100)}%"></i></span>
+      <b>${row.count}</b>
+    </button>
+  `).join("");
+
+  $("insightsGoalHealthList").querySelectorAll("[data-insights-goal-status]").forEach((button) => {
+    button.addEventListener("click", () =>
+      openInsightsGoalStatus(button.dataset.insightsGoalStatus)
+    );
+  });
+
+  // Routine consistency
+  const routineRows = routineSummary.items
+    .sort((a, b) => {
+      if (a.stats.rate !== b.stats.rate) return a.stats.rate - b.stats.rate;
+      return a.routine.title.localeCompare(b.routine.title);
+    })
+    .slice(0, 7);
+
+  $("insightsRoutineEmpty").hidden = routineRows.length > 0;
+  $("insightsRoutineList").innerHTML = routineRows.map(({ routine, stats }) => `
+    <button class="insights-list-row routine" type="button"
+      data-insights-routine="${escapeHtml(routine.id)}">
+      <span class="insights-row-icon">↻</span>
+      <span class="insights-row-copy">
+        <strong>${escapeHtml(routine.title)}</strong>
+        <small>${stats.completed}/${stats.scheduled} scheduled · ${escapeHtml(routine.workspace)}</small>
+        <span class="insights-mini-track"><i style="width:${stats.rate}%"></i></span>
+      </span>
+      <span class="insights-row-value">${stats.rate}%</span>
+    </button>
+  `).join("");
+
+  $("insightsRoutineList").querySelectorAll("[data-insights-routine]").forEach((button) => {
+    button.addEventListener("click", () => {
+      openApp("routines");
+      selectRoutine(button.dataset.insightsRoutine);
+    });
+  });
+
+  // Project portfolio
+  const projectRows = getInsightsProjects()
+    .sort((a, b) => {
+      if (a.urgent !== b.urgent) return b.urgent - a.urgent;
+      if (a.progress !== b.progress) return a.progress - b.progress;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, 7);
+
+  $("insightsProjectEmpty").hidden = projectRows.length > 0;
+  $("insightsProjectList").innerHTML = projectRows.map((project) => `
+    <button class="insights-list-row project" type="button"
+      data-insights-project="${escapeHtml(project.name)}">
+      <span class="insights-row-icon">◆</span>
+      <span class="insights-row-copy">
+        <strong>${escapeHtml(project.name)}</strong>
+        <small>${project.open} open · ${project.urgent} urgent · ${project.done}/${project.total} done</small>
+        <span class="insights-mini-track"><i style="width:${project.progress}%"></i></span>
+      </span>
+      <span class="insights-row-value">${project.progress}%</span>
+    </button>
+  `).join("");
+
+  $("insightsProjectList").querySelectorAll("[data-insights-project]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedProjectName = button.dataset.insightsProject;
+      openApp("projects");
+      renderProjectsHub();
+    });
+  });
+
+  // Activity source mix
+  const activityCounts = new Map();
+  currentActivity.forEach((item) => {
+    activityCounts.set(item.type, (activityCounts.get(item.type) || 0) + 1);
+  });
+
+  const activityRows = Array.from(activityCounts.entries())
+    .sort((a, b) => b[1] - a[1]);
+
+  const maxActivity = Math.max(1, ...activityRows.map(([, count]) => count));
+  $("insightsActivityEmpty").hidden = activityRows.length > 0;
+  $("insightsActivityMix").innerHTML = activityRows.map(([type, count]) => `
+    <button class="insights-bar-row" type="button"
+      data-insights-activity-type="${escapeHtml(type)}">
+      <span>${escapeHtml(getActivityTypeLabel(type))}</span>
+      <span class="insights-bar-track"><i style="width:${Math.round((count / maxActivity) * 100)}%"></i></span>
+      <strong>${count}</strong>
+    </button>
+  `).join("");
+
+  $("insightsActivityMix").querySelectorAll("[data-insights-activity-type]").forEach((button) => {
+    button.addEventListener("click", () =>
+      openInsightsActivitySource(button.dataset.insightsActivityType)
+    );
+  });
+
+  // Pressure
+  const openTasks = tasks.filter((task) =>
+    !task.completed &&
+    matchesInsightsWorkspace(task.workspace || "personal")
+  );
+  const nextWeek = new Date(`${today}T00:00:00`);
+  nextWeek.setDate(nextWeek.getDate() + 7);
+  const nextWeekKey = getAgendaDateKey(nextWeek);
+
+  $("insightsOverdueTasks").textContent = String(
+    openTasks.filter((task) => task.dueDate && task.dueDate < today).length
+  );
+  $("insightsDueSoonTasks").textContent = String(
+    openTasks.filter((task) =>
+      task.dueDate &&
+      task.dueDate >= today &&
+      task.dueDate <= nextWeekKey
+    ).length
+  );
+  $("insightsAtRiskGoals").textContent = String(atRiskGoalCount);
+  $("insightsUrgentTasks").textContent = String(
+    openTasks.filter((task) => task.priority === "urgent").length
+  );
+}
 
 function createRoutineId() {
   if (window.crypto?.randomUUID) return `routine-${window.crypto.randomUUID()}`;
@@ -3608,6 +4090,10 @@ function openApp(appName) {
 
   if (appName === "reminders") {
     renderReminderCenter();
+  }
+
+  if (appName === "insights") {
+    renderInsights();
   }
 
   if (appName === "routines") {
@@ -7985,6 +8471,7 @@ async function loadDocuments({ silent = false } = {}) {
   renderFavoritesHub();
   renderProjectsHub();
   renderRoutinesHub();
+  renderInsights();
   renderActivityTimeline();
   renderWorkspacesHub();
   renderWeeklyReview();
@@ -10492,7 +10979,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.11-Free";
+const BACKUP_APP_VERSION = "7O.12-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -13503,6 +13990,7 @@ function toggleTimer() {
       timerSeconds = selectedTimerMinutes * 60;
       updateTimerDisplay();
       renderDashboard();
+      renderInsights();
       showToast("Focus session complete");
     }
   }, 1000);
@@ -13653,6 +14141,7 @@ $("workspaceViewProjectsButton").addEventListener("click", () => {
 
 $("weeklyReviewOpenTasksButton").addEventListener("click", () => openApp("tasks"));
 $("weeklyReviewOpenCalendarButton").addEventListener("click", () => openApp("calendar"));
+$("weeklyReviewOpenInsightsButton").addEventListener("click", () => openApp("insights"));
 $("weeklyReviewQuickCaptureButton").addEventListener("click", () => openQuickCapture());
 $("weeklyReviewOpenActivityButton").addEventListener("click", () => openApp("activity"));
 
@@ -13768,6 +14257,27 @@ $("agendaTodayButton").addEventListener("click", () => {
 
 $("agendaQuickCaptureButton").addEventListener("click", () => openQuickCapture());
 $("agendaCalendarButton").addEventListener("click", () => openApp("calendar"));
+
+$("insightsRangeFilter").addEventListener("change", (event) => {
+  insightsRangeDays = Number(event.target.value) || 30;
+  renderInsights();
+});
+
+$("insightsWorkspaceFilter").addEventListener("change", (event) => {
+  insightsWorkspaceFilter = event.target.value;
+  renderInsights();
+});
+
+$("insightsWeeklyReviewButton").addEventListener("click", () => openApp("weeklyreview"));
+$("insightsActivityButton").addEventListener("click", () => openApp("activity"));
+$("insightsOpenWorkspacesButton").addEventListener("click", () => openApp("workspaces"));
+$("insightsOpenGoalsButton").addEventListener("click", () => openApp("goals"));
+$("insightsOpenRoutinesButton").addEventListener("click", () => openApp("routines"));
+$("insightsOpenProjectsButton").addEventListener("click", () => openApp("projects"));
+$("insightsOpenActivityButton").addEventListener("click", () => openApp("activity"));
+$("insightsOpenFinanceButton").addEventListener("click", () => openApp("finance"));
+$("insightsOpenAgendaButton").addEventListener("click", () => openApp("agenda"));
+
 
 $("routinesSearchInput").addEventListener("input", (event) => {
   routineSearchTerm = event.target.value.trim();

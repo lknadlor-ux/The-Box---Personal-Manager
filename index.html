@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o11">
+  <link rel="stylesheet" href="style.css?v=7o12">
 </head>
 <body>
   <div class="desktop-shell">
@@ -257,6 +257,12 @@
           <small>Local productivity help</small>
         </button>
 
+        <button class="app-tile insights-app-tile" data-open-app="insights">
+          <span class="app-icon">⌁</span>
+          <strong>Insights</strong>
+          <small>Progress, workload, trends</small>
+        </button>
+
         <button class="app-tile routines-app-tile" data-open-app="routines">
           <span class="app-icon">↻</span>
           <strong>Routines</strong>
@@ -396,6 +402,11 @@
         <button class="desktop-icon" data-open-app="calendar">
           <span>◫</span>
           <strong>Calendar</strong>
+        </button>
+
+        <button class="desktop-icon" data-open-app="insights">
+          <span>⌁</span>
+          <strong>Insights</strong>
         </button>
 
         <button class="desktop-icon" data-open-app="routines">
@@ -943,6 +954,158 @@
             </section>
           </div>
         </article>
+
+        <article class="app-window insights-app-window" data-app-window="insights" style="--x: 7%; --y: 5%; --w: 86%; --h: 87%;">
+          <div class="window-titlebar">
+            <div class="window-title"><span>⌁</span><strong>Insights</strong></div>
+            <div class="window-controls">
+              <button class="window-button minimize-button">—</button>
+              <button class="window-button maximize-button">□</button>
+              <button class="window-button close-button">✕</button>
+            </div>
+          </div>
+
+          <div class="window-content insights-window">
+            <section class="insights-hero">
+              <div>
+                <small>PROGRESS DASHBOARD</small>
+                <h2>See the pattern behind the work.</h2>
+                <p id="insightsRangeLabel">Last 30 days · All workspaces</p>
+              </div>
+
+              <div class="insights-hero-actions">
+                <select id="insightsRangeFilter" aria-label="Insights date range">
+                  <option value="7">7 days</option>
+                  <option value="30" selected>30 days</option>
+                  <option value="90">90 days</option>
+                </select>
+
+                <select id="insightsWorkspaceFilter" aria-label="Insights workspace">
+                  <option value="all">All workspaces</option>
+                  <option value="personal">Personal</option>
+                  <option value="pharmacy">Pharmacy</option>
+                  <option value="clinic">Clinic</option>
+                  <option value="sk">SK</option>
+                </select>
+
+                <button id="insightsWeeklyReviewButton" class="secondary-button" type="button">Weekly Review</button>
+                <button id="insightsActivityButton" class="primary-button" type="button">Activity</button>
+              </div>
+            </section>
+
+            <section class="insights-kpis" aria-label="Progress summary">
+              <div>
+                <small>COMPLETED*</small>
+                <strong id="insightsCompletedCount">0</strong>
+                <span id="insightsCompletedDelta">— vs previous</span>
+              </div>
+              <div>
+                <small>ACTIVITY</small>
+                <strong id="insightsActivityCount">0</strong>
+                <span id="insightsActivityDelta">— vs previous</span>
+              </div>
+              <div>
+                <small>FINANCE NET</small>
+                <strong id="insightsFinanceNet">₱0.00</strong>
+                <span id="insightsFinanceDelta">— vs previous</span>
+              </div>
+              <div>
+                <small>GOAL AVG</small>
+                <strong id="insightsGoalAverage">0%</strong>
+                <span id="insightsGoalHealth">No active goals</span>
+              </div>
+              <div>
+                <small>ROUTINE CONSISTENCY</small>
+                <strong id="insightsRoutineRate">0%</strong>
+                <span id="insightsRoutineMeta">No scheduled days</span>
+              </div>
+            </section>
+
+            <div class="insights-note">
+              <span>* Completed = Tasks currently marked done whose latest update falls inside the selected period.</span>
+              <span>Goal, Project, and workload panels are current snapshots; finance/activity use recorded timestamps.</span>
+            </div>
+
+            <section class="insights-grid">
+              <article class="insights-panel insights-panel-wide">
+                <div class="insights-panel-heading">
+                  <div><small>MOMENTUM</small><strong>Completed-task activity</strong></div>
+                  <span id="insightsTrendSummary">No completion activity</span>
+                </div>
+                <div id="insightsCompletionTrend" class="insights-trend"></div>
+              </article>
+
+              <article class="insights-panel">
+                <div class="insights-panel-heading">
+                  <div><small>CURRENT LOAD</small><strong>Workspace pressure</strong></div>
+                  <button id="insightsOpenWorkspacesButton" type="button">Workspaces</button>
+                </div>
+                <div id="insightsWorkspaceList" class="insights-list"></div>
+              </article>
+
+              <article class="insights-panel">
+                <div class="insights-panel-heading">
+                  <div><small>GOAL HEALTH</small><strong>Outcome status</strong></div>
+                  <button id="insightsOpenGoalsButton" type="button">Goals</button>
+                </div>
+                <div id="insightsGoalHealthList" class="insights-list"></div>
+              </article>
+
+              <article class="insights-panel">
+                <div class="insights-panel-heading">
+                  <div><small>ROUTINES</small><strong>Consistency in range</strong></div>
+                  <button id="insightsOpenRoutinesButton" type="button">Routines</button>
+                </div>
+                <div id="insightsRoutineList" class="insights-list"></div>
+                <p id="insightsRoutineEmpty" class="empty-state">No active routines in this view.</p>
+              </article>
+
+              <article class="insights-panel">
+                <div class="insights-panel-heading">
+                  <div><small>PROJECT PORTFOLIO</small><strong>Current progress</strong></div>
+                  <button id="insightsOpenProjectsButton" type="button">Projects</button>
+                </div>
+                <div id="insightsProjectList" class="insights-list"></div>
+                <p id="insightsProjectEmpty" class="empty-state">No Projects in this view.</p>
+              </article>
+
+              <article class="insights-panel">
+                <div class="insights-panel-heading">
+                  <div><small>ACTIVITY MIX</small><strong>Where updates happened</strong></div>
+                  <button id="insightsOpenActivityButton" type="button">Activity</button>
+                </div>
+                <div id="insightsActivityMix" class="insights-bars"></div>
+                <p id="insightsActivityEmpty" class="empty-state">No activity in the selected period.</p>
+              </article>
+
+              <article class="insights-panel">
+                <div class="insights-panel-heading">
+                  <div><small>FINANCE</small><strong>Recorded in range</strong></div>
+                  <button id="insightsOpenFinanceButton" type="button">Finance</button>
+                </div>
+                <div class="insights-finance-grid">
+                  <div><span>Income</span><strong id="insightsIncome">₱0.00</strong></div>
+                  <div><span>Expenses</span><strong id="insightsExpenses">₱0.00</strong></div>
+                  <div class="net"><span>Net</span><strong id="insightsNet">₱0.00</strong></div>
+                </div>
+              </article>
+
+              <article class="insights-panel">
+                <div class="insights-panel-heading">
+                  <div><small>PRESSURE</small><strong>Current deadlines</strong></div>
+                  <button id="insightsOpenAgendaButton" type="button">Agenda</button>
+                </div>
+                <div class="insights-pressure-grid">
+                  <div><strong id="insightsOverdueTasks">0</strong><span>Overdue tasks</span></div>
+                  <div><strong id="insightsDueSoonTasks">0</strong><span>Due next 7 days</span></div>
+                  <div><strong id="insightsAtRiskGoals">0</strong><span>At-risk goals</span></div>
+                  <div><strong id="insightsUrgentTasks">0</strong><span>Urgent tasks</span></div>
+                </div>
+              </article>
+            </section>
+          </div>
+        </article>
+
 
         <article class="app-window routines-app-window" data-app-window="routines" style="--x: 8%; --y: 5%; --w: 84%; --h: 87%;">
           <div class="window-titlebar">
@@ -1587,6 +1750,7 @@
               <div class="weekly-review-hero-actions">
                 <button id="weeklyReviewOpenTasksButton" class="secondary-button" type="button">Tasks</button>
                 <button id="weeklyReviewOpenCalendarButton" class="secondary-button" type="button">Calendar</button>
+                <button id="weeklyReviewOpenInsightsButton" class="secondary-button" type="button">Insights</button>
                 <button id="weeklyReviewQuickCaptureButton" class="primary-button" type="button">＋ Capture</button>
               </div>
             </section>
@@ -3350,6 +3514,10 @@
         <span class="dock-icon" aria-hidden="true">▤</span>
         <span class="dock-label">Templates</span>
       </button>
+      <button class="dock-item" data-open-app="insights" title="Insights" aria-label="Insights">
+        <span class="dock-icon" aria-hidden="true">⌁</span>
+        <span class="dock-label">Insights</span>
+      </button>
       <button class="dock-item" data-open-app="routines" title="Routines" aria-label="Routines">
         <span class="dock-icon" aria-hidden="true">↻</span>
         <span class="dock-label">Routines</span>
@@ -4026,6 +4194,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o11"></script>
+  <script src="app.js?v=7o12"></script>
 </body>
 </html>
