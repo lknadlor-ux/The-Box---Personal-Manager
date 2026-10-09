@@ -21534,3 +21534,141 @@ html.phone-ui .notes-toolbar {
     transition: none !important;
   }
 }
+
+
+/* ==========================================================================
+   Phase 7O.13.1 — Journal Layout Hotfix
+   Fixes editor-field overlap across Windows, Tablet and Mobile display modes.
+   Root cause: the Journal content label was allowed to flex-shrink below the
+   textarea's own minimum height, so Tags / metadata / actions could be laid
+   out on top of the writing surface.
+   ========================================================================== */
+
+/* Normal Journal mode should use natural document flow.
+   Focus Mode keeps its existing full-height flex editor. */
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-workspace {
+  min-height: 0;
+  align-items: start;
+}
+
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-sidebar,
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-editor-panel {
+  height: auto;
+  min-height: 0;
+}
+
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-editor-panel {
+  display: block !important;
+  overflow: visible !important;
+}
+
+/* Do not allow the Entry field wrapper to shrink independently of its
+   textarea. That was the overlap visible in the screenshot. */
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-content-field {
+  display: grid;
+  flex: none !important;
+  min-height: auto !important;
+  width: 100%;
+}
+
+/* Give the writing area a predictable viewport and let the textarea itself
+   scroll for long entries. The user can still resize it vertically. */
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) #journalEntryContent {
+  display: block;
+  width: 100%;
+  height: clamp(300px, 38vh, 520px);
+  min-height: 280px;
+  max-height: 70vh;
+  overflow-x: hidden;
+  overflow-y: auto !important;
+  resize: vertical;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Every element after the textarea stays in normal flow below it. */
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-writing-meta,
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-tags-field,
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-editor-actions {
+  position: static !important;
+  clear: both;
+}
+
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-writing-meta {
+  margin-top: 7px;
+}
+
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-tags-field {
+  margin-top: 10px;
+}
+
+.app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-editor-actions {
+  margin-top: 12px !important;
+  padding-top: 12px !important;
+}
+
+/* Tablet / forced Windows view: if vertical room is limited, the app's
+   existing parent window-content scroller handles the longer editor instead
+   of compressing the textarea into later controls. */
+html.tablet-ui .app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-workspace,
+html.windows-ui .app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-workspace {
+  align-items: start;
+}
+
+/* Phone uses one continuous app scroller. Override earlier phone rules that
+   re-enabled a shrinkable flex editor. */
+html.phone-ui .app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-editor-panel {
+  display: block !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-content-field {
+  display: grid !important;
+  flex: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+html.phone-ui .app-window[data-app-window="journal"]:not(.journal-focus-mode) #journalEntryContent {
+  height: clamp(320px, 46vh, 560px) !important;
+  min-height: 300px !important;
+  max-height: 68vh !important;
+  overflow-y: auto !important;
+  resize: vertical !important;
+}
+
+html.phone-ui .app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-writing-meta,
+html.phone-ui .app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-tags-field,
+html.phone-ui .app-window[data-app-window="journal"]:not(.journal-focus-mode) .journal-editor-actions {
+  position: static !important;
+  transform: none !important;
+}
+
+/* Narrow / compact windows should scroll vertically rather than overlap. */
+.app-window.window-narrow[data-app-window="journal"]:not(.journal-focus-mode) #journalEntryContent,
+.app-window.window-compact[data-app-window="journal"]:not(.journal-focus-mode) #journalEntryContent {
+  height: clamp(300px, 42vh, 480px);
+  min-height: 280px;
+  max-height: 64vh;
+}
+
+/* Focus mode explicitly retains the intended full writing canvas. */
+.app-window[data-app-window="journal"].journal-focus-mode .journal-editor-panel {
+  display: flex !important;
+  overflow: hidden;
+}
+
+.app-window[data-app-window="journal"].journal-focus-mode .journal-content-field {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+
+.app-window[data-app-window="journal"].journal-focus-mode #journalEntryContent {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  resize: none !important;
+}
