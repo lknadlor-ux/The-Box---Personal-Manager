@@ -1219,13 +1219,16 @@ function renderNotesEditor() {
     return;
   }
 
-  setNotesEditorDisabled(false);
-  $("noteEditorMode").textContent = note.sticky ? "STICKY NOTE" : "NOTE";
+  const locked = isStickyNoteLockedForCurrentMode(note);
+  setNotesEditorDisabled(locked);
+  $("noteEditorMode").textContent = locked
+    ? "LOCKED STICKY NOTE"
+    : (note.sticky ? "STICKY NOTE" : "NOTE");
   $("noteEditorHeading").textContent = note.title || "Untitled note";
   $("noteTitle").value = note.title;
   $("noteSticky").checked = note.sticky;
   $("noteContent").value = note.content;
-  $("noteStatus").textContent = "Saved";
+  $("noteStatus").textContent = locked ? "Locked · unlock on desktop to edit" : "Saved";
   updateNoteEditorMeta(note);
 }
 
@@ -1302,6 +1305,42 @@ function getStickyLayoutForNote(note, index, mode, bounds) {
   return clampStickyLayout(saved, mode, bounds);
 }
 
+function getLiveStickyCardLayout(card, note, mode, bounds, fallbackIndex = 0) {
+  const saved = getStickyLayoutForNote(note, fallbackIndex, mode, bounds);
+  if (!card) return saved;
+
+  const container = $("desktopStickyNotes");
+  const cardRect = card.getBoundingClientRect();
+  const containerRect = container?.getBoundingClientRect();
+
+  const styleX = Number.parseFloat(card.style.left);
+  const styleY = Number.parseFloat(card.style.top);
+  const styleWidth = Number.parseFloat(card.style.width);
+  const styleHeight = Number.parseFloat(card.style.height);
+
+  const live = {
+    ...saved,
+    x: Number.isFinite(styleX)
+      ? styleX
+      : (containerRect ? cardRect.left - containerRect.left : saved.x),
+    y: Number.isFinite(styleY)
+      ? styleY
+      : (containerRect ? cardRect.top - containerRect.top : saved.y),
+    width: Number.isFinite(styleWidth) ? styleWidth : (cardRect.width || saved.width),
+    height: Number.isFinite(styleHeight) ? styleHeight : (cardRect.height || saved.height),
+    locked: saved.locked,
+    z: Math.max(1, Number(card.style.zIndex) || saved.z || 1)
+  };
+
+  return clampStickyLayout(live, mode, bounds);
+}
+
+function isStickyNoteLockedForCurrentMode(note) {
+  if (!note?.sticky) return false;
+  const mode = getStickyLayoutMode();
+  return Boolean(note.stickyLayouts?.[mode]?.locked);
+}
+
 function setStickyLayoutForNote(note, mode, layout, { sync = true } = {}) {
   note.stickyLayouts = normalizeStickyLayouts(note.stickyLayouts);
   note.stickyLayouts[mode] = normalizeStickyLayoutEntry(layout);
@@ -1335,7 +1374,7 @@ function applyStickyCardLayout(card, layout) {
 function beginStickyPointerInteraction(event, note, card, type) {
   const mode = getStickyLayoutMode();
   const bounds = getStickyNoteContainerRect();
-  let layout = getStickyLayoutForNote(note, 0, mode, bounds);
+  let layout = getLiveStickyCardLayout(card, note, mode, bounds, 0);
   if (layout.locked) return;
 
   event.preventDefault();
@@ -1348,16 +1387,18 @@ function beginStickyPointerInteraction(event, note, card, type) {
     ...layout,
     z: Math.min(999, getTopStickyZ(mode) + 1)
   };
+  setStickyLayoutForNote(note, mode, layout, { sync: false });
   applyStickyCardLayout(card, layout);
 
   const startX = event.clientX;
   const startY = event.clientY;
   const startLayout = { ...layout };
+  let finished = false;
   document.documentElement.classList.add("sticky-layout-active");
   card.classList.add(type === "move" ? "moving" : "resizing");
 
   const move = (moveEvent) => {
-    if (moveEvent.pointerId !== event.pointerId) return;
+    if (moveEvent.pointerId !== event.pointerId || finished) return;
     moveEvent.preventDefault();
 
     const dx = moveEvent.clientX - startX;
@@ -1372,39 +1413,64 @@ function beginStickyPointerInteraction(event, note, card, type) {
       next.height = startLayout.height + dy;
     }
 
-    next = clampStickyLayout(next, mode, bounds);
-    layout = next;
+    layout = clampStickyLayout(next, mode, bounds);
+
+    // Keep the live position in the note object while dragging. This means a
+    // lock tap immediately after a drag uses the position the user can see,
+    // even on browsers where pointerup/pointer-capture delivery is imperfect.
+    setStickyLayoutForNote(note, mode, layout, { sync: false });
     applyStickyCardLayout(card, layout);
   };
 
-  const finish = (finishEvent) => {
-    if (finishEvent.pointerId !== event.pointerId) return;
+  const cleanup = () => {
     target.removeEventListener("pointermove", move);
     target.removeEventListener("pointerup", finish);
     target.removeEventListener("pointercancel", finish);
-    target.releasePointerCapture?.(event.pointerId);
+    window.removeEventListener("pointerup", finish, true);
+    window.removeEventListener("pointercancel", finish, true);
+    try { target.releasePointerCapture?.(event.pointerId); } catch (error) { /* noop */ }
     document.documentElement.classList.remove("sticky-layout-active");
     card.classList.remove("moving", "resizing");
+  };
+
+  const finish = (finishEvent) => {
+    if (finished || finishEvent.pointerId !== event.pointerId) return;
+    finished = true;
+
+    // Read the rendered card one final time before saving. This avoids losing
+    // the last visible movement if the browser coalesced pointer events.
+    layout = getLiveStickyCardLayout(card, note, mode, bounds, 0);
+    layout.locked = false;
+    cleanup();
     setStickyLayoutForNote(note, mode, layout, { sync: true });
   };
 
   target.addEventListener("pointermove", move, { passive: false });
   target.addEventListener("pointerup", finish);
   target.addEventListener("pointercancel", finish);
+  window.addEventListener("pointerup", finish, true);
+  window.addEventListener("pointercancel", finish, true);
 }
 
 function toggleStickyNoteLock(noteId, card) {
   const note = noteItems.find((item) => item.id === noteId);
   if (!note) return;
+
   const mode = getStickyLayoutMode();
   const bounds = getStickyNoteContainerRect();
   const stickyNotes = getSortedNoteItems(noteItems.filter((item) => item.sticky));
   const index = Math.max(0, stickyNotes.findIndex((item) => item.id === note.id));
-  const layout = getStickyLayoutForNote(note, index, mode, bounds);
-  layout.locked = !layout.locked;
+
+  // IMPORTANT: lock the card exactly where it is visibly sitting now.
+  // Do not reconstruct position from an older saved/default layout.
+  const layout = getLiveStickyCardLayout(card, note, mode, bounds, index);
+  layout.locked = !Boolean(note.stickyLayouts?.[mode]?.locked);
+
   setStickyLayoutForNote(note, mode, layout, { sync: true });
   applyStickyCardLayout(card, layout);
-  showToast(layout.locked ? "Sticky note locked" : "Sticky note unlocked");
+
+  if (selectedNoteId === note.id) renderNotesEditor();
+  showToast(layout.locked ? "Sticky note locked in place" : "Sticky note unlocked");
 }
 
 function resetStickyNoteLayoutsForCurrentMode() {
@@ -1466,6 +1532,11 @@ function renderDesktopStickyNotes() {
     container.appendChild(card);
 
     card.querySelector("[data-sticky-open]").addEventListener("click", () => {
+      const liveNote = noteItems.find((item) => item.id === note.id);
+      if (isStickyNoteLockedForCurrentMode(liveNote)) {
+        showToast("Unlock this sticky note before editing");
+        return;
+      }
       openApp("notes");
       selectNoteItem(note.id);
     });
@@ -1531,6 +1602,10 @@ function createNewNoteItem() {
 function updateSelectedNoteFromEditor() {
   const note = getSelectedNoteItem();
   if (!note) return;
+  if (isStickyNoteLockedForCurrentMode(note)) {
+    renderNotesEditor();
+    return;
+  }
 
   note.title = $("noteTitle").value.slice(0, 180);
   note.content = $("noteContent").value.slice(0, 250000);
@@ -1557,6 +1632,10 @@ function updateSelectedNoteFromEditor() {
 function deleteSelectedNoteItem() {
   const note = getSelectedNoteItem();
   if (!note) return;
+  if (isStickyNoteLockedForCurrentMode(note)) {
+    showToast("Unlock this sticky note before deleting it");
+    return;
+  }
   if (!window.confirm(`Delete “${note.title || "Untitled note"}”?`)) return;
 
   noteItems = noteItems.filter((item) => item.id !== note.id);
@@ -11248,7 +11327,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.13.1-Free";
+const BACKUP_APP_VERSION = "7O.13.2-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {

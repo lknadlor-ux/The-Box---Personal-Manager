@@ -21672,3 +21672,49 @@ html.phone-ui .app-window[data-app-window="journal"]:not(.journal-focus-mode) .j
   overflow-y: auto !important;
   resize: none !important;
 }
+
+
+/* ==========================================================================
+   Phase 7O.13.2 — Sticky Lock Position + Read-only Lock Hotfix
+   ========================================================================== */
+
+/* Locked means locked: the note body is no longer presented as an editor
+   launcher, while the lock control itself stays available so it can be
+   unlocked again. */
+.desktop-sticky-note.locked .sticky-note-open {
+  cursor: default;
+}
+
+.desktop-sticky-note.locked .sticky-note-open:hover {
+  background: transparent;
+}
+
+.desktop-sticky-note.locked .sticky-drag-grip,
+.desktop-sticky-note.locked .sticky-resize-handle {
+  opacity: .34;
+}
+
+.desktop-sticky-note.locked .sticky-drag-handle {
+  pointer-events: none;
+  cursor: default !important;
+}
+
+/* Keep the lock button interactive even though movement/content interaction is
+   frozen. */
+.desktop-sticky-note.locked .sticky-note-controls,
+.desktop-sticky-note.locked .sticky-lock-button {
+  pointer-events: auto;
+}
+
+/* Locked Notes opened from the Notes app are visibly read-only. */
+.notes-editor-panel:has(#noteTitle:disabled) #noteTitle,
+.notes-editor-panel:has(#noteContent:disabled) #noteContent {
+  cursor: not-allowed;
+  opacity: .78;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-sticky-note.locked {
+    transition: none !important;
+  }
+}
