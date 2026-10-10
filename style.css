@@ -21718,3 +21718,159 @@ html.phone-ui .app-window[data-app-window="journal"]:not(.journal-focus-mode) .j
     transition: none !important;
   }
 }
+
+
+/* ==========================================================================
+   Phase 7O.13.3 — Notes Scroll / Layout Hotfix
+   Main fix: the Notes app can always scroll vertically. On phone, the Notes
+   list joins the page flow instead of trapping touch gestures in a short
+   nested scroller.
+   ========================================================================== */
+
+/* Make the Notes app window the reliable primary vertical scroll owner. */
+.app-window[data-app-window="notes"] > .window-content.notes-window-redesign {
+  min-height: 0;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: auto !important;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Allow nested list/editor scrolling to hand the gesture back to the Notes
+   window once their own boundary is reached. */
+.app-window[data-app-window="notes"] .notes-list,
+.app-window[data-app-window="notes"] .notes-editor-panel,
+.app-window[data-app-window="notes"] #noteContent {
+  overscroll-behavior-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Keep normal desktop/tablet layout, but never clip the editor footer. */
+.app-window[data-app-window="notes"] .notes-editor-panel {
+  min-height: 0;
+}
+
+.app-window[data-app-window="notes"] #noteContent {
+  overflow-x: hidden;
+  overflow-y: auto !important;
+}
+
+/* Narrow/compact windows should become one vertically scrollable page instead
+   of relying on several competing fixed-height panes. */
+.app-window.window-narrow[data-app-window="notes"] .notes-workspace,
+.app-window.window-compact[data-app-window="notes"] .notes-workspace {
+  display: flex !important;
+  flex: none !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.app-window.window-narrow[data-app-window="notes"] .notes-sidebar,
+.app-window.window-compact[data-app-window="notes"] .notes-sidebar {
+  flex: none !important;
+  width: 100%;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.app-window.window-narrow[data-app-window="notes"] .notes-list,
+.app-window.window-compact[data-app-window="notes"] .notes-list {
+  flex: none !important;
+  max-height: 280px;
+  overflow-y: auto !important;
+}
+
+.app-window.window-narrow[data-app-window="notes"] .notes-editor-panel,
+.app-window.window-compact[data-app-window="notes"] .notes-editor-panel {
+  flex: none !important;
+  width: 100%;
+  min-height: 460px;
+  overflow: visible !important;
+}
+
+/* PHONE ------------------------------------------------------------------
+   Remove the short nested Notes-list scroller. This was the main source of
+   "cannot scroll up" behavior because the touch gesture stayed captured by
+   the 210/220/230px list instead of moving the full Notes screen. */
+html.phone-ui .app-window[data-app-window="notes"] > .window-content.notes-window-redesign {
+  display: block !important;
+  height: calc(100% - 52px) !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: auto !important;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .notes-workspace {
+  display: flex !important;
+  flex: none !important;
+  flex-direction: column !important;
+  gap: 11px !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .notes-sidebar {
+  flex: none !important;
+  width: 100%;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .notes-list {
+  display: flex !important;
+  flex: none !important;
+  max-height: none !important;
+  overflow: visible !important;
+  overscroll-behavior: auto !important;
+  touch-action: pan-y;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .notes-editor-panel {
+  display: flex !important;
+  flex: none !important;
+  flex-direction: column !important;
+  width: 100%;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .note-content-field {
+  display: grid !important;
+  flex: none !important;
+  min-height: 0 !important;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] #noteContent {
+  display: block;
+  width: 100%;
+  height: clamp(320px, 46vh, 560px) !important;
+  min-height: 300px !important;
+  max-height: 68vh !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: auto !important;
+  resize: vertical !important;
+  touch-action: pan-y;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .notes-editor-footer {
+  position: static !important;
+  flex: none !important;
+  margin-top: 10px;
+}
+
+/* Forced Tablet / Windows display modes on a small screen still need the
+   Notes app itself to retain a vertical scrolling path. */
+@media (max-width: 900px) {
+  html.view-mode-tablet:not(.phone-ui) .app-window[data-app-window="notes"] > .window-content,
+  html.view-mode-windows:not(.phone-ui) .app-window[data-app-window="notes"] > .window-content {
+    overflow-y: auto !important;
+    overscroll-behavior-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
