@@ -215,6 +215,9 @@ const STORAGE = {
   finance: "theBoxOS4Finance",
   theme: "theBoxOS4Theme",
   backgroundMode: "theBoxOSBackgroundMode",
+  clockFormat: "theBoxOSClockFormat",
+  clockShowSeconds: "theBoxOSClockShowSeconds",
+  clockShowDate: "theBoxOSClockShowDate",
   timerMinutes: "theBoxOS4TimerMinutes",
   focusTotal: "theBoxOS4FocusTotal",
   windowLayouts: "theBoxOSWindowLayouts",
@@ -1578,6 +1581,10 @@ function handleFullscreenChange() {
   }
 
   updateFullscreenUi();
+
+  if (deskClockDeskModeActive) {
+    updateDeskClock();
+  }
 }
 
 
@@ -1599,6 +1606,7 @@ const COMMAND_PALETTE_APPS = [
   { app: "weeklyreview", icon: "◷", label: "Weekly Review", keywords: "weekly review planning recap wins overdue upcoming" },
   { app: "workspaces", icon: "▦", label: "Workspaces", keywords: "workspaces context personal tasks projects routines" },
   { app: "activity", icon: "↺", label: "Activity", keywords: "activity timeline history recent changes" },
+  { app: "clock", icon: "◷", label: "Desk Clock", keywords: "clock digital desk stationary fullscreen time" },
   { app: "focus", icon: "◉", label: "Focus", keywords: "focus timer pomodoro" },
   { app: "assistant", icon: "◇", label: "Assistant", keywords: "assistant helper" },
   { app: "reminders", icon: "♢", label: "Reminders", keywords: "reminders alerts due expiry" },
@@ -4111,6 +4119,10 @@ function updateClock() {
   if ($("welcomeDate").textContent !== welcomeDate) $("welcomeDate").textContent = welcomeDate;
   if ($("systemTime").textContent !== systemTime) $("systemTime").textContent = systemTime;
   if ($("systemDate").textContent !== systemDate) $("systemDate").textContent = systemDate;
+
+  if (isAppWindowOpen("clock") || deskClockDeskModeActive) {
+    updateDeskClock();
+  }
 }
 
 
@@ -4193,6 +4205,11 @@ function openApp(appName) {
   updateDockNavigation(appName);
 
   closeLauncher();
+
+  if (appName === "clock") {
+    updateDeskClock();
+    updateDeskClockControls();
+  }
 
   if (appName === "tasks") renderTasks();
 
@@ -11116,7 +11133,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.15-Live-Crimson-Free";
+const BACKUP_APP_VERSION = "7O.16-Desk-Clock-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -11175,6 +11192,9 @@ function buildLocalBackupData() {
     preferences: {
       theme: localStorage.getItem(STORAGE.theme) || "dark",
       backgroundMode: normalizeBackgroundMode(localStorage.getItem(STORAGE.backgroundMode) || "live"),
+      clockFormat: localStorage.getItem(STORAGE.clockFormat) === "24" ? "24" : "12",
+      clockShowSeconds: localStorage.getItem(STORAGE.clockShowSeconds) !== "0",
+      clockShowDate: localStorage.getItem(STORAGE.clockShowDate) !== "0",
       timerMinutes: Number(localStorage.getItem(STORAGE.timerMinutes) || 25),
       focusTotal: Number(localStorage.getItem(STORAGE.focusTotal) || 0),
       windowLayouts: readWindowLayouts(),
@@ -11464,6 +11484,13 @@ function restoreBackupPreferences(preferences = {}) {
   const backgroundMode = normalizeBackgroundMode(preferences.backgroundMode || "live");
   localStorage.setItem(STORAGE.backgroundMode, backgroundMode);
 
+  deskClockFormat = preferences.clockFormat === "24" ? "24" : "12";
+  deskClockShowSeconds = preferences.clockShowSeconds !== false;
+  deskClockShowDate = preferences.clockShowDate !== false;
+  localStorage.setItem(STORAGE.clockFormat, deskClockFormat);
+  localStorage.setItem(STORAGE.clockShowSeconds, deskClockShowSeconds ? "1" : "0");
+  localStorage.setItem(STORAGE.clockShowDate, deskClockShowDate ? "1" : "0");
+
   const minutes = Math.min(180, Math.max(1, Number(preferences.timerMinutes) || 25));
   localStorage.setItem(STORAGE.timerMinutes, String(minutes));
   selectedTimerMinutes = minutes;
@@ -11489,6 +11516,8 @@ function restoreBackupPreferences(preferences = {}) {
   document.body.classList.toggle("light-theme", theme === "light");
   $("themeButton").textContent = theme === "light" ? "☀" : "☾";
   applyBackgroundMode(backgroundMode);
+  updateDeskClockControls();
+  updateDeskClock();
   updateTimerDisplay();
 }
 
@@ -14079,6 +14108,218 @@ document.addEventListener("visibilitychange", updateBackgroundVisibilityState);
 updateBackgroundVisibilityState();
 
 
+let deskClockFormat = localStorage.getItem(STORAGE.clockFormat) === "24" ? "24" : "12";
+let deskClockShowSeconds = localStorage.getItem(STORAGE.clockShowSeconds) !== "0";
+let deskClockShowDate = localStorage.getItem(STORAGE.clockShowDate) !== "0";
+let deskClockDeskModeActive = false;
+let deskClockWakeLock = null;
+let deskClockWakeRequested = true;
+let deskClockLastMinuteKey = "";
+
+function formatDeskClockTime(now = new Date()) {
+  const hour24 = now.getHours();
+  const minute = String(now.getMinutes()).padStart(2, "0");
+  const second = String(now.getSeconds()).padStart(2, "0");
+
+  if (deskClockFormat === "24") {
+    return {
+      main: `${String(hour24).padStart(2, "0")}:${minute}`,
+      seconds: second,
+      period: ""
+    };
+  }
+
+  return {
+    main: `${hour24 % 12 || 12}:${minute}`,
+    seconds: second,
+    period: hour24 >= 12 ? "PM" : "AM"
+  };
+}
+
+function updateDeskClockBurnInShift(now = new Date()) {
+  if (!deskClockDeskModeActive) return;
+  const minuteKey = `${now.getHours()}:${now.getMinutes()}`;
+  if (minuteKey === deskClockLastMinuteKey) return;
+  deskClockLastMinuteKey = minuteKey;
+
+  const shifts = [
+    [-4, -3], [0, -4], [4, -3],
+    [-5, 0], [0, 0], [5, 0],
+    [-4, 3], [0, 4], [4, 3]
+  ];
+  const [x, y] = shifts[(now.getHours() * 60 + now.getMinutes()) % shifts.length];
+  document.documentElement.style.setProperty("--desk-clock-shift-x", `${x}px`);
+  document.documentElement.style.setProperty("--desk-clock-shift-y", `${y}px`);
+}
+
+function updateDeskClock() {
+  if (!$("deskClockHoursMinutes")) return;
+
+  const now = new Date();
+  const value = formatDeskClockTime(now);
+  $("deskClockHoursMinutes").textContent = value.main;
+  $("deskClockSeconds").textContent = value.seconds;
+  $("deskClockPeriod").textContent = value.period;
+  $("deskClockSeconds").hidden = !deskClockShowSeconds;
+  $("deskClockPeriod").hidden = deskClockFormat === "24";
+  $("deskClockDate").hidden = !deskClockShowDate;
+  $("deskClockDate").textContent = now.toLocaleDateString("en-PH", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+
+  updateDeskClockBurnInShift(now);
+}
+
+function updateDeskClockControls() {
+  document.querySelectorAll("[data-clock-format]").forEach((button) => {
+    const active = button.dataset.clockFormat === deskClockFormat;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  $("deskClockSecondsToggle").checked = deskClockShowSeconds;
+  $("deskClockDateToggle").checked = deskClockShowDate;
+
+  const wakeButton = $("deskClockWakeButton");
+  const supported = "wakeLock" in navigator;
+  wakeButton.disabled = !supported;
+  wakeButton.classList.toggle("active", Boolean(deskClockWakeLock));
+  wakeButton.innerHTML = supported
+    ? `${deskClockWakeLock ? "☀" : "○"} <span>${deskClockWakeLock ? "Awake" : "Keep awake"}</span>`
+    : `○ <span>Wake lock unavailable</span>`;
+}
+
+async function releaseDeskClockWakeLock() {
+  if (!deskClockWakeLock) return;
+  const lock = deskClockWakeLock;
+  deskClockWakeLock = null;
+  try {
+    await lock.release();
+  } catch (error) {
+    // The browser may already have released it.
+  }
+  updateDeskClockControls();
+}
+
+async function requestDeskClockWakeLock({ notify = false } = {}) {
+  deskClockWakeRequested = true;
+
+  if (!("wakeLock" in navigator)) {
+    updateDeskClockControls();
+    if (notify) showToast("Screen Wake Lock is unavailable in this browser");
+    return false;
+  }
+
+  if (document.visibilityState !== "visible") return false;
+
+  try {
+    await releaseDeskClockWakeLock();
+    deskClockWakeLock = await navigator.wakeLock.request("screen");
+    deskClockWakeLock.addEventListener("release", () => {
+      deskClockWakeLock = null;
+      updateDeskClockControls();
+    });
+    updateDeskClockControls();
+    if (notify) showToast("Screen will stay awake while Desk mode is active");
+    return true;
+  } catch (error) {
+    deskClockWakeLock = null;
+    updateDeskClockControls();
+    if (notify) showToast("Edge did not allow Screen Wake Lock");
+    return false;
+  }
+}
+
+function setDeskClockFormat(format) {
+  deskClockFormat = format === "24" ? "24" : "12";
+  localStorage.setItem(STORAGE.clockFormat, deskClockFormat);
+  updateDeskClockControls();
+  updateDeskClock();
+}
+
+function setDeskClockShowSeconds(show) {
+  deskClockShowSeconds = Boolean(show);
+  localStorage.setItem(STORAGE.clockShowSeconds, deskClockShowSeconds ? "1" : "0");
+  updateDeskClock();
+}
+
+function setDeskClockShowDate(show) {
+  deskClockShowDate = Boolean(show);
+  localStorage.setItem(STORAGE.clockShowDate, deskClockShowDate ? "1" : "0");
+  updateDeskClock();
+}
+
+async function enterDeskClockMode() {
+  if (deskClockDeskModeActive) return;
+
+  openApp("clock");
+  deskClockDeskModeActive = true;
+  deskClockWakeRequested = true;
+  document.documentElement.classList.add("desk-clock-mode");
+  document.body.classList.add("desk-clock-mode");
+  $("activeAppLabel").textContent = "Desk Clock";
+  updateDeskClock();
+  updateDeskClockControls();
+
+  await requestDeskClockWakeLock();
+
+  if (!isFullscreenActive()) {
+    await enterBoxFullscreen();
+  }
+}
+
+async function exitDeskClockMode({ exitFullscreen = true } = {}) {
+  if (!deskClockDeskModeActive) return;
+
+  deskClockDeskModeActive = false;
+  deskClockWakeRequested = false;
+  document.documentElement.classList.remove("desk-clock-mode");
+  document.body.classList.remove("desk-clock-mode");
+  document.documentElement.style.removeProperty("--desk-clock-shift-x");
+  document.documentElement.style.removeProperty("--desk-clock-shift-y");
+  deskClockLastMinuteKey = "";
+  await releaseDeskClockWakeLock();
+
+  if (exitFullscreen && isFullscreenActive()) {
+    await exitBoxFullscreen();
+  }
+
+  $("activeAppLabel").textContent = "Desk Clock";
+}
+
+async function toggleDeskClockWakeLock() {
+  if (!("wakeLock" in navigator)) {
+    showToast("Screen Wake Lock is unavailable in this browser");
+    return;
+  }
+
+  if (deskClockWakeLock) {
+    deskClockWakeRequested = false;
+    await releaseDeskClockWakeLock();
+    showToast("Screen Wake Lock turned off");
+    return;
+  }
+
+  deskClockWakeRequested = true;
+  await requestDeskClockWakeLock({ notify: true });
+}
+
+function handleDeskClockVisibilityChange() {
+  if (
+    deskClockDeskModeActive &&
+    deskClockWakeRequested &&
+    document.visibilityState === "visible" &&
+    !deskClockWakeLock
+  ) {
+    requestDeskClockWakeLock();
+  }
+}
+
+document.addEventListener("visibilitychange", handleDeskClockVisibilityChange);
+
 function setTimer(minutes) {
   clearInterval(timerInterval);
   timerInterval = null;
@@ -14589,6 +14830,22 @@ $("fullscreenFallbackExitButton").addEventListener("click", exitBoxFullscreen);
 
 document.addEventListener("fullscreenchange", handleFullscreenChange);
 document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+
+document.querySelectorAll("[data-clock-format]").forEach((button) => {
+  button.addEventListener("click", () => setDeskClockFormat(button.dataset.clockFormat));
+});
+
+$("deskClockSecondsToggle").addEventListener("change", (event) => {
+  setDeskClockShowSeconds(event.currentTarget.checked);
+});
+
+$("deskClockDateToggle").addEventListener("change", (event) => {
+  setDeskClockShowDate(event.currentTarget.checked);
+});
+
+$("deskClockDeskModeButton").addEventListener("click", enterDeskClockMode);
+$("deskClockExitButton").addEventListener("click", () => exitDeskClockMode());
+$("deskClockWakeButton").addEventListener("click", toggleDeskClockWakeLock);
 
 $("themeButton").addEventListener("click", () => {
   document.body.classList.toggle("light-theme");
@@ -15657,6 +15914,8 @@ ensureScheduledRoutineTasks({ silent: true });
 initializeWindowControls();
 restoreTheme();
 restoreBackgroundMode();
+updateDeskClockControls();
+updateDeskClock();
 updateFullscreenUi();
 updateClock();
 setInterval(updateClock, 1000);

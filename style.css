@@ -22829,3 +22829,334 @@ html.box-fallback-fullscreen .live-background {
     grid-template-columns: 46px 1fr;
   }
 }
+
+
+/* ==========================================================================
+   Phase 7O.16 — Fullscreen Desk Clock
+   ========================================================================== */
+
+.desk-clock-app-window {
+  --desk-clock-shift-x: 0px;
+  --desk-clock-shift-y: 0px;
+}
+
+.desk-clock-window {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background:
+    radial-gradient(ellipse at 78% 30%, rgba(174, 15, 35, .12), transparent 40%),
+    rgba(5, 3, 5, .30);
+}
+
+.desk-clock-stage {
+  display: grid;
+  flex: 1 1 auto;
+  place-content: center;
+  min-height: 0;
+  padding: 30px;
+  text-align: center;
+  transform: translate(var(--desk-clock-shift-x, 0px), var(--desk-clock-shift-y, 0px));
+  transition: transform 1.2s ease;
+}
+
+.desk-clock-time-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: clamp(8px, 1.2vw, 20px);
+  min-width: 0;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.desk-clock-hours-minutes {
+  color: var(--text);
+  font-size: clamp(86px, 15vw, 250px);
+  font-weight: 760;
+  line-height: .86;
+  letter-spacing: -.075em;
+  text-shadow: 0 0 42px rgba(255, 50, 68, .08);
+  white-space: nowrap;
+}
+
+.desk-clock-seconds {
+  color: var(--accent);
+  font-size: clamp(30px, 4.5vw, 72px);
+  font-weight: 720;
+  line-height: 1;
+}
+
+.desk-clock-period {
+  color: var(--text-soft);
+  font-size: clamp(18px, 2.4vw, 38px);
+  font-weight: 760;
+  letter-spacing: .08em;
+}
+
+.desk-clock-date {
+  margin-top: clamp(18px, 3vw, 34px);
+  color: var(--text-soft);
+  font-size: clamp(18px, 2vw, 31px);
+  font-weight: 550;
+}
+
+.desk-clock-status {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: clamp(10px, 1vw, 14px);
+  letter-spacing: .10em;
+  text-transform: uppercase;
+}
+
+.desk-clock-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 12px 16px 15px;
+  border-top: 1px solid var(--border);
+  background: rgba(8, 4, 6, .72);
+}
+
+.desk-clock-control-group {
+  display: flex;
+  gap: 5px;
+}
+
+.desk-clock-control-group button.active {
+  border-color: rgba(255, 83, 98, .46);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.desk-clock-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: 9px;
+}
+
+.desk-clock-switch input {
+  accent-color: var(--accent);
+}
+
+html.desk-clock-mode .topbar,
+html.desk-clock-mode .dock,
+html.desk-clock-mode .mobile-bottom-nav,
+html.desk-clock-mode .launcher,
+html.desk-clock-mode .desktop-welcome,
+html.desk-clock-mode .desktop-sticky-notes {
+  display: none !important;
+}
+
+html.desk-clock-mode .desktop {
+  inset: 0 !important;
+}
+
+html.desk-clock-mode .app-window:not([data-app-window="clock"]) {
+  display: none !important;
+}
+
+html.desk-clock-mode .app-window[data-app-window="clock"] {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9500 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  visibility: visible !important;
+}
+
+html.desk-clock-mode .app-window[data-app-window="clock"] > .window-titlebar,
+html.desk-clock-mode .desk-clock-controls {
+  display: none !important;
+}
+
+html.desk-clock-mode .desk-clock-window,
+html.desk-clock-mode .desk-clock-stage {
+  width: 100%;
+  height: 100%;
+}
+
+html.desk-clock-mode .desk-clock-window {
+  background: transparent !important;
+}
+
+html.desk-clock-mode .desk-clock-stage {
+  padding: clamp(24px, 5vw, 80px);
+}
+
+html.desk-clock-mode .desk-clock-hours-minutes {
+  font-size: clamp(118px, 23vw, 430px);
+  line-height: .82;
+}
+
+html.desk-clock-mode .desk-clock-seconds {
+  font-size: clamp(40px, 6vw, 112px);
+}
+
+html.desk-clock-mode .desk-clock-period {
+  font-size: clamp(23px, 3.3vw, 62px);
+}
+
+html.desk-clock-mode .desk-clock-date {
+  margin-top: clamp(22px, 4vw, 52px);
+  font-size: clamp(22px, 3vw, 50px);
+}
+
+html.desk-clock-mode .desk-clock-status {
+  display: none;
+}
+
+.desk-clock-mode-toolbar {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 10050;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  opacity: .18;
+  transition: opacity .2s ease;
+}
+
+html.desk-clock-mode .desk-clock-mode-toolbar {
+  display: flex;
+}
+
+.desk-clock-mode-toolbar:hover,
+.desk-clock-mode-toolbar:focus-within {
+  opacity: 1;
+}
+
+.desk-clock-mode-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 11px;
+  background: rgba(8, 4, 6, .72);
+  color: rgba(255,255,255,.72);
+  backdrop-filter: blur(12px);
+}
+
+.desk-clock-mode-toolbar button.active {
+  color: var(--accent);
+  border-color: rgba(255,83,98,.30);
+}
+
+.desk-clock-mode-toolbar button:disabled {
+  opacity: .45;
+}
+
+.desk-clock-mode-toolbar span {
+  font-size: 8px;
+  font-weight: 700;
+}
+
+html.desk-clock-mode body:not(.light-theme) .live-background {
+  filter: brightness(.62) saturate(.82);
+}
+
+html.desk-clock-mode body:not(.light-theme) .crimson-nebula-stars {
+  opacity: .15;
+}
+
+html.desk-clock-mode body:not(.light-theme) .crimson-nebula-primary {
+  opacity: .58;
+}
+
+html.desk-clock-mode body:not(.light-theme) .crimson-nebula-secondary {
+  opacity: .32;
+}
+
+body.light-theme .desk-clock-window {
+  background: #070709;
+}
+
+body.light-theme .desk-clock-hours-minutes {
+  color: #f8f8fa;
+}
+
+body.light-theme .desk-clock-date,
+body.light-theme .desk-clock-period {
+  color: #b8bac2;
+}
+
+html.desk-clock-mode body.light-theme .live-background {
+  opacity: 1 !important;
+  background: #050305;
+}
+
+html.tablet-ui .desk-clock-controls,
+html.performance-ui .desk-clock-controls {
+  flex-wrap: wrap;
+}
+
+html.tablet-ui .desk-clock-controls button,
+html.tablet-ui .desk-clock-switch,
+html.performance-ui .desk-clock-controls button,
+html.performance-ui .desk-clock-switch {
+  min-height: 44px;
+}
+
+@media (max-width: 680px) {
+  .desk-clock-stage {
+    padding: 22px 14px;
+  }
+
+  .desk-clock-hours-minutes {
+    font-size: clamp(66px, 22vw, 116px);
+  }
+
+  .desk-clock-seconds {
+    font-size: clamp(22px, 7vw, 38px);
+  }
+
+  .desk-clock-period {
+    font-size: clamp(14px, 4vw, 22px);
+  }
+
+  .desk-clock-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .desk-clock-control-group {
+    grid-column: 1 / -1;
+  }
+
+  .desk-clock-desk-mode-button {
+    grid-column: 1 / -1;
+  }
+
+  html.desk-clock-mode .desk-clock-hours-minutes {
+    font-size: clamp(84px, 28vw, 160px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desk-clock-stage {
+    transition: none;
+    transform: none !important;
+  }
+}

@@ -72,7 +72,7 @@
     })();
   </script>
 <link href="manifest.json" rel="manifest"/>
-<link href="style.css?v=7o15" rel="stylesheet"/>
+<link href="style.css?v=7o16" rel="stylesheet"/>
 </head>
 <body>
 <div class="desktop-shell">
@@ -235,6 +235,11 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 
 
 
+<button class="app-tile clock-app-tile" data-open-app="clock">
+<span class="app-icon">◷</span>
+<strong>Desk Clock</strong>
+<small>Fullscreen digital clock</small>
+</button>
 <button class="app-tile" data-open-app="focus">
 <span class="app-icon">◉</span>
 <strong>Focus</strong>
@@ -2200,6 +2205,42 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 <p class="empty-state" id="emptyFinance">No finance entries yet.</p>
 </div>
 </article>
+<article class="app-window desk-clock-app-window" data-app-window="clock" style="--x: 14%; --y: 9%; --w: 72%; --h: 76%;">
+<div class="window-titlebar">
+<div class="window-title"><span>◷</span><strong>Desk Clock</strong></div>
+<div class="window-controls">
+<button class="window-button minimize-button">—</button>
+<button class="window-button maximize-button">□</button>
+<button class="window-button close-button">✕</button>
+</div>
+</div>
+<div class="window-content desk-clock-window">
+<section class="desk-clock-stage" aria-live="off">
+<div class="desk-clock-time-row">
+<span class="desk-clock-hours-minutes" id="deskClockHoursMinutes">5:02</span>
+<span class="desk-clock-seconds" id="deskClockSeconds">00</span>
+<span class="desk-clock-period" id="deskClockPeriod">PM</span>
+</div>
+<div class="desk-clock-date" id="deskClockDate">Sunday, October 11, 2026</div>
+<div class="desk-clock-status" id="deskClockStatus">Local device time</div>
+</section>
+<div class="desk-clock-controls">
+<div class="desk-clock-control-group">
+<button class="secondary-button active" data-clock-format="12" id="deskClock12HourButton" type="button">12-hour</button>
+<button class="secondary-button" data-clock-format="24" id="deskClock24HourButton" type="button">24-hour</button>
+</div>
+<label class="desk-clock-switch">
+<input checked id="deskClockSecondsToggle" type="checkbox"/>
+<span>Show seconds</span>
+</label>
+<label class="desk-clock-switch">
+<input checked id="deskClockDateToggle" type="checkbox"/>
+<span>Show date</span>
+</label>
+<button class="primary-button desk-clock-desk-mode-button" id="deskClockDeskModeButton" type="button">⛶ Desk mode</button>
+</div>
+</div>
+</article>
 <article class="app-window" data-app-window="focus" style="--x: 33%; --y: 15%; --w: 38%; --h: 58%;">
 <div class="window-titlebar">
 <div class="window-title"><span>◉</span><strong>Focus</strong></div>
@@ -3573,10 +3614,14 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
       </p>
 </section>
 </div>
+<div class="desk-clock-mode-toolbar" id="deskClockModeToolbar" aria-label="Desk clock controls">
+<button id="deskClockWakeButton" type="button" title="Keep screen awake">☀ <span>Awake</span></button>
+<button id="deskClockExitButton" type="button" title="Exit desk mode">✕ <span>Exit</span></button>
+</div>
 <div aria-live="polite" id="toast" role="status"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="cloud.js"></script>
-<script src="app.js?v=7o15"></script>
+<script src="app.js?v=7o16"></script>
 </body>
 </html>

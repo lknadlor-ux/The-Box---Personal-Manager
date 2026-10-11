@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o15-live-crimson-nebula";
+const CACHE_NAME = "the-box-os-phase-7o16-desk-clock";
 
 const APP_FILES = [
   "./",
