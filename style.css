@@ -23391,3 +23391,751 @@ html.desk-clock-mode .desk-clock-seconds[hidden] + .desk-clock-period {
     opacity: .58;
   }
 }
+
+
+/* ==========================================================================
+   Phase 7O.17 — Memory Frame Desktop Widget
+   ========================================================================== */
+
+/* Desktop layer ----------------------------------------------------------- */
+.memory-frame-desktop-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.memory-frame-desktop-layer[hidden] {
+  display: none !important;
+}
+
+.memory-frame-widget {
+  position: absolute;
+  display: grid;
+  grid-template-rows: 1fr;
+  min-width: 250px;
+  min-height: 165px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 77, 91, .24);
+  border-radius: 18px;
+  background: rgba(8, 4, 6, .86);
+  box-shadow:
+    0 22px 54px rgba(0,0,0,.34),
+    0 0 0 1px rgba(255,255,255,.015) inset;
+  pointer-events: auto;
+  isolation: isolate;
+  transition:
+    border-color .18s ease,
+    box-shadow .18s ease;
+}
+
+.memory-frame-widget:hover,
+.memory-frame-widget.moving,
+.memory-frame-widget.resizing {
+  border-color: rgba(255, 76, 91, .48);
+  box-shadow:
+    0 26px 66px rgba(0,0,0,.42),
+    0 0 34px rgba(169, 10, 35, .08);
+}
+
+.memory-frame-media {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 75% 24%, rgba(168,15,35,.15), transparent 38%),
+    #090507;
+}
+
+.memory-frame-media > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  object-position: center;
+  transition: opacity .65s ease;
+}
+
+.memory-frame-media > img.active {
+  opacity: 1;
+}
+
+.memory-frame-widget.no-photo-transition .memory-frame-media > img {
+  transition: none !important;
+}
+
+/* Theme styles ------------------------------------------------------------ */
+.memory-frame-widget[data-frame-style="frame"] {
+  padding: 8px;
+  background:
+    linear-gradient(145deg, rgba(255,72,88,.055), transparent 42%),
+    rgba(8,4,6,.91);
+}
+
+.memory-frame-widget[data-frame-style="frame"] .memory-frame-media {
+  inset: 8px;
+  border-radius: 12px;
+}
+
+.memory-frame-widget[data-frame-style="cinematic"] {
+  border-color: rgba(255, 71, 86, .18);
+  border-radius: 15px;
+  background: #050304;
+}
+
+.memory-frame-widget[data-frame-style="cinematic"] .memory-frame-media {
+  inset: 0;
+}
+
+.memory-frame-widget[data-frame-style="polaroid"] {
+  padding: 9px 9px 42px;
+  border-color: rgba(255, 94, 105, .20);
+  background:
+    linear-gradient(180deg, rgba(24,12,16,.98), rgba(11,6,8,.98));
+}
+
+.memory-frame-widget[data-frame-style="polaroid"] .memory-frame-media {
+  inset: 9px 9px 42px;
+  border-radius: 10px;
+}
+
+.memory-frame-widget-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  left: 8px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  opacity: .18;
+  transition: opacity .18s ease;
+}
+
+.memory-frame-widget:hover .memory-frame-widget-toolbar,
+.memory-frame-widget:focus-within .memory-frame-widget-toolbar,
+.memory-frame-widget.moving .memory-frame-widget-toolbar,
+.memory-frame-widget.resizing .memory-frame-widget-toolbar,
+.memory-frame-widget.locked .memory-frame-widget-toolbar {
+  opacity: .92;
+}
+
+.memory-frame-drag-handle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 10px;
+  background: rgba(6,3,5,.68);
+  color: rgba(239,233,239,.82);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  backdrop-filter: blur(12px);
+}
+
+.memory-frame-widget.moving .memory-frame-drag-handle {
+  cursor: grabbing;
+}
+
+.memory-frame-widget.locked .memory-frame-drag-handle {
+  cursor: default;
+}
+
+.memory-frame-drag-grip {
+  color: rgba(255,81,96,.75);
+  font-size: 12px;
+  letter-spacing: -4px;
+  transform: rotate(90deg);
+}
+
+.memory-frame-drag-handle strong {
+  overflow: hidden;
+  font-size: 8.5px;
+  font-weight: 730;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.memory-frame-widget-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.memory-frame-widget-actions button,
+.memory-frame-playback button {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  width: 32px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 10px;
+  background: rgba(6,3,5,.70);
+  color: rgba(239,233,239,.85);
+  backdrop-filter: blur(12px);
+}
+
+.memory-frame-widget-actions button:hover,
+.memory-frame-playback button:hover,
+.memory-frame-widget-actions button:focus-visible,
+.memory-frame-playback button:focus-visible {
+  border-color: rgba(255,72,88,.34);
+  color: var(--accent);
+}
+
+.memory-frame-playback {
+  position: absolute;
+  right: 50%;
+  bottom: 9px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255,255,255,.065);
+  border-radius: 12px;
+  background: rgba(6,3,5,.67);
+  opacity: .16;
+  transform: translateX(50%);
+  transition: opacity .18s ease;
+  backdrop-filter: blur(12px);
+}
+
+.memory-frame-widget:hover .memory-frame-playback,
+.memory-frame-widget:focus-within .memory-frame-playback {
+  opacity: .94;
+}
+
+.memory-frame-playback span {
+  min-width: 42px;
+  padding: 0 4px;
+  color: rgba(231,224,232,.66);
+  font-size: 7.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.memory-frame-widget-caption {
+  position: absolute;
+  right: 10px;
+  bottom: 48px;
+  left: 10px;
+  z-index: 4;
+  padding: 34px 12px 10px;
+  overflow: hidden;
+  color: rgba(248,244,248,.92);
+  background: linear-gradient(transparent, rgba(0,0,0,.72));
+  font-size: 10px;
+  font-weight: 570;
+  line-height: 1.35;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-frame-widget[data-frame-style="polaroid"] .memory-frame-widget-caption {
+  right: 12px;
+  bottom: 10px;
+  left: 12px;
+  padding: 0;
+  color: rgba(232,224,232,.76);
+  background: transparent;
+  text-align: center;
+}
+
+.memory-frame-widget-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  padding: 24px;
+  color: var(--text-muted);
+  background:
+    radial-gradient(circle at 78% 22%, rgba(172,14,35,.12), transparent 38%),
+    #090507;
+  text-align: center;
+}
+
+.memory-frame-widget-placeholder strong {
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.memory-frame-widget-placeholder span {
+  max-width: 260px;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.memory-frame-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  display: grid;
+  place-items: end;
+  width: 34px;
+  height: 34px;
+  padding: 0 5px 4px 0;
+  color: rgba(255,80,95,.58);
+  cursor: nwse-resize;
+  font-size: 11px;
+  line-height: 1;
+  touch-action: none;
+  user-select: none;
+}
+
+.memory-frame-widget.locked .memory-frame-resize-handle {
+  display: none;
+}
+
+html.memory-frame-layout-active,
+html.memory-frame-layout-active body {
+  overflow: hidden;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* Manager --------------------------------------------------------------- */
+.memory-frame-window {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto !important;
+}
+
+.memory-frame-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 20px;
+  border: 1px solid rgba(255,75,90,.14);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 88% 20%, rgba(170,15,35,.14), transparent 38%),
+    var(--surface-soft);
+}
+
+.memory-frame-hero > div:first-child {
+  min-width: 0;
+}
+
+.memory-frame-hero small,
+.memory-frame-section-heading small,
+.memory-frame-library-heading small {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 820;
+  letter-spacing: .11em;
+}
+
+.memory-frame-hero h2 {
+  margin: 5px 0 6px;
+  font-size: clamp(20px, 2.3vw, 30px);
+}
+
+.memory-frame-hero p {
+  max-width: 650px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.memory-frame-hero-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.memory-frame-enabled-switch,
+.memory-frame-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-solid);
+  color: var(--text-soft);
+  font-size: 9px;
+}
+
+.memory-frame-enabled-switch input,
+.memory-frame-check input {
+  width: 17px;
+  height: 17px;
+  min-height: auto;
+  accent-color: var(--accent);
+}
+
+.memory-frame-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  cursor: pointer;
+}
+
+.memory-frame-manager-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(270px, .7fr);
+  gap: 12px;
+}
+
+.memory-frame-settings-card,
+.memory-frame-preview-card {
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.memory-frame-section-heading,
+.memory-frame-library-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.memory-frame-section-heading strong,
+.memory-frame-library-heading h3 {
+  display: block;
+  margin: 3px 0 0;
+  font-size: 13px;
+}
+
+.memory-frame-section-heading > span,
+.memory-frame-library-heading > span,
+.memory-frame-local-badge {
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+.memory-frame-local-badge {
+  padding: 4px 7px;
+  border: 1px solid rgba(255,75,90,.17);
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.memory-frame-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.memory-frame-settings-grid label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 8px;
+}
+
+.memory-frame-settings-grid select {
+  width: 100%;
+}
+
+.memory-frame-option-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.memory-frame-settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.memory-frame-storage-note {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.memory-frame-preview-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.memory-frame-preview-demo {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  align-items: center;
+  gap: 11px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-solid);
+}
+
+.memory-frame-preview-demo strong {
+  display: block;
+  font-size: 9px;
+}
+
+.memory-frame-preview-demo p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.memory-frame-preview-image {
+  width: 78px;
+  height: 50px;
+  border: 1px solid rgba(255,78,92,.25);
+  border-radius: 9px;
+  background:
+    radial-gradient(ellipse at 72% 34%, rgba(255,45,61,.58), transparent 38%),
+    radial-gradient(ellipse at 20% 78%, rgba(105,6,23,.72), transparent 45%),
+    #080406;
+  box-shadow: 0 8px 24px rgba(0,0,0,.24);
+}
+
+.memory-frame-preview-controls {
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 38px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 10px;
+  color: rgba(239,233,239,.78);
+  background: #0b0709;
+  font-size: 15px;
+  letter-spacing: 8px;
+}
+
+.memory-frame-library-section {
+  min-height: 180px;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.memory-frame-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 9px;
+}
+
+.memory-frame-photo-card {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface-solid);
+}
+
+.memory-frame-photo-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 120px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background:
+    radial-gradient(circle at 75% 25%, rgba(174,15,35,.17), transparent 42%),
+    #090507;
+}
+
+.memory-frame-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.memory-frame-photo-thumb span {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 4px 7px;
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 8px;
+  background: rgba(5,3,4,.72);
+  color: rgba(245,240,245,.85);
+  font-size: 7px;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+
+.memory-frame-photo-thumb:hover span,
+.memory-frame-photo-thumb:focus-visible span {
+  opacity: 1;
+}
+
+.memory-frame-photo-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  padding: 9px;
+}
+
+.memory-frame-photo-card-body strong {
+  overflow: hidden;
+  font-size: 8.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-frame-photo-card-body small {
+  color: var(--text-muted);
+  font-size: 7px;
+}
+
+.memory-frame-photo-card-body input {
+  grid-column: 1 / -1;
+  min-height: 35px;
+  margin-top: 4px;
+  font-size: 9px;
+}
+
+.memory-frame-photo-delete {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  width: 29px;
+  min-width: 29px;
+  height: 29px;
+  min-height: 29px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: 9px;
+  background: rgba(7,4,5,.76);
+  color: rgba(235,228,235,.76);
+  opacity: .32;
+}
+
+.memory-frame-photo-card:hover .memory-frame-photo-delete,
+.memory-frame-photo-delete:focus-visible {
+  opacity: 1;
+  color: var(--danger);
+}
+
+.memory-frame-photo-card.missing-photo .memory-frame-photo-thumb::after {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: 12px;
+  color: var(--text-muted);
+  background: #090507;
+  content: "Photo unavailable";
+  font-size: 8px;
+  text-align: center;
+}
+
+/* Touch / tablet ---------------------------------------------------------- */
+html.touch-ui .memory-frame-widget-toolbar,
+html.touch-ui .memory-frame-playback {
+  opacity: .58;
+}
+
+html.performance-ui .memory-frame-widget,
+html.performance-ui .memory-frame-drag-handle,
+html.performance-ui .memory-frame-widget-actions button,
+html.performance-ui .memory-frame-playback,
+html.performance-ui .memory-frame-playback button {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+html.performance-ui .memory-frame-drag-handle,
+html.performance-ui .memory-frame-widget-actions button,
+html.performance-ui .memory-frame-playback,
+html.performance-ui .memory-frame-playback button {
+  background: rgba(8,4,6,.88);
+}
+
+html.phone-ui .memory-frame-desktop-layer {
+  display: none !important;
+}
+
+/* Desk Clock owns the screen when active. */
+html.desk-clock-mode .memory-frame-desktop-layer {
+  display: none !important;
+}
+
+/* Light mode keeps photos natural but uses a clean neutral frame. */
+body.light-theme .memory-frame-widget {
+  border-color: rgba(84,88,100,.22);
+  background: rgba(249,249,252,.92);
+}
+
+body.light-theme .memory-frame-widget[data-frame-style="polaroid"] {
+  background: linear-gradient(180deg, #fbfbfd, #ededf2);
+}
+
+@media (max-width: 980px) {
+  .memory-frame-manager-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .memory-frame-settings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .memory-frame-hero {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 15px;
+  }
+
+  .memory-frame-hero-actions {
+    justify-content: stretch;
+  }
+
+  .memory-frame-hero-actions > * {
+    flex: 1 1 100%;
+  }
+
+  .memory-frame-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .memory-frame-photo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memory-frame-media > img,
+  .memory-frame-widget-toolbar,
+  .memory-frame-playback {
+    transition: none !important;
+  }
+}

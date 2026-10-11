@@ -158,6 +158,9 @@ function setViewModePreference(mode, { notify = true } = {}) {
   if (typeof renderDesktopStickyNotes === "function") {
     renderDesktopStickyNotes();
   }
+  if (typeof renderMemoryFrameDesktop === "function") {
+    renderMemoryFrameDesktop();
+  }
 
   if (notify && typeof showToast === "function") {
     const labels = {
@@ -218,6 +221,7 @@ const STORAGE = {
   clockFormat: "theBoxOSClockFormat",
   clockShowSeconds: "theBoxOSClockShowSeconds",
   clockShowDate: "theBoxOSClockShowDate",
+  memoryFrameConfig: "theBoxOSMemoryFrameConfig",
   timerMinutes: "theBoxOS4TimerMinutes",
   focusTotal: "theBoxOS4FocusTotal",
   windowLayouts: "theBoxOSWindowLayouts",
@@ -1383,6 +1387,1185 @@ function getSelectedNoteLinesForTasks() {
 }
 
 
+// ============================================================================
+// Phase 7O.17 — Memory Frame Desktop Widget
+// Photos are stored as Blobs in IndexedDB. Only the active slideshow image is
+// kept as a full-size object URL, avoiding repeated base64/localStorage writes.
+// ============================================================================
+
+const MEMORY_FRAME_DB_NAME = "theBoxOSMemoryFrame";
+const MEMORY_FRAME_DB_VERSION = 1;
+const MEMORY_FRAME_STORE = "photos";
+const MEMORY_FRAME_MAX_PHOTOS = 40;
+const MEMORY_FRAME_MAX_FILE_SIZE = 15 * 1024 * 1024;
+const MEMORY_FRAME_INTERVALS = new Set([5, 8, 10, 15, 30, 60]);
+const MEMORY_FRAME_STYLES = new Set(["frame", "cinematic", "polaroid"]);
+const MEMORY_FRAME_FITS = new Set(["cover", "contain"]);
+
+let memoryFrameDbPromise = null;
+let memoryFrameCurrentIndex = 0;
+let memoryFramePaused = false;
+let memoryFrameSlideTimer = null;
+let memoryFrameActiveImageLayer = 0;
+let memoryFrameImageObjectUrls = [null, null];
+let memoryFrameCurrentPhotoId = null;
+let memoryFrameRequestedPhotoId = null;
+let memoryFrameImageLoadToken = 0;
+let memoryFrameManagerRenderToken = 0;
+
+function createMemoryFramePhotoId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `memory-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeMemoryFramePhotoMeta(value = {}) {
+  return {
+    id: String(value.id || createMemoryFramePhotoId()),
+    name: String(value.name || "Photo").slice(0, 180),
+    caption: String(value.caption || "").slice(0, 180),
+    type: String(value.type || "image/jpeg").slice(0, 80),
+    size: Math.max(0, Number(value.size) || 0),
+    createdAt: value.createdAt || new Date().toISOString()
+  };
+}
+
+function normalizeMemoryFrameLayout(value = {}) {
+  const finiteOrNull = (input) => {
+    const number = Number(input);
+    return Number.isFinite(number) ? number : null;
+  };
+
+  return {
+    x: finiteOrNull(value.x),
+    y: finiteOrNull(value.y),
+    width: finiteOrNull(value.width),
+    height: finiteOrNull(value.height),
+    locked: Boolean(value.locked)
+  };
+}
+
+function normalizeMemoryFrameConfig(value = {}) {
+  const photos = Array.isArray(value.photos)
+    ? value.photos
+        .map(normalizeMemoryFramePhotoMeta)
+        .filter((photo, index, array) =>
+          photo.id && array.findIndex((item) => item.id === photo.id) === index
+        )
+        .slice(0, MEMORY_FRAME_MAX_PHOTOS)
+    : [];
+
+  const layouts = {};
+  const sourceLayouts =
+    value.layouts && typeof value.layouts === "object" && !Array.isArray(value.layouts)
+      ? value.layouts
+      : {};
+
+  ["windows", "tablet", "mobile"].forEach((mode) => {
+    if (sourceLayouts[mode] && typeof sourceLayouts[mode] === "object") {
+      layouts[mode] = normalizeMemoryFrameLayout(sourceLayouts[mode]);
+    }
+  });
+
+  const interval = Number(value.interval);
+
+  return {
+    enabled: Boolean(value.enabled),
+    interval: MEMORY_FRAME_INTERVALS.has(interval) ? interval : 10,
+    shuffle: Boolean(value.shuffle),
+    fit: MEMORY_FRAME_FITS.has(value.fit) ? value.fit : "cover",
+    style: MEMORY_FRAME_STYLES.has(value.style) ? value.style : "frame",
+    showCaption: value.showCaption !== false,
+    photos,
+    layouts
+  };
+}
+
+let memoryFrameConfig = normalizeMemoryFrameConfig(
+  loadJSON(STORAGE.memoryFrameConfig, {})
+);
+
+function saveMemoryFrameConfig() {
+  localStorage.setItem(
+    STORAGE.memoryFrameConfig,
+    JSON.stringify(memoryFrameConfig)
+  );
+}
+
+function openMemoryFrameDb() {
+  if (memoryFrameDbPromise) return memoryFrameDbPromise;
+
+  memoryFrameDbPromise = new Promise((resolve, reject) => {
+    if (!("indexedDB" in window)) {
+      reject(new Error("IndexedDB is unavailable in this browser."));
+      return;
+    }
+
+    const request = indexedDB.open(
+      MEMORY_FRAME_DB_NAME,
+      MEMORY_FRAME_DB_VERSION
+    );
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(MEMORY_FRAME_STORE)) {
+        db.createObjectStore(MEMORY_FRAME_STORE, { keyPath: "id" });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () =>
+      reject(request.error || new Error("Could not open photo storage."));
+  });
+
+  return memoryFrameDbPromise;
+}
+
+function waitForMemoryFrameTransaction(transaction) {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () =>
+      reject(transaction.error || new Error("Photo storage operation failed."));
+    transaction.onabort = () =>
+      reject(transaction.error || new Error("Photo storage operation was cancelled."));
+  });
+}
+
+async function putMemoryFramePhotoRecord(record) {
+  const db = await openMemoryFrameDb();
+  const transaction = db.transaction(MEMORY_FRAME_STORE, "readwrite");
+  transaction.objectStore(MEMORY_FRAME_STORE).put(record);
+  await waitForMemoryFrameTransaction(transaction);
+}
+
+async function getMemoryFramePhotoRecord(photoId) {
+  const db = await openMemoryFrameDb();
+
+  return new Promise((resolve, reject) => {
+    const request = db
+      .transaction(MEMORY_FRAME_STORE, "readonly")
+      .objectStore(MEMORY_FRAME_STORE)
+      .get(photoId);
+
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () =>
+      reject(request.error || new Error("Could not read this photo."));
+  });
+}
+
+async function deleteMemoryFramePhotoRecord(photoId) {
+  const db = await openMemoryFrameDb();
+  const transaction = db.transaction(MEMORY_FRAME_STORE, "readwrite");
+  transaction.objectStore(MEMORY_FRAME_STORE).delete(photoId);
+  await waitForMemoryFrameTransaction(transaction);
+}
+
+async function clearMemoryFramePhotoRecords() {
+  const db = await openMemoryFrameDb();
+  const transaction = db.transaction(MEMORY_FRAME_STORE, "readwrite");
+  transaction.objectStore(MEMORY_FRAME_STORE).clear();
+  await waitForMemoryFrameTransaction(transaction);
+}
+
+async function createMemoryFrameThumbnail(file) {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxSide = 320;
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d", { alpha: false });
+    context.fillStyle = "#090507";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+
+    return await new Promise((resolve) => {
+      canvas.toBlob(
+        (blob) => resolve(blob || null),
+        "image/jpeg",
+        0.78
+      );
+    });
+  } catch (error) {
+    return null;
+  }
+}
+
+function getMemoryFrameMode() {
+  return getEffectiveViewMode();
+}
+
+function getMemoryFrameBounds() {
+  const layer = $("memoryFrameDesktopLayer");
+  const desktop = $("desktop");
+  const source = layer || desktop;
+
+  return {
+    width: Math.max(
+      1,
+      source?.clientWidth ||
+      source?.getBoundingClientRect?.().width ||
+      1000
+    ),
+    height: Math.max(
+      1,
+      source?.clientHeight ||
+      source?.getBoundingClientRect?.().height ||
+      650
+    )
+  };
+}
+
+function getMemoryFrameSizeLimits(mode, bounds) {
+  const minWidth = Math.min(250, bounds.width);
+  const minHeight = Math.min(165, bounds.height);
+  const maxWidth = Math.max(
+    minWidth,
+    Math.min(mode === "windows" ? 760 : 560, bounds.width - 20)
+  );
+  const maxHeight = Math.max(
+    minHeight,
+    Math.min(mode === "windows" ? 560 : 430, bounds.height - 20)
+  );
+
+  return { minWidth, minHeight, maxWidth, maxHeight };
+}
+
+function getDefaultMemoryFrameLayout(mode, bounds) {
+  const limits = getMemoryFrameSizeLimits(mode, bounds);
+  const targetWidth =
+    mode === "tablet"
+      ? Math.min(360, Math.round(bounds.width * 0.43))
+      : Math.min(430, Math.round(bounds.width * 0.33));
+  const width = Math.max(limits.minWidth, Math.min(targetWidth, limits.maxWidth));
+  const height = Math.max(
+    limits.minHeight,
+    Math.min(Math.round(width * 0.66), limits.maxHeight)
+  );
+  const x = Math.max(12, bounds.width - width - (mode === "tablet" ? 22 : 34));
+  const y = Math.max(
+    76,
+    Math.min(mode === "tablet" ? 108 : 96, bounds.height - height - 76)
+  );
+
+  return {
+    x: Math.min(x, Math.max(0, bounds.width - width)),
+    y: Math.min(y, Math.max(0, bounds.height - height)),
+    width,
+    height,
+    locked: false
+  };
+}
+
+function clampMemoryFrameLayout(layout, mode, bounds) {
+  const limits = getMemoryFrameSizeLimits(mode, bounds);
+  const width = Math.max(
+    limits.minWidth,
+    Math.min(Number(layout.width) || limits.minWidth, limits.maxWidth, bounds.width)
+  );
+  const height = Math.max(
+    limits.minHeight,
+    Math.min(Number(layout.height) || limits.minHeight, limits.maxHeight, bounds.height)
+  );
+  const x = Math.max(
+    0,
+    Math.min(Number(layout.x) || 0, Math.max(0, bounds.width - width))
+  );
+  const y = Math.max(
+    0,
+    Math.min(Number(layout.y) || 0, Math.max(0, bounds.height - height))
+  );
+
+  return {
+    x,
+    y,
+    width,
+    height,
+    locked: Boolean(layout.locked)
+  };
+}
+
+function getMemoryFrameLayout(mode = getMemoryFrameMode(), bounds = getMemoryFrameBounds()) {
+  const saved = memoryFrameConfig.layouts?.[mode];
+  if (
+    !saved ||
+    saved.x === null ||
+    saved.y === null ||
+    saved.width === null ||
+    saved.height === null
+  ) {
+    return clampMemoryFrameLayout(
+      getDefaultMemoryFrameLayout(mode, bounds),
+      mode,
+      bounds
+    );
+  }
+
+  return clampMemoryFrameLayout(saved, mode, bounds);
+}
+
+function getLiveMemoryFrameLayout(widget, mode, bounds) {
+  const saved = getMemoryFrameLayout(mode, bounds);
+  if (!widget) return saved;
+
+  const layer = $("memoryFrameDesktopLayer");
+  const widgetRect = widget.getBoundingClientRect();
+  const layerRect = layer?.getBoundingClientRect();
+  const styleX = Number.parseFloat(widget.style.left);
+  const styleY = Number.parseFloat(widget.style.top);
+  const styleWidth = Number.parseFloat(widget.style.width);
+  const styleHeight = Number.parseFloat(widget.style.height);
+
+  return clampMemoryFrameLayout(
+    {
+      x: Number.isFinite(styleX)
+        ? styleX
+        : (layerRect ? widgetRect.left - layerRect.left : saved.x),
+      y: Number.isFinite(styleY)
+        ? styleY
+        : (layerRect ? widgetRect.top - layerRect.top : saved.y),
+      width: Number.isFinite(styleWidth)
+        ? styleWidth
+        : (widgetRect.width || saved.width),
+      height: Number.isFinite(styleHeight)
+        ? styleHeight
+        : (widgetRect.height || saved.height),
+      locked: saved.locked
+    },
+    mode,
+    bounds
+  );
+}
+
+function setMemoryFrameLayout(mode, layout) {
+  memoryFrameConfig.layouts = {
+    ...(memoryFrameConfig.layouts || {}),
+    [mode]: normalizeMemoryFrameLayout(layout)
+  };
+  saveMemoryFrameConfig();
+}
+
+function applyMemoryFrameLayout(widget, layout) {
+  if (!widget) return;
+  widget.style.left = `${layout.x}px`;
+  widget.style.top = `${layout.y}px`;
+  widget.style.width = `${layout.width}px`;
+  widget.style.height = `${layout.height}px`;
+  widget.classList.toggle("locked", layout.locked);
+  widget.dataset.locked = layout.locked ? "true" : "false";
+
+  const lock = widget.querySelector("[data-memory-frame-lock]");
+  if (lock) {
+    lock.textContent = layout.locked ? "🔒" : "🔓";
+    lock.title = layout.locked ? "Unlock Memory Frame" : "Lock Memory Frame";
+    lock.setAttribute("aria-label", lock.title);
+  }
+}
+
+function clearMemoryFrameSlideTimer() {
+  clearTimeout(memoryFrameSlideTimer);
+  memoryFrameSlideTimer = null;
+}
+
+function revokeMemoryFrameImageUrl(index) {
+  const url = memoryFrameImageObjectUrls[index];
+  if (url) {
+    URL.revokeObjectURL(url);
+    memoryFrameImageObjectUrls[index] = null;
+  }
+}
+
+function clearMemoryFrameWidgetImages() {
+  revokeMemoryFrameImageUrl(0);
+  revokeMemoryFrameImageUrl(1);
+  memoryFrameCurrentPhotoId = null;
+  memoryFrameRequestedPhotoId = null;
+
+  const widget = document.querySelector(".memory-frame-widget");
+  widget?.querySelectorAll("[data-memory-frame-image]").forEach((image) => {
+    image.removeAttribute("src");
+    image.classList.remove("active");
+  });
+}
+
+function updateMemoryFrameWidgetMeta() {
+  const widget = document.querySelector(".memory-frame-widget");
+  if (!widget) return;
+
+  const photos = memoryFrameConfig.photos;
+  const photo = photos[memoryFrameCurrentIndex] || null;
+  const caption = widget.querySelector("[data-memory-frame-caption]");
+  const counter = widget.querySelector("[data-memory-frame-counter]");
+  const pause = widget.querySelector("[data-memory-frame-pause]");
+
+  if (caption) {
+    caption.textContent = photo?.caption || "";
+    caption.hidden =
+      !memoryFrameConfig.showCaption ||
+      !String(photo?.caption || "").trim();
+  }
+
+  if (counter) {
+    counter.textContent = photos.length
+      ? `${memoryFrameCurrentIndex + 1} / ${photos.length}`
+      : "0 / 0";
+  }
+
+  if (pause) {
+    pause.textContent = memoryFramePaused ? "▶" : "Ⅱ";
+    pause.title = memoryFramePaused ? "Resume slideshow" : "Pause slideshow";
+    pause.setAttribute("aria-label", pause.title);
+  }
+}
+
+function getNextMemoryFrameIndex(direction = 1) {
+  const count = memoryFrameConfig.photos.length;
+  if (count <= 1) return 0;
+
+  if (memoryFrameConfig.shuffle && direction > 0) {
+    let next = memoryFrameCurrentIndex;
+    while (next === memoryFrameCurrentIndex && count > 1) {
+      next = Math.floor(Math.random() * count);
+    }
+    return next;
+  }
+
+  return (memoryFrameCurrentIndex + direction + count) % count;
+}
+
+function scheduleMemoryFrameSlide() {
+  clearMemoryFrameSlideTimer();
+
+  if (
+    !memoryFrameConfig.enabled ||
+    memoryFrameConfig.photos.length <= 1 ||
+    memoryFramePaused ||
+    document.hidden ||
+    getMemoryFrameMode() === "mobile" ||
+    document.documentElement.classList.contains("desk-clock-mode")
+  ) {
+    return;
+  }
+
+  memoryFrameSlideTimer = window.setTimeout(() => {
+    showMemoryFramePhoto(getNextMemoryFrameIndex(1), {
+      immediate: false,
+      restartTimer: true
+    });
+  }, memoryFrameConfig.interval * 1000);
+}
+
+async function waitForMemoryFrameImage(image, url) {
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const finish = (success) => {
+      if (settled) return;
+      settled = true;
+      image.removeEventListener("load", onLoad);
+      image.removeEventListener("error", onError);
+      resolve(success);
+    };
+
+    const onLoad = () => finish(true);
+    const onError = () => finish(false);
+
+    image.addEventListener("load", onLoad, { once: true });
+    image.addEventListener("error", onError, { once: true });
+    image.src = url;
+
+    if (image.complete) {
+      window.setTimeout(() => finish(image.naturalWidth > 0), 0);
+    }
+  });
+}
+
+async function showMemoryFramePhoto(
+  index,
+  { immediate = false, restartTimer = true } = {}
+) {
+  const widget = document.querySelector(".memory-frame-widget");
+  const photos = memoryFrameConfig.photos;
+
+  if (!widget || !photos.length) {
+    clearMemoryFrameWidgetImages();
+    updateMemoryFrameWidgetMeta();
+    return;
+  }
+
+  const safeIndex = Math.max(0, Math.min(Number(index) || 0, photos.length - 1));
+  const photo = photos[safeIndex];
+  const loadToken = ++memoryFrameImageLoadToken;
+  memoryFrameRequestedPhotoId = photo.id;
+  memoryFrameCurrentIndex = safeIndex;
+
+  const placeholder = widget.querySelector("[data-memory-frame-placeholder]");
+  if (placeholder) {
+    placeholder.hidden = true;
+    placeholder.textContent = "";
+  }
+
+  let record = null;
+  try {
+    record = await getMemoryFramePhotoRecord(photo.id);
+  } catch (error) {
+    record = null;
+  }
+
+  if (loadToken !== memoryFrameImageLoadToken) return;
+
+  if (!record?.blob) {
+    memoryFrameCurrentPhotoId = null;
+    if (placeholder) {
+      placeholder.hidden = false;
+      placeholder.innerHTML =
+        '<strong>Photo unavailable on this device</strong><span>Open Memory Frame to remove or re-add it.</span>';
+    }
+    updateMemoryFrameWidgetMeta();
+    if (restartTimer) scheduleMemoryFrameSlide();
+    return;
+  }
+
+  const incomingIndex = memoryFrameActiveImageLayer === 0 ? 1 : 0;
+  const outgoingIndex = memoryFrameActiveImageLayer;
+  const images = widget.querySelectorAll("[data-memory-frame-image]");
+  const incoming = images[incomingIndex];
+  const outgoing = images[outgoingIndex];
+
+  if (!incoming || !outgoing) return;
+
+  revokeMemoryFrameImageUrl(incomingIndex);
+  const url = URL.createObjectURL(record.blob);
+  memoryFrameImageObjectUrls[incomingIndex] = url;
+
+  const loaded = await waitForMemoryFrameImage(incoming, url);
+
+  if (loadToken !== memoryFrameImageLoadToken) {
+    revokeMemoryFrameImageUrl(incomingIndex);
+    return;
+  }
+
+  if (!loaded) {
+    revokeMemoryFrameImageUrl(incomingIndex);
+    if (placeholder) {
+      placeholder.hidden = false;
+      placeholder.innerHTML =
+        '<strong>Could not display this photo</strong><span>Try removing and adding it again.</span>';
+    }
+    if (restartTimer) scheduleMemoryFrameSlide();
+    return;
+  }
+
+  incoming.alt = photo.caption || photo.name || "Memory Frame photo";
+  incoming.style.objectFit = memoryFrameConfig.fit;
+
+  if (immediate) widget.classList.add("no-photo-transition");
+  incoming.classList.add("active");
+  outgoing.classList.remove("active");
+
+  memoryFrameActiveImageLayer = incomingIndex;
+  memoryFrameCurrentPhotoId = photo.id;
+  memoryFrameRequestedPhotoId = null;
+  updateMemoryFrameWidgetMeta();
+
+  window.setTimeout(() => {
+    if (immediate) widget.classList.remove("no-photo-transition");
+    if (!outgoing.classList.contains("active")) {
+      outgoing.removeAttribute("src");
+      revokeMemoryFrameImageUrl(outgoingIndex);
+    }
+  }, immediate ? 40 : 720);
+
+  if (restartTimer) scheduleMemoryFrameSlide();
+}
+
+function nextMemoryFramePhoto(direction = 1) {
+  if (!memoryFrameConfig.photos.length) return;
+  showMemoryFramePhoto(getNextMemoryFrameIndex(direction), {
+    immediate: false,
+    restartTimer: true
+  });
+}
+
+function toggleMemoryFramePause() {
+  memoryFramePaused = !memoryFramePaused;
+  updateMemoryFrameWidgetMeta();
+  scheduleMemoryFrameSlide();
+  showToast(memoryFramePaused ? "Memory Frame paused" : "Memory Frame resumed");
+}
+
+function ensureMemoryFrameWidget() {
+  const layer = $("memoryFrameDesktopLayer");
+  if (!layer) return null;
+
+  let widget = layer.querySelector(".memory-frame-widget");
+  if (widget) return widget;
+
+  widget = document.createElement("article");
+  widget.className = "memory-frame-widget";
+  widget.innerHTML = `
+    <div class="memory-frame-widget-toolbar">
+      <div class="memory-frame-drag-handle" data-memory-frame-drag title="Drag to move">
+        <span class="memory-frame-drag-grip" aria-hidden="true">⋮⋮</span>
+        <strong>Memory Frame</strong>
+      </div>
+      <div class="memory-frame-widget-actions">
+        <button type="button" data-memory-frame-lock aria-label="Lock Memory Frame">🔓</button>
+        <button type="button" data-memory-frame-settings aria-label="Open Memory Frame settings">•••</button>
+      </div>
+    </div>
+    <div class="memory-frame-media">
+      <img data-memory-frame-image="0" alt="">
+      <img data-memory-frame-image="1" alt="">
+      <div class="memory-frame-widget-placeholder" data-memory-frame-placeholder hidden></div>
+      <div class="memory-frame-widget-caption" data-memory-frame-caption hidden></div>
+    </div>
+    <div class="memory-frame-playback">
+      <button type="button" data-memory-frame-prev aria-label="Previous photo">‹</button>
+      <button type="button" data-memory-frame-pause aria-label="Pause slideshow">Ⅱ</button>
+      <span data-memory-frame-counter>0 / 0</span>
+      <button type="button" data-memory-frame-next aria-label="Next photo">›</button>
+    </div>
+    <span class="memory-frame-resize-handle" data-memory-frame-resize title="Drag to resize" aria-hidden="true">◢</span>
+  `;
+
+  layer.appendChild(widget);
+
+  widget.querySelector("[data-memory-frame-settings]").addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openApp("memoryframe");
+  });
+
+  widget.querySelector("[data-memory-frame-lock]").addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const mode = getMemoryFrameMode();
+    const bounds = getMemoryFrameBounds();
+    const layout = getLiveMemoryFrameLayout(widget, mode, bounds);
+    layout.locked = !layout.locked;
+    setMemoryFrameLayout(mode, layout);
+    applyMemoryFrameLayout(widget, layout);
+    showToast(layout.locked ? "Memory Frame locked" : "Memory Frame unlocked");
+  });
+
+  widget.querySelector("[data-memory-frame-prev]").addEventListener("click", (event) => {
+    event.stopPropagation();
+    nextMemoryFramePhoto(-1);
+  });
+
+  widget.querySelector("[data-memory-frame-next]").addEventListener("click", (event) => {
+    event.stopPropagation();
+    nextMemoryFramePhoto(1);
+  });
+
+  widget.querySelector("[data-memory-frame-pause]").addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleMemoryFramePause();
+  });
+
+  widget.querySelector("[data-memory-frame-drag]").addEventListener("pointerdown", (event) => {
+    beginMemoryFramePointerInteraction(event, widget, "move");
+  });
+
+  widget.querySelector("[data-memory-frame-resize]").addEventListener("pointerdown", (event) => {
+    beginMemoryFramePointerInteraction(event, widget, "resize");
+  });
+
+  return widget;
+}
+
+function beginMemoryFramePointerInteraction(event, widget, type) {
+  const mode = getMemoryFrameMode();
+  const bounds = getMemoryFrameBounds();
+  let layout = getLiveMemoryFrameLayout(widget, mode, bounds);
+  if (layout.locked) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const target = event.currentTarget;
+  target.setPointerCapture?.(event.pointerId);
+
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const startLayout = { ...layout };
+  let finished = false;
+
+  document.documentElement.classList.add("memory-frame-layout-active");
+  widget.classList.add(type === "move" ? "moving" : "resizing");
+
+  const move = (moveEvent) => {
+    if (finished) return;
+
+    const deltaX = moveEvent.clientX - startX;
+    const deltaY = moveEvent.clientY - startY;
+
+    if (type === "move") {
+      layout = clampMemoryFrameLayout(
+        {
+          ...startLayout,
+          x: startLayout.x + deltaX,
+          y: startLayout.y + deltaY
+        },
+        mode,
+        bounds
+      );
+    } else {
+      layout = clampMemoryFrameLayout(
+        {
+          ...startLayout,
+          width: startLayout.width + deltaX,
+          height: startLayout.height + deltaY
+        },
+        mode,
+        bounds
+      );
+    }
+
+    applyMemoryFrameLayout(widget, layout);
+  };
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    target.releasePointerCapture?.(event.pointerId);
+    target.removeEventListener("pointermove", move);
+    target.removeEventListener("pointerup", finish);
+    target.removeEventListener("pointercancel", finish);
+    document.documentElement.classList.remove("memory-frame-layout-active");
+    widget.classList.remove("moving", "resizing");
+
+    const live = getLiveMemoryFrameLayout(widget, mode, bounds);
+    setMemoryFrameLayout(mode, live);
+    applyMemoryFrameLayout(widget, live);
+  };
+
+  target.addEventListener("pointermove", move);
+  target.addEventListener("pointerup", finish, { once: true });
+  target.addEventListener("pointercancel", finish, { once: true });
+}
+
+function renderMemoryFrameDesktop() {
+  const layer = $("memoryFrameDesktopLayer");
+  if (!layer) return;
+
+  const mode = getMemoryFrameMode();
+  const shouldShow =
+    mode !== "mobile" &&
+    memoryFrameConfig.enabled &&
+    memoryFrameConfig.photos.length > 0 &&
+    !document.documentElement.classList.contains("desk-clock-mode");
+
+  layer.hidden = !shouldShow;
+
+  if (!shouldShow) {
+    clearMemoryFrameSlideTimer();
+    return;
+  }
+
+  const widget = ensureMemoryFrameWidget();
+  const bounds = getMemoryFrameBounds();
+  const layout = getMemoryFrameLayout(mode, bounds);
+
+  applyMemoryFrameLayout(widget, layout);
+  widget.dataset.frameStyle = memoryFrameConfig.style;
+  widget.dataset.photoFit = memoryFrameConfig.fit;
+
+  widget.querySelectorAll("[data-memory-frame-image]").forEach((image) => {
+    image.style.objectFit = memoryFrameConfig.fit;
+  });
+
+  updateMemoryFrameWidgetMeta();
+
+  const photo = memoryFrameConfig.photos[memoryFrameCurrentIndex];
+  if (!photo) {
+    memoryFrameCurrentIndex = 0;
+  }
+
+  const nextPhoto = memoryFrameConfig.photos[memoryFrameCurrentIndex];
+  if (nextPhoto && memoryFrameCurrentPhotoId !== nextPhoto.id) {
+    showMemoryFramePhoto(memoryFrameCurrentIndex, {
+      immediate: true,
+      restartTimer: true
+    });
+  } else {
+    scheduleMemoryFrameSlide();
+  }
+}
+
+function setMemoryFrameStatus(message) {
+  if ($("memoryFrameStatus")) {
+    $("memoryFrameStatus").textContent = message;
+  }
+}
+
+function formatMemoryFrameFileSize(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
+  return `${(value / (1024 * 1024)).toFixed(value >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+}
+
+async function loadMemoryFrameThumbnail(card, photo, token) {
+  try {
+    const record = await getMemoryFramePhotoRecord(photo.id);
+    if (token !== memoryFrameManagerRenderToken || !card.isConnected) return;
+
+    const blob = record?.thumbnail || record?.blob;
+    if (!blob) {
+      card.classList.add("missing-photo");
+      return;
+    }
+
+    const image = card.querySelector("img");
+    const url = URL.createObjectURL(blob);
+    image.addEventListener(
+      "load",
+      () => URL.revokeObjectURL(url),
+      { once: true }
+    );
+    image.addEventListener(
+      "error",
+      () => URL.revokeObjectURL(url),
+      { once: true }
+    );
+    image.src = url;
+  } catch (error) {
+    card.classList.add("missing-photo");
+  }
+}
+
+function renderMemoryFrameManager() {
+  if (!$("memoryFramePhotoList")) return;
+
+  $("memoryFrameEnabledToggle").checked = memoryFrameConfig.enabled;
+  $("memoryFrameStyleSelect").value = memoryFrameConfig.style;
+  $("memoryFrameFitSelect").value = memoryFrameConfig.fit;
+  $("memoryFrameIntervalSelect").value = String(memoryFrameConfig.interval);
+  $("memoryFrameShuffleToggle").checked = memoryFrameConfig.shuffle;
+  $("memoryFrameCaptionToggle").checked = memoryFrameConfig.showCaption;
+  $("memoryFramePhotoCount").textContent =
+    `${memoryFrameConfig.photos.length} ${memoryFrameConfig.photos.length === 1 ? "photo" : "photos"}`;
+
+  const list = $("memoryFramePhotoList");
+  const empty = $("memoryFrameEmptyState");
+  list.innerHTML = "";
+  empty.hidden = memoryFrameConfig.photos.length > 0;
+
+  const token = ++memoryFrameManagerRenderToken;
+
+  memoryFrameConfig.photos.forEach((photo, index) => {
+    const card = document.createElement("article");
+    card.className = "memory-frame-photo-card";
+    card.dataset.memoryFramePhotoId = photo.id;
+    card.innerHTML = `
+      <button class="memory-frame-photo-thumb" type="button" data-memory-frame-select title="Show this photo">
+        <img alt="${escapeHtml(photo.caption || photo.name || "Memory Frame photo")}" loading="lazy">
+        <span>Show</span>
+      </button>
+      <div class="memory-frame-photo-card-body">
+        <strong title="${escapeHtml(photo.name)}">${escapeHtml(photo.name)}</strong>
+        <small>${escapeHtml(formatMemoryFrameFileSize(photo.size))}</small>
+        <input maxlength="180" type="text" data-memory-frame-caption-input
+          placeholder="Caption (optional)" value="${escapeHtml(photo.caption)}">
+      </div>
+      <button class="memory-frame-photo-delete" type="button" data-memory-frame-delete aria-label="Remove photo">✕</button>
+    `;
+
+    list.appendChild(card);
+    loadMemoryFrameThumbnail(card, photo, token);
+
+    card.querySelector("[data-memory-frame-select]").addEventListener("click", () => {
+      memoryFrameCurrentIndex = index;
+      memoryFrameConfig.enabled = true;
+      saveMemoryFrameConfig();
+      renderMemoryFrameManager();
+      renderMemoryFrameDesktop();
+      showMemoryFramePhoto(index, {
+        immediate: false,
+        restartTimer: true
+      });
+    });
+
+    card.querySelector("[data-memory-frame-caption-input]").addEventListener("change", (event) => {
+      const current = memoryFrameConfig.photos.find((item) => item.id === photo.id);
+      if (!current) return;
+      current.caption = String(event.currentTarget.value || "").slice(0, 180);
+      saveMemoryFrameConfig();
+      updateMemoryFrameWidgetMeta();
+    });
+
+    card.querySelector("[data-memory-frame-delete]").addEventListener("click", async () => {
+      await removeMemoryFramePhoto(photo.id);
+    });
+  });
+
+  if (!("indexedDB" in window)) {
+    setMemoryFrameStatus("Photo storage unavailable in this browser");
+  } else if (!memoryFrameConfig.photos.length) {
+    setMemoryFrameStatus("Add photos to begin");
+  } else {
+    setMemoryFrameStatus(memoryFramePaused ? "Slideshow paused" : "Slideshow ready");
+  }
+}
+
+async function handleMemoryFrameFiles(fileList) {
+  const files = Array.from(fileList || []);
+  if (!files.length) return;
+
+  if (!("indexedDB" in window)) {
+    showToast("This browser does not provide local photo storage");
+    return;
+  }
+
+  const remaining = Math.max(
+    0,
+    MEMORY_FRAME_MAX_PHOTOS - memoryFrameConfig.photos.length
+  );
+
+  if (!remaining) {
+    showToast(`Memory Frame supports up to ${MEMORY_FRAME_MAX_PHOTOS} photos`);
+    return;
+  }
+
+  let added = 0;
+  let skipped = 0;
+  let firstAddedId = null;
+
+  setMemoryFrameStatus("Adding photos…");
+
+  for (const file of files.slice(0, remaining)) {
+    const isImage = String(file.type || "").startsWith("image/");
+    if (!isImage || file.size > MEMORY_FRAME_MAX_FILE_SIZE) {
+      skipped += 1;
+      continue;
+    }
+
+    const meta = normalizeMemoryFramePhotoMeta({
+      id: createMemoryFramePhotoId(),
+      name: file.name || "Photo",
+      caption: "",
+      type: file.type || "image/jpeg",
+      size: file.size,
+      createdAt: new Date().toISOString()
+    });
+
+    try {
+      const thumbnail = await createMemoryFrameThumbnail(file);
+      await putMemoryFramePhotoRecord({
+        id: meta.id,
+        blob: file,
+        thumbnail
+      });
+      memoryFrameConfig.photos.push(meta);
+      firstAddedId ||= meta.id;
+      added += 1;
+    } catch (error) {
+      skipped += 1;
+    }
+  }
+
+  if (files.length > remaining) {
+    skipped += files.length - remaining;
+  }
+
+  if (added) {
+    memoryFrameConfig.enabled = true;
+    memoryFramePaused = false;
+    const firstIndex = memoryFrameConfig.photos.findIndex(
+      (photo) => photo.id === firstAddedId
+    );
+    memoryFrameCurrentIndex = Math.max(0, firstIndex);
+    memoryFrameCurrentPhotoId = null;
+    saveMemoryFrameConfig();
+    renderMemoryFrameManager();
+    renderMemoryFrameDesktop();
+    showMemoryFramePhoto(memoryFrameCurrentIndex, {
+      immediate: true,
+      restartTimer: true
+    });
+  }
+
+  if ($("memoryFramePhotoInput")) {
+    $("memoryFramePhotoInput").value = "";
+  }
+
+  const message = added
+    ? `${added} ${added === 1 ? "photo" : "photos"} added${skipped ? ` · ${skipped} skipped` : ""}`
+    : "No photos were added";
+  setMemoryFrameStatus(message);
+  showToast(message);
+}
+
+async function removeMemoryFramePhoto(photoId) {
+  const photo = memoryFrameConfig.photos.find((item) => item.id === photoId);
+  if (!photo) return;
+
+  if (!window.confirm(`Remove “${photo.name}” from Memory Frame?`)) return;
+
+  try {
+    await deleteMemoryFramePhotoRecord(photoId);
+  } catch (error) {
+    // Continue removing stale metadata even if the blob is already missing.
+  }
+
+  const wasCurrent = memoryFrameConfig.photos[memoryFrameCurrentIndex]?.id === photoId;
+  memoryFrameConfig.photos = memoryFrameConfig.photos.filter(
+    (item) => item.id !== photoId
+  );
+
+  if (!memoryFrameConfig.photos.length) {
+    memoryFrameConfig.enabled = false;
+    memoryFrameCurrentIndex = 0;
+    memoryFrameCurrentPhotoId = null;
+    clearMemoryFrameWidgetImages();
+  } else {
+    memoryFrameCurrentIndex = Math.min(
+      memoryFrameCurrentIndex,
+      memoryFrameConfig.photos.length - 1
+    );
+    if (wasCurrent) memoryFrameCurrentPhotoId = null;
+  }
+
+  saveMemoryFrameConfig();
+  renderMemoryFrameManager();
+  renderMemoryFrameDesktop();
+  showToast("Photo removed");
+}
+
+async function clearMemoryFrameLibrary() {
+  if (!memoryFrameConfig.photos.length) return;
+  if (!window.confirm("Remove all photos from Memory Frame on this device?")) return;
+
+  try {
+    await clearMemoryFramePhotoRecords();
+  } catch (error) {
+    showToast("Could not clear local photo storage");
+    return;
+  }
+
+  memoryFrameConfig.photos = [];
+  memoryFrameConfig.enabled = false;
+  memoryFrameCurrentIndex = 0;
+  memoryFrameCurrentPhotoId = null;
+  memoryFramePaused = false;
+  clearMemoryFrameWidgetImages();
+  clearMemoryFrameSlideTimer();
+  saveMemoryFrameConfig();
+  renderMemoryFrameManager();
+  renderMemoryFrameDesktop();
+  showToast("Memory Frame photo library cleared");
+}
+
+function resetMemoryFrameLayoutForCurrentMode() {
+  const mode = getMemoryFrameMode();
+  memoryFrameConfig.layouts = { ...(memoryFrameConfig.layouts || {}) };
+  delete memoryFrameConfig.layouts[mode];
+  saveMemoryFrameConfig();
+  renderMemoryFrameDesktop();
+  showToast(`Memory Frame position reset for ${mode} view`);
+}
+
+function handleMemoryFrameVisibilityChange() {
+  if (document.hidden) {
+    clearMemoryFrameSlideTimer();
+  } else {
+    scheduleMemoryFrameSlide();
+  }
+}
+
+function initializeMemoryFrame() {
+  const fileInput = $("memoryFramePhotoInput");
+  const enabled = $("memoryFrameEnabledToggle");
+  const style = $("memoryFrameStyleSelect");
+  const fit = $("memoryFrameFitSelect");
+  const interval = $("memoryFrameIntervalSelect");
+  const shuffle = $("memoryFrameShuffleToggle");
+  const caption = $("memoryFrameCaptionToggle");
+  const reset = $("memoryFrameResetLayoutButton");
+  const clear = $("memoryFrameClearButton");
+
+  fileInput?.addEventListener("change", (event) => {
+    handleMemoryFrameFiles(event.currentTarget.files);
+  });
+
+  enabled?.addEventListener("change", (event) => {
+    if (event.currentTarget.checked && !memoryFrameConfig.photos.length) {
+      event.currentTarget.checked = false;
+      showToast("Add at least one photo first");
+      return;
+    }
+
+    memoryFrameConfig.enabled = event.currentTarget.checked;
+    saveMemoryFrameConfig();
+    renderMemoryFrameDesktop();
+  });
+
+  style?.addEventListener("change", (event) => {
+    memoryFrameConfig.style = MEMORY_FRAME_STYLES.has(event.currentTarget.value)
+      ? event.currentTarget.value
+      : "frame";
+    saveMemoryFrameConfig();
+    renderMemoryFrameDesktop();
+  });
+
+  fit?.addEventListener("change", (event) => {
+    memoryFrameConfig.fit = MEMORY_FRAME_FITS.has(event.currentTarget.value)
+      ? event.currentTarget.value
+      : "cover";
+    saveMemoryFrameConfig();
+    renderMemoryFrameDesktop();
+  });
+
+  interval?.addEventListener("change", (event) => {
+    const value = Number(event.currentTarget.value);
+    memoryFrameConfig.interval = MEMORY_FRAME_INTERVALS.has(value) ? value : 10;
+    saveMemoryFrameConfig();
+    scheduleMemoryFrameSlide();
+  });
+
+  shuffle?.addEventListener("change", (event) => {
+    memoryFrameConfig.shuffle = event.currentTarget.checked;
+    saveMemoryFrameConfig();
+    scheduleMemoryFrameSlide();
+  });
+
+  caption?.addEventListener("change", (event) => {
+    memoryFrameConfig.showCaption = event.currentTarget.checked;
+    saveMemoryFrameConfig();
+    updateMemoryFrameWidgetMeta();
+  });
+
+  reset?.addEventListener("click", resetMemoryFrameLayoutForCurrentMode);
+  clear?.addEventListener("click", clearMemoryFrameLibrary);
+
+  document.addEventListener("visibilitychange", handleMemoryFrameVisibilityChange);
+
+  let resizeFrame = 0;
+  const refreshLayout = () => {
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => {
+      renderMemoryFrameDesktop();
+    });
+  };
+
+  window.addEventListener("resize", refreshLayout);
+  window.visualViewport?.addEventListener("resize", refreshLayout);
+
+  openMemoryFrameDb()
+    .then(() => setMemoryFrameStatus(memoryFrameConfig.photos.length ? "Slideshow ready" : "Add photos to begin"))
+    .catch(() => setMemoryFrameStatus("Photo storage unavailable in this browser"));
+
+  renderMemoryFrameManager();
+  renderMemoryFrameDesktop();
+}
+
+
 let boxFullscreenFallbackActive = false;
 
 function getNativeFullscreenElement() {
@@ -1597,6 +2780,7 @@ const COMMAND_PALETTE_APPS = [
   { app: "journal", icon: "☷", label: "Journal", keywords: "journal diary reflection writing" },
   { app: "ourspace", icon: "♥", label: "Our Space", keywords: "plans memories partner dates trips" },
   { app: "documents", icon: "▱", label: "Document Vault", keywords: "files documents vault storage compliance" },
+  { app: "memoryframe", icon: "▧", label: "Memory Frame", keywords: "photos pictures slideshow frame desktop widget memories" },
   { app: "projects", icon: "◆", label: "Projects", keywords: "projects outcomes grouped tasks" },
   { app: "favorites", icon: "★", label: "Favorites", keywords: "favorites pinned sticky important" },
   { app: "insights", icon: "⌁", label: "Insights", keywords: "insights analytics progress trends workload dashboard" },
@@ -4209,6 +5393,10 @@ function openApp(appName) {
   if (appName === "clock") {
     updateDeskClock();
     updateDeskClockControls();
+  }
+
+  if (appName === "memoryframe") {
+    renderMemoryFrameManager();
   }
 
   if (appName === "tasks") renderTasks();
@@ -11133,7 +12321,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.16.1-Desk-Clock-Polish-Free";
+const BACKUP_APP_VERSION = "7O.17-Memory-Frame-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -13976,7 +15164,9 @@ function renderFavoritesHub() {
 function renderAll() {
   renderDashboard();
   renderDesktopStickyNotes();
+  renderMemoryFrameDesktop();
 
+  renderIfAppOpen("memoryframe", renderMemoryFrameManager);
   renderIfAppOpen("tasks", renderTasks);
 
   if (isAppWindowOpen("calendar")) {
@@ -15916,6 +17106,7 @@ restoreTheme();
 restoreBackgroundMode();
 updateDeskClockControls();
 updateDeskClock();
+initializeMemoryFrame();
 updateFullscreenUi();
 updateClock();
 setInterval(updateClock, 1000);

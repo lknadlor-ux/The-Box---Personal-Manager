@@ -72,7 +72,7 @@
     })();
   </script>
 <link href="manifest.json" rel="manifest"/>
-<link href="style.css?v=7o16-1" rel="stylesheet"/>
+<link href="style.css?v=7o17" rel="stylesheet"/>
 </head>
 <body>
 <div class="desktop-shell">
@@ -225,6 +225,11 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 <strong>Our Space</strong>
 <small>Plans, bucket list, and memories</small>
 </button>
+<button class="app-tile memory-frame-app-tile" data-open-app="memoryframe">
+<span class="app-icon">▧</span>
+<strong>Memory Frame</strong>
+<small>Desktop photo slideshow</small>
+</button>
 <button class="app-tile" data-open-app="documents">
 <span class="app-icon">▣</span>
 <strong>Documents</strong>
@@ -332,6 +337,7 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 </div>
 </section>
 <section aria-label="Sticky notes" class="desktop-sticky-notes" id="desktopStickyNotes"></section>
+<section aria-label="Memory Frame desktop widget" class="memory-frame-desktop-layer" hidden id="memoryFrameDesktopLayer"></section>
 
 <section class="window-layer" id="windowLayer">
 <article class="app-window active-window" data-app-window="dashboard" style="--x: 4%; --y: 5%; --w: 76%; --h: 82%;">
@@ -2205,6 +2211,130 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 <p class="empty-state" id="emptyFinance">No finance entries yet.</p>
 </div>
 </article>
+<article class="app-window memory-frame-app-window" data-app-window="memoryframe" style="--x: 13%; --y: 8%; --w: 74%; --h: 78%;">
+<div class="window-titlebar">
+<div class="window-title"><span>▧</span><strong>Memory Frame</strong></div>
+<div class="window-controls">
+<button class="window-button minimize-button">—</button>
+<button class="window-button maximize-button">□</button>
+<button class="window-button close-button">✕</button>
+</div>
+</div>
+<div class="window-content memory-frame-window">
+<section class="memory-frame-hero">
+<div>
+<small>DESKTOP WIDGET</small>
+<h2>Your photos, quietly part of The Box.</h2>
+<p>Attach pictures from this device and let them rotate in a glass frame over the Crimson Nebula desktop.</p>
+</div>
+<div class="memory-frame-hero-actions">
+<label class="memory-frame-enabled-switch">
+<input id="memoryFrameEnabledToggle" type="checkbox"/>
+<span>Show on desktop</span>
+</label>
+<label class="primary-button memory-frame-upload-button" for="memoryFramePhotoInput">＋ Add photos</label>
+<input accept="image/*" hidden id="memoryFramePhotoInput" multiple type="file"/>
+</div>
+</section>
+
+<section class="memory-frame-manager-grid">
+<article class="memory-frame-settings-card">
+<div class="memory-frame-section-heading">
+<div>
+<small>APPEARANCE</small>
+<strong>Frame style</strong>
+</div>
+<span id="memoryFramePhotoCount">0 photos</span>
+</div>
+
+<div class="memory-frame-settings-grid">
+<label>
+<span>Style</span>
+<select id="memoryFrameStyleSelect">
+<option value="frame">Crimson Glass</option>
+<option value="cinematic">Cinematic</option>
+<option value="polaroid">Dark Polaroid</option>
+</select>
+</label>
+<label>
+<span>Photo fit</span>
+<select id="memoryFrameFitSelect">
+<option value="cover">Fill frame</option>
+<option value="contain">Fit entire photo</option>
+</select>
+</label>
+<label>
+<span>Change every</span>
+<select id="memoryFrameIntervalSelect">
+<option value="5">5 seconds</option>
+<option value="8">8 seconds</option>
+<option selected value="10">10 seconds</option>
+<option value="15">15 seconds</option>
+<option value="30">30 seconds</option>
+<option value="60">1 minute</option>
+</select>
+</label>
+</div>
+
+<div class="memory-frame-option-row">
+<label class="memory-frame-check">
+<input id="memoryFrameShuffleToggle" type="checkbox"/>
+<span>Shuffle photos</span>
+</label>
+<label class="memory-frame-check">
+<input checked id="memoryFrameCaptionToggle" type="checkbox"/>
+<span>Show captions</span>
+</label>
+</div>
+
+<div class="memory-frame-settings-actions">
+<button class="secondary-button" id="memoryFrameResetLayoutButton" type="button">Reset widget position</button>
+<button class="template-danger-button" id="memoryFrameClearButton" type="button">Clear photo library</button>
+</div>
+
+<p class="memory-frame-storage-note">
+Photos stay on this device in browser storage. The slideshow loads only the current image to keep memory use low.
+</p>
+</article>
+
+<article class="memory-frame-preview-card">
+<div class="memory-frame-section-heading">
+<div>
+<small>WIDGET</small>
+<strong>Desktop controls</strong>
+</div>
+<span class="memory-frame-local-badge">Local</span>
+</div>
+<div class="memory-frame-preview-demo">
+<div class="memory-frame-preview-image"></div>
+<div>
+<strong>Move · Resize · Lock</strong>
+<p>Unlocked frames can be positioned anywhere on the desktop. Locking freezes the exact current position and size.</p>
+</div>
+</div>
+<div class="memory-frame-preview-demo">
+<div class="memory-frame-preview-controls">‹ Ⅱ ›</div>
+<div>
+<strong>Minimal playback</strong>
+<p>Previous, pause and next appear subtly on the frame and the slideshow pauses automatically when Edge is in the background.</p>
+</div>
+</div>
+</article>
+</section>
+
+<section class="memory-frame-library-section">
+<div class="memory-frame-library-heading">
+<div>
+<small>PHOTO LIBRARY</small>
+<h3>Pictures in this frame</h3>
+</div>
+<span id="memoryFrameStatus">Ready</span>
+</div>
+<div class="memory-frame-photo-grid" id="memoryFramePhotoList"></div>
+<p class="empty-state" id="memoryFrameEmptyState">No pictures yet. Add photos to create your Memory Frame.</p>
+</section>
+</div>
+</article>
 <article class="app-window desk-clock-app-window" data-app-window="clock" style="--x: 14%; --y: 9%; --w: 72%; --h: 76%;">
 <div class="window-titlebar">
 <div class="window-title"><span>◷</span><strong>Desk Clock</strong></div>
@@ -3622,6 +3752,6 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="cloud.js"></script>
-<script src="app.js?v=7o16-1"></script>
+<script src="app.js?v=7o17"></script>
 </body>
 </html>
