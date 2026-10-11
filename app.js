@@ -377,6 +377,15 @@ let routineWorkspaceFilter = "all";
 let routineStateFilter = "all";
 let insightsRangeDays = 30;
 let insightsWorkspaceFilter = "all";
+const SLIM_MODE = true;
+const SLIM_DISABLED_APPS = new Set([
+  "clinic",
+  "templates",
+  "pharmacy",
+  "sk",
+  "finance",
+  "goals"
+]);
 let favoritesFilter = "all";
 let favoritesSearchTerm = "";
 let taskViewMode = localStorage.getItem(STORAGE.taskView) === "kanban" ? "kanban" : "list";
@@ -440,299 +449,9 @@ let smartPdfModulePromise = null;
 let smartTextDatabasePromise = null;
 
 
-const BUILT_IN_TEMPLATES = [
-  {
-    id: "builtin-sk-program-design",
-    title: "SK Program Design",
-    category: "SK",
-    content: `TITLE
-{{program_title}}
+const BUILT_IN_TEMPLATES = [];
 
-RATIONALE
-{{rationale}}
-
-OBJECTIVES
-• {{objective_1}}
-• {{objective_2}}
-• {{objective_3}}
-
-DATE AND TIME
-{{date_and_time}}
-
-PARTICIPANTS
-{{participants}}
-
-BUDGETARY REQUIREMENTS
-{{budgetary_requirements}}
-
-EXPECTED OUTPUT
-{{expected_output}}
-
-Prepared by:
-
-______________________________
-SK Secretary
-
-Noted by:
-
-______________________________
-SK Chairperson`
-  },
-  {
-    id: "builtin-sk-post-activity",
-    title: "SK Post-Activity Report",
-    category: "SK",
-    content: `TITLE
-{{activity_title}}
-
-DATE
-{{activity_date}}
-
-VENUE
-{{venue}}
-
-TOTAL PARTICIPANTS
-{{total_participants}}
-
-OBJECTIVES
-• {{objective_1}}
-• {{objective_2}}
-• {{objective_3}}
-
-HIGHLIGHTS
-
-{{highlights_paragraph_1}}
-
-{{highlights_paragraph_2}}
-
-A. Activities Conducted
-{{activities_conducted}}
-
-B. Participation and Engagement
-{{participation_and_engagement}}
-
-C. Issues and Challenges
-{{issues_and_challenges}}
-
-D. Recommendations
-{{recommendations}}
-
-Prepared by:
-
-______________________________
-SK Secretary
-
-Noted by:
-
-______________________________
-SK Chairperson`
-  },
-  {
-    id: "builtin-supplier-follow-up-email",
-    title: "Supplier Order Follow-up Email",
-    category: "Suppliers",
-    content: `Subject: Follow-up on {{order_reference}}
-
-Dear {{recipient_name}},
-
-Good day.
-
-We would like to follow up on {{order_reference}}, placed on {{order_date}}. Please provide the current status, expected delivery date, and any items that are unavailable or pending.
-
-Delivery details:
-Facility: {{facility_name}}
-Address: {{delivery_address}}
-Contact person: {{contact_person}}
-
-Thank you.
-
-Sincerely,
-{{sender_name}}
-{{position}}
-{{facility_name}}`
-  },
-  {
-    id: "builtin-clinic-staff-memo",
-    title: "Clinic Staff Memorandum",
-    category: "Clinic",
-    content: `MEMORANDUM
-
-Date: {{today}}
-To: {{recipients}}
-From: {{sender_name}}
-Subject: {{subject}}
-
-{{opening_statement}}
-
-Please observe the following:
-
-1. {{instruction_1}}
-2. {{instruction_2}}
-3. {{instruction_3}}
-
-{{closing_statement}}
-
-For strict compliance.
-
-______________________________
-{{sender_name}}
-{{position}}`
-  },
-  {
-    id: "builtin-document-renewal-notice",
-    title: "Document Renewal Notice",
-    category: "Compliance",
-    content: `DOCUMENT RENEWAL NOTICE
-
-Date: {{today}}
-
-Document: {{document_name}}
-Current expiry date: {{expiry_date}}
-Responsible person/unit: {{responsible_person}}
-Target filing date: {{target_filing_date}}
-
-Required actions:
-☐ Confirm the latest documentary requirements
-☐ Prepare and review supporting documents
-☐ Verify names, dates, addresses, and signatures
-☐ Arrange payment or filing, when applicable
-☐ Save the submission and acknowledgement copies
-☐ Update the Document Vault record after completion
-
-Notes:
-{{notes}}`
-  },
-  {
-    id: "builtin-compliance-incident-report",
-    title: "Compliance Incident Report",
-    category: "Compliance",
-    content: `COMPLIANCE INCIDENT REPORT
-
-Date and time identified: {{incident_date_time}}
-Facility/unit: {{facility_name}}
-Reported by: {{reported_by}}
-
-INCIDENT
-{{incident_description}}
-
-IMMEDIATE ACTIONS TAKEN
-{{immediate_actions}}
-
-POTENTIAL IMPACT
-{{potential_impact}}
-
-ROOT CAUSE OR CONTRIBUTING FACTORS
-{{root_cause}}
-
-CORRECTIVE ACTIONS
-{{corrective_actions}}
-
-PREVENTIVE ACTIONS
-{{preventive_actions}}
-
-RESPONSIBLE PERSON AND TARGET DATE
-{{responsible_person_and_target}}
-
-STATUS
-{{status}}
-
-Attachments or references:
-{{attachments}}`
-  },
-  {
-    id: "builtin-fda-renewal-planning",
-    title: "FDA LTO Renewal Planning Checklist",
-    category: "FDA",
-    content: `FDA LTO RENEWAL PLANNING CHECKLIST
-Customizable working copy — verify the current official FDA requirements.
-
-Facility: {{facility_name}}
-LTO type: {{lto_type}}
-Current validity: {{validity_period}}
-Target submission date: {{target_submission_date}}
-
-PLANNING
-☐ Confirm the correct application or variation type
-☐ Review the current FDA portal instructions
-☐ Verify establishment and qualified-person details
-☐ Review business and location information
-☐ Check all supporting documents for validity
-☐ Confirm fees and payment instructions
-☐ Prepare clear, readable file copies
-☐ Review consistency of names, addresses, and dates
-☐ Submit and save the acknowledgement/reference number
-☐ Track clarifications, inspection, or compliance requests
-☐ Save the approved record in the Document Vault
-
-Additional requirements to confirm:
-{{requirements_to_confirm}}
-
-Notes:
-{{notes}}`
-  },
-  {
-    id: "builtin-philhealth-operations-checklist",
-    title: "PhilHealth YAKAP/GAMOT Operations Checklist",
-    category: "PhilHealth",
-    content: `PHILHEALTH YAKAP/GAMOT OPERATIONS CHECKLIST
-Customizable working copy — confirm current PhilHealth issuances and portal rules.
-
-Date: {{today}}
-Facility: {{facility_name}}
-Prepared by: {{prepared_by}}
-
-DAILY REVIEW
-☐ Check portal access and account status
-☐ Review pending patient or member concerns
-☐ Verify completeness of required records
-☐ Check pending claims, availments, or submissions
-☐ Record system errors or downtime
-☐ Follow up unresolved cases
-☐ Save official advisories and reference documents
-☐ Escalate urgent operational issues
-
-PENDING ITEMS
-{{pending_items}}
-
-SYSTEM OR PROCESS ISSUES
-{{system_issues}}
-
-FOLLOW-UP OWNER AND DUE DATE
-{{follow_up_owner_and_due_date}}`
-  },
-  {
-    id: "builtin-formal-request-letter",
-    title: "Formal Request Letter",
-    category: "General",
-    content: `{{today}}
-
-{{recipient_name}}
-{{recipient_position}}
-{{organization}}
-{{organization_address}}
-
-Subject: {{subject}}
-
-Dear {{recipient_salutation}},
-
-{{opening_paragraph}}
-
-{{request_details}}
-
-{{supporting_context}}
-
-Thank you for your consideration.
-
-Respectfully,
-
-{{sender_name}}
-{{position}}
-{{facility_name}}
-{{contact_details}}`
-  }
-];
-
-let selectedTemplateId = BUILT_IN_TEMPLATES[0].id;
+let selectedTemplateId = "";
 let templateSearchTerm = "";
 let templateCategoryFilter = "all";
 let generatedComplianceReport = null;
@@ -1874,21 +1593,15 @@ const COMMAND_PALETTE_APPS = [
   { app: "favorites", icon: "★", label: "Favorites", keywords: "favorites pinned sticky important" },
   { app: "insights", icon: "⌁", label: "Insights", keywords: "insights analytics progress trends workload dashboard" },
   { app: "routines", icon: "↻", label: "Routines", keywords: "routines recurring habits repeat schedule consistency" },
-  { app: "goals", icon: "◎", label: "Goals", keywords: "goals milestones outcomes targets progress" },
   { app: "agenda", icon: "≡", label: "Agenda", keywords: "agenda timeline schedule due dates deadlines events plans" },
   { app: "today", icon: "☀", label: "Today", keywords: "today daily planner agenda priorities focus" },
   { app: "weeklyreview", icon: "◷", label: "Weekly Review", keywords: "weekly review planning recap wins overdue upcoming" },
-  { app: "workspaces", icon: "▦", label: "Workspaces", keywords: "workspaces personal pharmacy clinic sk contexts" },
+  { app: "workspaces", icon: "▦", label: "Workspaces", keywords: "workspaces context personal tasks projects routines" },
   { app: "activity", icon: "↺", label: "Activity", keywords: "activity timeline history recent changes" },
-  { app: "finance", icon: "₱", label: "Finance", keywords: "finance income expenses money" },
   { app: "focus", icon: "◉", label: "Focus", keywords: "focus timer pomodoro" },
   { app: "assistant", icon: "◇", label: "Assistant", keywords: "assistant helper" },
-  { app: "templates", icon: "▤", label: "Templates", keywords: "templates compliance reusable" },
   { app: "reminders", icon: "♢", label: "Reminders", keywords: "reminders alerts due expiry" },
   { app: "backup", icon: "↥", label: "Backup", keywords: "backup restore export recovery" },
-  { app: "pharmacy", icon: "Rx", label: "Pharmacy", keywords: "pharmacy workspace medicine" },
-  { app: "clinic", icon: "+", label: "Clinic", keywords: "clinic workspace" },
-  { app: "sk", icon: "SK", label: "SK", keywords: "sk barangay youth workspace" }
 ];
 
 function isCommandPaletteOpen() {
@@ -1911,7 +1624,7 @@ function getCommandPaletteActions() {
       type: "action",
       icon: "⌁",
       title: "Open Insights",
-      description: "Review progress, workload, goals, routines, Projects, and finance trends",
+      description: "Review task progress, workload, routines, Projects, and activity trends",
       keywords: "insights analytics progress trends dashboard",
       run: () => openApp("insights")
     },
@@ -1925,18 +1638,6 @@ function getCommandPaletteActions() {
       run: () => {
         openApp("routines");
         resetRoutineEditor();
-      }
-    },
-    {
-      key: "action-new-goal",
-      type: "action",
-      icon: "◎",
-      title: "New Goal",
-      description: "Create a goal and connect Projects, Tasks, and milestones",
-      keywords: "goal milestone outcome target new",
-      run: () => {
-        openApp("goals");
-        resetGoalEditor();
       }
     },
     {
@@ -1962,7 +1663,7 @@ function getCommandPaletteActions() {
       type: "action",
       icon: "◷",
       title: "Open Weekly Review",
-      description: "Review wins, overdue work, projects, finance, and the next 7 days",
+      description: "Review wins, overdue work, Projects, routines, and the next 7 days",
       keywords: "weekly review planning recap wins overdue upcoming",
       run: () => openApp("weeklyreview")
     },
@@ -1971,7 +1672,7 @@ function getCommandPaletteActions() {
       type: "action",
       icon: "▦",
       title: "Open Workspaces",
-      description: "Switch between Personal, Pharmacy, Clinic, and SK",
+      description: "Open your Personal task, event, Project, and Routine context",
       keywords: "workspaces contexts personal pharmacy clinic sk",
       run: () => openApp("workspaces")
     },
@@ -2187,22 +1888,6 @@ function getCommandPaletteContentItems() {
     });
   });
 
-  goals.forEach((goal) => {
-    const status = getGoalDerivedStatus(goal);
-    const progress = getGoalProgress(goal);
-    items.push({
-      key: `goal-${goal.id}`,
-      type: "goal",
-      icon: "◎",
-      title: goal.title || "Untitled goal",
-      description: `${getGoalStatusLabel(status)} · ${progress}%${goal.targetDate ? ` · ${formatGoalTargetDate(goal.targetDate)}` : ""}`,
-      keywords: `${goal.title || ""} ${goal.description || ""} ${goal.workspace || ""} ${(goal.linkedProjects || []).join(" ")} ${(goal.milestones || []).map((item) => item.text).join(" ")}`,
-      run: () => {
-        openApp("goals");
-        selectGoal(goal.id);
-      }
-    });
-  });
 
   getProjectRecords().forEach((project) => {
     items.push({
@@ -2220,17 +1905,6 @@ function getCommandPaletteContentItems() {
     });
   });
 
-  financeEntries.forEach((entry) => {
-    items.push({
-      key: `finance-${entry.id}`,
-      type: "finance",
-      icon: entry.type === "income" ? "＋" : "−",
-      title: entry.description || "Finance entry",
-      description: `${entry.workspace || "personal"} · ${formatMoney(entry.amount)}`,
-      keywords: `${entry.description || ""} ${entry.workspace || ""} ${entry.type || ""}`,
-      run: () => openApp("finance")
-    });
-  });
 
   return items;
 }
@@ -2737,6 +2411,8 @@ function getInsightsTaskCompletionItems(previous = false) {
 }
 
 function getInsightsFinanceEntries(previous = false) {
+  if (SLIM_MODE) return [];
+
   return financeEntries.filter((entry) =>
     matchesInsightsWorkspace(entry.workspace || "personal") &&
     isInsightsTimestampInRange(entry.createdAt, insightsRangeDays, previous)
@@ -2768,6 +2444,7 @@ function getInsightsActivityItems(previous = false) {
 }
 
 function getInsightsGoals() {
+  if (SLIM_MODE) return [];
   return goals.filter((goal) => matchesInsightsWorkspace(goal.workspace || "personal"));
 }
 
@@ -4328,6 +4005,8 @@ function addGoalMilestoneFromControls() {
 }
 
 function getGoalFocusCandidate() {
+  if (SLIM_MODE) return null;
+
   return getSortedGoals(
     goals.filter((goal) => !["completed", "paused"].includes(getGoalDerivedStatus(goal)))
   )[0] || null;
@@ -4491,6 +4170,12 @@ function renderIfAppOpen(appName, renderer) {
 }
 
 function openApp(appName) {
+  if (SLIM_MODE && SLIM_DISABLED_APPS.has(appName)) {
+    showToast("This module is disabled in Slim mode");
+    closeLauncher();
+    return;
+  }
+
   const windowElement = document.querySelector(`[data-app-window="${appName}"]`);
   if (!windowElement) return;
 
@@ -11430,7 +11115,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.13.8-Free";
+const BACKUP_APP_VERSION = "7O.14-Slim-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -12037,28 +11722,6 @@ function getAgendaItems() {
       });
     });
 
-  goals
-    .filter((goal) =>
-      goal.targetDate &&
-      getGoalDerivedStatus(goal) !== "completed"
-    )
-    .forEach((goal) => {
-      const status = getGoalDerivedStatus(goal);
-      items.push({
-        kind: "goal",
-        id: String(goal.id),
-        date: goal.targetDate,
-        icon: "◎",
-        title: goal.title || "Untitled goal",
-        meta: [
-          goal.workspace || "personal",
-          getGoalStatusLabel(status),
-          `${getGoalProgress(goal)}%`
-        ].filter(Boolean).join(" · "),
-        workspace: goal.workspace || "personal",
-        searchText: `${goal.title || ""} ${goal.description || ""} ${(goal.linkedProjects || []).join(" ")} ${(goal.milestones || []).map((item) => item.text).join(" ")}`
-      });
-    });
 
   ourSpacePlans
     .filter((plan) => plan.status !== "done" && plan.target_date)
@@ -12922,12 +12585,14 @@ function renderWeeklyReview() {
     isDateKeyInCurrentReviewWeek(eventItem.date)
   );
   const activeProjects = getProjectRecords().filter((project) => project.open > 0);
-  const activeGoals = getSortedGoals(goals.filter((goal) => !["completed", "paused"].includes(getGoalDerivedStatus(goal))));
+  const activeGoals = SLIM_MODE ? [] : getSortedGoals(goals.filter((goal) => !["completed", "paused"].includes(getGoalDerivedStatus(goal))));
   const upcoming = getWeeklyReviewUpcomingItems();
 
-  const weekFinance = financeEntries.filter((entry) =>
-    isTimestampInCurrentReviewWeek(entry.createdAt)
-  );
+  const weekFinance = SLIM_MODE
+    ? []
+    : financeEntries.filter((entry) =>
+        isTimestampInCurrentReviewWeek(entry.createdAt)
+      );
   const weekIncome = weekFinance
     .filter((entry) => entry.type === "income")
     .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
@@ -13127,25 +12792,7 @@ const WORKSPACE_HUB_DEFINITIONS = [
     key: "personal",
     label: "Personal",
     icon: "◇",
-    description: "Personal plans, errands, goals, and everyday work."
-  },
-  {
-    key: "pharmacy",
-    label: "Pharmacy",
-    icon: "Rx",
-    description: "Pharmacy operations, compliance, inventory, and regulatory work."
-  },
-  {
-    key: "clinic",
-    label: "Clinic",
-    icon: "+",
-    description: "Clinic operations, patient-service tasks, and internal coordination."
-  },
-  {
-    key: "sk",
-    label: "SK",
-    icon: "SK",
-    description: "Barangay youth programs, reports, sessions, and activities."
+    description: "Personal Tasks, Events, Projects, and Routines in one focused context."
   }
 ];
 
@@ -13169,27 +12816,15 @@ function getWorkspaceHubData(workspaceKey) {
     (task) => task.workspace === workspaceKey && !task.completed
   ));
 
-  const workspaceGoals = goals.filter((goal) => goal.workspace === workspaceKey);
-  const activeGoals = workspaceGoals.filter((goal) =>
-    !["completed", "paused"].includes(getGoalDerivedStatus(goal))
-  );
+  const workspaceGoals = [];
+  const activeGoals = [];
 
   const workspaceRoutines = routines.filter((routine) => routine.workspace === workspaceKey);
   const activeRoutines = workspaceRoutines.filter((routine) => routine.state === "active");
 
-  const finance = financeEntries
-    .filter((entry) => entry.workspace === workspaceKey)
-    .sort((a, b) =>
-      String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
-    );
-
-  const income = finance
-    .filter((entry) => entry.type === "income")
-    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
-
-  const expenses = finance
-    .filter((entry) => entry.type === "expense")
-    .reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const finance = [];
+  const income = 0;
+  const expenses = 0;
 
   return {
     workspaceKey,
@@ -13549,23 +13184,6 @@ function getActivityItems() {
     });
   });
 
-  goals.forEach((goal) => {
-    const status = getGoalDerivedStatus(goal);
-    items.push({
-      type: "goals",
-      id: String(goal.id),
-      icon: "◎",
-      title: goal.title || "Untitled goal",
-      action: goal.updatedAt !== goal.createdAt ? "Goal updated" : "Goal created",
-      meta: [
-        goal.workspace || "personal",
-        getGoalStatusLabel(status),
-        `${getGoalProgress(goal)}%`
-      ].filter(Boolean).join(" · "),
-      timestamp: goal.updatedAt || goal.createdAt || "",
-      searchText: `${goal.title || ""} ${goal.description || ""} ${(goal.linkedProjects || []).join(" ")} ${(goal.milestones || []).map((item) => item.text).join(" ")}`
-    });
-  });
 
   noteItems.forEach((note) => {
     items.push({
@@ -13631,18 +13249,6 @@ function getActivityItems() {
       });
     });
 
-  financeEntries.forEach((entry) => {
-    items.push({
-      type: "finance",
-      id: String(entry.id),
-      icon: entry.type === "income" ? "＋" : "−",
-      title: entry.description || "Finance entry",
-      action: entry.type === "income" ? "Income recorded" : "Expense recorded",
-      meta: `${entry.workspace || "personal"} · ${formatMoney(entry.amount)}`,
-      timestamp: entry.createdAt || "",
-      searchText: `${entry.description || ""} ${entry.workspace || ""} ${entry.type || ""}`
-    });
-  });
 
   return items
     .filter((item) => getActivityTimestamp(item.timestamp) > 0)
@@ -14343,15 +13949,12 @@ function renderAll() {
     renderEvents();
   }
 
-  renderIfAppOpen("finance", renderFinance);
   renderIfAppOpen("documents", renderDocuments);
   renderIfAppOpen("backup", renderBackupCenter);
-  renderIfAppOpen("templates", renderTemplateCenter);
   renderIfAppOpen("reminders", renderReminderCenter);
   renderIfAppOpen("notes", renderNotesCenter);
   renderIfAppOpen("favorites", renderFavoritesHub);
   renderIfAppOpen("projects", renderProjectsHub);
-  renderIfAppOpen("goals", renderGoalsHub);
   renderIfAppOpen("routines", renderRoutinesHub);
   renderIfAppOpen("insights", renderInsights);
   renderIfAppOpen("activity", renderActivityTimeline);
@@ -14359,12 +13962,6 @@ function renderAll() {
   renderIfAppOpen("weeklyreview", renderWeeklyReview);
   renderIfAppOpen("today", renderTodayPlanner);
   renderIfAppOpen("agenda", renderAgenda);
-
-  ["pharmacy", "clinic", "sk"].forEach((workspace) => {
-    if (isAppWindowOpen(workspace)) {
-      renderWorkspaceTaskList(workspace, $(`${workspace}TaskList`));
-    }
-  });
 
   if (isCommandPaletteOpen()) renderCommandPalette();
 }

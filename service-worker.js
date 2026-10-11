@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o13-8-true-tablet-fullscreen";
+const CACHE_NAME = "the-box-os-phase-7o14-slim-cleanup";
 
 const APP_FILES = [
   "./",

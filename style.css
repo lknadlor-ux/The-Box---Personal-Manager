@@ -22407,3 +22407,43 @@ html.performance-ui.box-native-fullscreen .desktop-icons {
 html.box-native-fullscreen .fullscreen-fallback-exit {
   display: none !important;
 }
+
+
+/* ==========================================================================
+   Phase 7O.14 — The Box Slim Cleanup
+   Disabled: Clinic · Templates & Reports · Pharmacy · SK · Finance · Goals
+   ========================================================================== */
+
+.slim-disabled-window,
+.slim-disabled-panel {
+  display: none !important;
+}
+
+.desktop-welcome {
+  width: min(760px, calc(100vw - 56px));
+  max-width: 760px;
+}
+
+.insights-kpis,
+.weekly-review-summary,
+.workspace-detail-stats {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+}
+
+.workspace-hub-list,
+#workspaceHubCards {
+  grid-template-columns: 1fr !important;
+}
+
+.launcher-grid {
+  align-content: start;
+}
+
+html.performance-ui.view-mode-windows .desktop-welcome {
+  width: min(760px, calc(100vw - 56px));
+}
+
+.app-window.slim-disabled-window.open,
+.app-window.slim-disabled-window.maximized {
+  display: none !important;
+}
