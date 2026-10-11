@@ -24139,3 +24139,93 @@ body.light-theme .memory-frame-widget[data-frame-style="polaroid"] {
     transition: none !important;
   }
 }
+
+
+/* ==========================================================================
+   Phase 7O.17.1 — Memory Frame Display / All-Mode Hotfix
+   ========================================================================== */
+
+/* The desktop frame is now slideshow-only: no playback bar. */
+.memory-frame-playback {
+  display: none !important;
+}
+
+/* Defensive hidden-state rule for the full-frame error/placeholder layer. */
+.memory-frame-widget-placeholder[hidden],
+.memory-frame-widget-caption[hidden] {
+  display: none !important;
+}
+
+/* With the playback bar removed, captions can sit closer to the bottom edge. */
+.memory-frame-widget-caption {
+  bottom: 10px !important;
+  padding-bottom: 10px;
+}
+
+/* Mobile view is now supported rather than intentionally hidden. */
+html.phone-ui .memory-frame-desktop-layer:not([hidden]) {
+  display: block !important;
+}
+
+/* Keep the Memory Frame below phone app windows and above the Home background. */
+html.phone-ui .memory-frame-desktop-layer {
+  z-index: 3;
+}
+
+html.phone-ui .memory-frame-widget {
+  min-width: 220px;
+  min-height: 145px;
+  border-radius: 16px;
+}
+
+html.phone-ui .memory-frame-widget-toolbar {
+  top: 6px;
+  right: 6px;
+  left: 6px;
+  opacity: .70;
+}
+
+html.phone-ui .memory-frame-drag-handle {
+  min-height: 36px;
+  max-width: calc(100% - 86px);
+  padding: 0 8px;
+}
+
+html.phone-ui .memory-frame-widget-actions button {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+}
+
+html.phone-ui .memory-frame-resize-handle {
+  width: 40px;
+  height: 40px;
+  padding: 0 6px 5px 0;
+}
+
+html.phone-ui .memory-frame-widget-caption {
+  right: 8px;
+  bottom: 8px !important;
+  left: 8px;
+  font-size: 9px;
+}
+
+/* Tablet stays touch-friendly and visually consistent with Windows mode. */
+html.tablet-ui .memory-frame-widget,
+html.performance-ui .memory-frame-widget {
+  border-radius: 17px;
+}
+
+html.tablet-ui .memory-frame-widget-toolbar,
+html.performance-ui .memory-frame-widget-toolbar {
+  opacity: .62;
+}
+
+/* AUTO preview replaces the removed transport controls. */
+.memory-frame-preview-controls {
+  letter-spacing: .12em !important;
+  font-size: 9px !important;
+  font-weight: 800;
+  color: var(--accent);
+}

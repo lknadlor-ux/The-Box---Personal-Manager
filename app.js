@@ -1621,15 +1621,24 @@ function getMemoryFrameBounds() {
 }
 
 function getMemoryFrameSizeLimits(mode, bounds) {
-  const minWidth = Math.min(250, bounds.width);
-  const minHeight = Math.min(165, bounds.height);
+  const mobile = mode === "mobile";
+  const tablet = mode === "tablet";
+
+  const minWidth = Math.min(mobile ? 220 : 250, Math.max(1, bounds.width - 8));
+  const minHeight = Math.min(mobile ? 145 : 165, Math.max(1, bounds.height - 8));
   const maxWidth = Math.max(
     minWidth,
-    Math.min(mode === "windows" ? 760 : 560, bounds.width - 20)
+    Math.min(
+      mobile ? 430 : tablet ? 600 : 760,
+      Math.max(minWidth, bounds.width - (mobile ? 12 : 20))
+    )
   );
   const maxHeight = Math.max(
     minHeight,
-    Math.min(mode === "windows" ? 560 : 430, bounds.height - 20)
+    Math.min(
+      mobile ? 340 : tablet ? 460 : 560,
+      Math.max(minHeight, bounds.height - (mobile ? 12 : 20))
+    )
   );
 
   return { minWidth, minHeight, maxWidth, maxHeight };
@@ -1637,20 +1646,43 @@ function getMemoryFrameSizeLimits(mode, bounds) {
 
 function getDefaultMemoryFrameLayout(mode, bounds) {
   const limits = getMemoryFrameSizeLimits(mode, bounds);
-  const targetWidth =
-    mode === "tablet"
-      ? Math.min(360, Math.round(bounds.width * 0.43))
+  const mobile = mode === "mobile";
+  const tablet = mode === "tablet";
+
+  const targetWidth = mobile
+    ? Math.min(390, Math.round(bounds.width * 0.90))
+    : tablet
+      ? Math.min(410, Math.round(bounds.width * 0.46))
       : Math.min(430, Math.round(bounds.width * 0.33));
-  const width = Math.max(limits.minWidth, Math.min(targetWidth, limits.maxWidth));
+
+  const width = Math.max(
+    limits.minWidth,
+    Math.min(targetWidth, limits.maxWidth)
+  );
+
   const height = Math.max(
     limits.minHeight,
-    Math.min(Math.round(width * 0.66), limits.maxHeight)
+    Math.min(
+      Math.round(width * (mobile ? 0.60 : 0.66)),
+      limits.maxHeight
+    )
   );
-  const x = Math.max(12, bounds.width - width - (mode === "tablet" ? 22 : 34));
-  const y = Math.max(
-    76,
-    Math.min(mode === "tablet" ? 108 : 96, bounds.height - height - 76)
-  );
+
+  let x;
+  let y;
+
+  if (mobile) {
+    x = Math.max(6, Math.round((bounds.width - width) / 2));
+    const maxY = Math.max(6, bounds.height - height - 8);
+    const preferredY = Math.max(220, Math.round(bounds.height * 0.46));
+    y = Math.min(preferredY, maxY);
+  } else {
+    x = Math.max(12, bounds.width - width - (tablet ? 22 : 34));
+    y = Math.max(
+      76,
+      Math.min(tablet ? 108 : 96, bounds.height - height - 76)
+    );
+  }
 
   return {
     x: Math.min(x, Math.max(0, bounds.width - width)),
@@ -1796,29 +1828,14 @@ function updateMemoryFrameWidgetMeta() {
   const widget = document.querySelector(".memory-frame-widget");
   if (!widget) return;
 
-  const photos = memoryFrameConfig.photos;
-  const photo = photos[memoryFrameCurrentIndex] || null;
+  const photo = memoryFrameConfig.photos[memoryFrameCurrentIndex] || null;
   const caption = widget.querySelector("[data-memory-frame-caption]");
-  const counter = widget.querySelector("[data-memory-frame-counter]");
-  const pause = widget.querySelector("[data-memory-frame-pause]");
 
   if (caption) {
     caption.textContent = photo?.caption || "";
     caption.hidden =
       !memoryFrameConfig.showCaption ||
       !String(photo?.caption || "").trim();
-  }
-
-  if (counter) {
-    counter.textContent = photos.length
-      ? `${memoryFrameCurrentIndex + 1} / ${photos.length}`
-      : "0 / 0";
-  }
-
-  if (pause) {
-    pause.textContent = memoryFramePaused ? "▶" : "Ⅱ";
-    pause.title = memoryFramePaused ? "Resume slideshow" : "Pause slideshow";
-    pause.setAttribute("aria-label", pause.title);
   }
 }
 
@@ -1843,9 +1860,7 @@ function scheduleMemoryFrameSlide() {
   if (
     !memoryFrameConfig.enabled ||
     memoryFrameConfig.photos.length <= 1 ||
-    memoryFramePaused ||
     document.hidden ||
-    getMemoryFrameMode() === "mobile" ||
     document.documentElement.classList.contains("desk-clock-mode")
   ) {
     return;
@@ -1862,24 +1877,40 @@ function scheduleMemoryFrameSlide() {
 async function waitForMemoryFrameImage(image, url) {
   return new Promise((resolve) => {
     let settled = false;
+    const timeoutId = window.setTimeout(() => {
+      finish(image.naturalWidth > 0);
+    }, 8000);
 
     const finish = (success) => {
       if (settled) return;
       settled = true;
+      window.clearTimeout(timeoutId);
       image.removeEventListener("load", onLoad);
       image.removeEventListener("error", onError);
-      resolve(success);
+      resolve(Boolean(success));
     };
 
-    const onLoad = () => finish(true);
+    const onLoad = async () => {
+      if (typeof image.decode === "function") {
+        try {
+          await image.decode();
+        } catch (error) {
+          // The load event already confirms the object URL is displayable.
+        }
+      }
+      finish(image.naturalWidth > 0);
+    };
+
     const onError = () => finish(false);
 
     image.addEventListener("load", onLoad, { once: true });
     image.addEventListener("error", onError, { once: true });
     image.src = url;
 
-    if (image.complete) {
-      window.setTimeout(() => finish(image.naturalWidth > 0), 0);
+    // Edge can temporarily report complete=true with naturalWidth=0 for a new
+    // Blob/object URL. Only short-circuit when it is already genuinely loaded.
+    if (image.complete && image.naturalWidth > 0) {
+      window.setTimeout(() => finish(true), 0);
     }
   });
 }
@@ -1918,7 +1949,12 @@ async function showMemoryFramePhoto(
 
   if (loadToken !== memoryFrameImageLoadToken) return;
 
-  if (!record?.blob) {
+  const originalBlob = record?.blob instanceof Blob ? record.blob : null;
+  const thumbnailBlob =
+    record?.thumbnail instanceof Blob ? record.thumbnail : null;
+  const displayBlob = originalBlob || thumbnailBlob;
+
+  if (!displayBlob) {
     memoryFrameCurrentPhotoId = null;
     if (placeholder) {
       placeholder.hidden = false;
@@ -1939,22 +1975,39 @@ async function showMemoryFramePhoto(
   if (!incoming || !outgoing) return;
 
   revokeMemoryFrameImageUrl(incomingIndex);
-  const url = URL.createObjectURL(record.blob);
+  const url = URL.createObjectURL(displayBlob);
   memoryFrameImageObjectUrls[incomingIndex] = url;
 
-  const loaded = await waitForMemoryFrameImage(incoming, url);
+  let loaded = await waitForMemoryFrameImage(incoming, url);
 
   if (loadToken !== memoryFrameImageLoadToken) {
     revokeMemoryFrameImageUrl(incomingIndex);
     return;
   }
 
-  if (!loaded) {
+  if (!loaded && thumbnailBlob && thumbnailBlob !== displayBlob) {
     revokeMemoryFrameImageUrl(incomingIndex);
+    const fallbackUrl = URL.createObjectURL(thumbnailBlob);
+    memoryFrameImageObjectUrls[incomingIndex] = fallbackUrl;
+    const fallbackLoaded = await waitForMemoryFrameImage(incoming, fallbackUrl);
+
+    if (loadToken !== memoryFrameImageLoadToken) {
+      revokeMemoryFrameImageUrl(incomingIndex);
+      return;
+    }
+
+    if (!fallbackLoaded) {
+      revokeMemoryFrameImageUrl(incomingIndex);
+    } else {
+      loaded = true;
+    }
+  }
+
+  if (!loaded) {
     if (placeholder) {
       placeholder.hidden = false;
       placeholder.innerHTML =
-        '<strong>Could not display this photo</strong><span>Try removing and adding it again.</span>';
+        '<strong>Could not display this photo</strong><span>Open Memory Frame and re-add this picture.</span>';
     }
     if (restartTimer) scheduleMemoryFrameSlide();
     return;
@@ -2024,12 +2077,6 @@ function ensureMemoryFrameWidget() {
       <div class="memory-frame-widget-placeholder" data-memory-frame-placeholder hidden></div>
       <div class="memory-frame-widget-caption" data-memory-frame-caption hidden></div>
     </div>
-    <div class="memory-frame-playback">
-      <button type="button" data-memory-frame-prev aria-label="Previous photo">‹</button>
-      <button type="button" data-memory-frame-pause aria-label="Pause slideshow">Ⅱ</button>
-      <span data-memory-frame-counter>0 / 0</span>
-      <button type="button" data-memory-frame-next aria-label="Next photo">›</button>
-    </div>
     <span class="memory-frame-resize-handle" data-memory-frame-resize title="Drag to resize" aria-hidden="true">◢</span>
   `;
 
@@ -2052,21 +2099,6 @@ function ensureMemoryFrameWidget() {
     setMemoryFrameLayout(mode, layout);
     applyMemoryFrameLayout(widget, layout);
     showToast(layout.locked ? "Memory Frame locked" : "Memory Frame unlocked");
-  });
-
-  widget.querySelector("[data-memory-frame-prev]").addEventListener("click", (event) => {
-    event.stopPropagation();
-    nextMemoryFramePhoto(-1);
-  });
-
-  widget.querySelector("[data-memory-frame-next]").addEventListener("click", (event) => {
-    event.stopPropagation();
-    nextMemoryFramePhoto(1);
-  });
-
-  widget.querySelector("[data-memory-frame-pause]").addEventListener("click", (event) => {
-    event.stopPropagation();
-    toggleMemoryFramePause();
   });
 
   widget.querySelector("[data-memory-frame-drag]").addEventListener("pointerdown", (event) => {
@@ -2157,7 +2189,6 @@ function renderMemoryFrameDesktop() {
 
   const mode = getMemoryFrameMode();
   const shouldShow =
-    mode !== "mobile" &&
     memoryFrameConfig.enabled &&
     memoryFrameConfig.photos.length > 0 &&
     !document.documentElement.classList.contains("desk-clock-mode");
@@ -2310,7 +2341,7 @@ function renderMemoryFrameManager() {
   } else if (!memoryFrameConfig.photos.length) {
     setMemoryFrameStatus("Add photos to begin");
   } else {
-    setMemoryFrameStatus(memoryFramePaused ? "Slideshow paused" : "Slideshow ready");
+    setMemoryFrameStatus("Slideshow ready");
   }
 }
 
@@ -12321,7 +12352,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.17-Memory-Frame-Free";
+const BACKUP_APP_VERSION = "7O.17.1-Memory-Frame-Hotfix-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
