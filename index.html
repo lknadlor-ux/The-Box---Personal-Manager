@@ -72,7 +72,7 @@
     })();
   </script>
 <link href="manifest.json" rel="manifest"/>
-<link href="style.css?v=7o17-2" rel="stylesheet"/>
+<link href="style.css?v=7o17-3" rel="stylesheet"/>
 </head>
 <body>
 <div class="desktop-shell">
@@ -740,11 +740,14 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 </label>
 </section>
 <section class="notes-workspace">
-<aside class="notes-sidebar">
+<aside class="notes-sidebar" id="notesSidebar">
 <div class="notes-sidebar-heading">
 <div>
 <small>NOTES</small>
+<div class="notes-sidebar-title-row">
 <h3>All notes</h3>
+<button class="notes-sidebar-toggle" id="notesSidebarToggle" type="button" aria-label="Collapse notes list" aria-controls="notesSidebar" aria-expanded="true" title="Collapse notes list"><span aria-hidden="true">‹</span></button>
+</div>
 </div>
 <span class="notes-count-badge" id="notesCount">0</span>
 </div>
@@ -753,9 +756,12 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 </aside>
 <section class="notes-editor-panel">
 <div class="notes-editor-heading">
+<div class="notes-editor-heading-main">
+<button class="notes-sidebar-restore" id="notesSidebarRestore" type="button" aria-label="Show notes list" aria-controls="notesSidebar" aria-expanded="false" title="Show notes list" hidden><span aria-hidden="true">›</span></button>
 <div>
 <small id="noteEditorMode">NOTE</small>
 <h3 id="noteEditorHeading">Select a note</h3>
+</div>
 </div>
 <div class="notes-editor-state">
 <span id="noteStatus">Saved</span>
@@ -3753,6 +3759,6 @@ Photos stay on this device in browser storage. The slideshow loads only the curr
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="cloud.js"></script>
-<script src="app.js?v=7o17-2"></script>
+<script src="app.js?v=7o17-3"></script>
 </body>
 </html>

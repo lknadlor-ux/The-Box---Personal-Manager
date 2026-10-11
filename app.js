@@ -886,6 +886,42 @@ function formatNoteUpdatedAt(value) {
   })}`;
 }
 
+// Phase 7O.17.3 — Notes list collapse is a display-only, per-device preference.
+const NOTES_LIST_COLLAPSED_KEY = "the-box-notes-list-collapsed";
+
+function setNotesListCollapsed(collapsed, { persist = true } = {}) {
+  const workspace = document.querySelector('.app-window[data-app-window="notes"] .notes-workspace');
+  const sidebar = $("notesSidebar");
+  const collapseButton = $("notesSidebarToggle");
+  const restoreButton = $("notesSidebarRestore");
+  if (!workspace || !sidebar || !collapseButton || !restoreButton) return;
+
+  const isCollapsed = Boolean(collapsed);
+  workspace.classList.toggle("notes-sidebar-collapsed", isCollapsed);
+  sidebar.hidden = isCollapsed;
+  collapseButton.setAttribute("aria-expanded", String(!isCollapsed));
+  restoreButton.hidden = !isCollapsed;
+  restoreButton.setAttribute("aria-expanded", String(!isCollapsed));
+
+  if (persist) {
+    try {
+      localStorage.setItem(NOTES_LIST_COLLAPSED_KEY, String(isCollapsed));
+    } catch (_) {
+      // Storage-disabled browsers can still use the toggle until refresh.
+    }
+  }
+}
+
+function initializeNotesListCollapse() {
+  let collapsed = false;
+  try {
+    collapsed = localStorage.getItem(NOTES_LIST_COLLAPSED_KEY) === "true";
+  } catch (_) {
+    // The notes sidebar stays expanded if storage is unavailable.
+  }
+  setNotesListCollapsed(collapsed, { persist: false });
+}
+
 function renderNotesList() {
   const list = $("notesList");
   if (!list) return;
@@ -12441,7 +12477,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.17.2-Memory-Frame-Gallery-Free";
+const BACKUP_APP_VERSION = "7O.17.3-Notes-Collapse-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -16491,6 +16527,7 @@ $("eventForm").addEventListener("submit", (event) => {
 });
 
 initializeNoteItems();
+initializeNotesListCollapse();
 
 $("dashboardStickyNote").addEventListener("click", () => {
   const noteId = $("dashboardStickyNote").dataset.noteId;
@@ -16504,6 +16541,8 @@ $("dashboardOurSpacePlan").addEventListener("click", () => {
   if (planId) selectOurSpacePlan(planId);
 });
 
+$("notesSidebarToggle").addEventListener("click", () => setNotesListCollapsed(true));
+$("notesSidebarRestore").addEventListener("click", () => setNotesListCollapsed(false));
 $("newNoteButton").addEventListener("click", createNewNoteItem);
 $("resetStickyLayoutButton").addEventListener("click", resetStickyNoteLayoutsForCurrentMode);
 $("notesSearchInput").addEventListener("input", (event) => {
