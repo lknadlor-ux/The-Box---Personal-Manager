@@ -72,7 +72,7 @@
     })();
   </script>
 <link href="manifest.json" rel="manifest"/>
-<link href="style.css?v=7o17-3" rel="stylesheet"/>
+<link href="style.css?v=7o17-4" rel="stylesheet"/>
 </head>
 <body>
 <div class="desktop-shell">
@@ -775,10 +775,29 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
                   Title
                   <input id="noteTitle" maxlength="180" placeholder="Note title" type="text"/>
 </label>
-<label class="note-content-field">
+<div class="note-format-toolbar" id="noteFormattingToolbar" role="toolbar" aria-label="Note formatting">
+<div class="note-format-group" aria-label="Text style">
+<button type="button" data-note-format="bold" aria-label="Bold selected text" title="Bold (Ctrl+B)"><strong>B</strong></button>
+<button type="button" data-note-format="italic" aria-label="Italic selected text" title="Italic (Ctrl+I)"><em>I</em></button>
+<button type="button" data-note-format="strike" aria-label="Strikethrough selected text" title="Strikethrough"><s>S</s></button>
+<button type="button" data-note-format="heading" aria-label="Heading" title="Heading">H₂</button>
+</div>
+<div class="note-format-group" aria-label="Lists">
+<button type="button" data-note-format="bullet" aria-label="Bullet list" title="Bullet list">☷</button>
+<button type="button" data-note-format="number" aria-label="Numbered list" title="Numbered list">1.</button>
+<button type="button" data-note-format="checklist" aria-label="Checklist" title="Checklist">☑</button>
+</div>
+<div class="note-format-group" aria-label="Blocks">
+<button type="button" data-note-format="quote" aria-label="Quote" title="Quote">❝</button>
+<button type="button" data-note-format="divider" aria-label="Insert divider" title="Divider">—</button>
+</div>
+<button class="note-format-preview-toggle" id="notePreviewToggle" type="button" aria-label="Preview formatted note" aria-pressed="false" title="Preview formatting and check off items">◉ Preview</button>
+</div>
+<label class="note-content-field" id="noteContentField">
                   Note
                   <textarea id="noteContent" maxlength="250000" placeholder="Start writing..." spellcheck="true"></textarea>
 </label>
+<div class="note-markdown-preview" id="noteMarkdownPreview" role="region" aria-label="Formatted note preview" hidden></div>
 <div class="notes-editor-footer">
 <div class="notes-editor-meta">
 <span id="noteWordCount">0 words</span>
@@ -3759,6 +3778,6 @@ Photos stay on this device in browser storage. The slideshow loads only the curr
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="cloud.js"></script>
-<script src="app.js?v=7o17-3"></script>
+<script src="app.js?v=7o17-4"></script>
 </body>
 </html>
