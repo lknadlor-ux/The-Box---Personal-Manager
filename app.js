@@ -963,6 +963,9 @@ function setNotesEditorDisabled(disabled) {
     if (element) element.disabled = disabled;
   });
   $("deleteNoteButton").disabled = disabled;
+  document.querySelectorAll('#noteFormattingToolbar [data-note-format]').forEach((button) => {
+    button.disabled = disabled;
+  });
 }
 
 function updateNoteEditorMeta(note = getSelectedNoteItem()) {
@@ -970,6 +973,228 @@ function updateNoteEditorMeta(note = getSelectedNoteItem()) {
   const words = content.trim() ? content.trim().split(/\s+/).length : 0;
   $("noteWordCount").textContent = `${words} word${words === 1 ? "" : "s"}`;
   $("noteUpdatedAt").textContent = note ? formatNoteUpdatedAt(note.updatedAt) : "—";
+}
+
+// Phase 7O.17.4 — Notes formatting and interactive checklists.
+// Retains the existing text-based note payload and cloud synchronization.
+let notePreviewActive = false;
+
+function formatNoteInlineText(value) {
+  return escapeHtml(String(value || ""))
+    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/~~([^~\n]+)~~/g, "<del>$1</del>")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+}
+
+function buildNotesMarkdownPreview(content, { readOnly = false } = {}) {
+  const sourceLines = String(content || "").split(/\r?\n/);
+  const output = [];
+  let openList = "";
+  const closeList = () => {
+    if (openList) output.push(openList === "ordered" ? "</ol>" : "</ul>");
+    openList = "";
+  };
+  const useList = (type) => {
+    if (openList === type) return;
+    closeList();
+    output.push(type === "ordered" ? '<ol class="note-preview-list">' :
+      '<ul class="note-preview-list' + (type === "checks" ? ' note-preview-checks' : '') + '">');
+    openList = type;
+  };
+  sourceLines.forEach((line, index) => {
+    const checkbox = line.match(/^\s*[-*+]\s+\[([xX ])\]\s*(.*)$/);
+    if (checkbox) {
+      const checked = checkbox[1].toLowerCase() === "x";
+      useList("checks");
+      output.push('<li class="note-preview-check-item"><label>' +
+        '<input type="checkbox" data-note-check-line="' + index + '" ' +
+        (checked ? "checked " : "") + (readOnly ? "disabled " : "") +
+        'aria-label="Mark item ' + (index + 1) + (checked ? ' incomplete' : ' complete') + '">' +
+        '<span' + (checked ? ' class="is-complete"' : "") + '>' +
+        formatNoteInlineText(checkbox[2]) + "</span></label></li>");
+      return;
+    }
+    const bullet = line.match(/^\s*[-*+]\s+(.*)$/);
+    if (bullet) {
+      useList("bullet");
+      output.push("<li>" + formatNoteInlineText(bullet[1]) + "</li>");
+      return;
+    }
+    const numbered = line.match(/^\s*(\d+)[.)]\s+(.*)$/);
+    if (numbered) {
+      if (openList !== "ordered") {
+        closeList();
+        const start = Math.max(1, Math.min(999999, Number(numbered[1]) || 1));
+        output.push('<ol class="note-preview-list" start="' + start + '">');
+        openList = "ordered";
+      }
+      output.push("<li>" + formatNoteInlineText(numbered[2]) + "</li>");
+      return;
+    }
+    closeList();
+    const trimmed = line.trim();
+    if (!trimmed) {
+      output.push('<div class="note-preview-space" aria-hidden="true"></div>');
+      return;
+    }
+    if (/^(?:---|\*\*\*|___)$/.test(trimmed)) {
+      output.push("<hr>");
+      return;
+    }
+    const heading = line.match(/^\s*(#{1,3})\s+(.+)$/);
+    if (heading) {
+      const level = heading[1].length + 1;
+      output.push("<h" + level + ">" + formatNoteInlineText(heading[2]) + "</h" + level + ">");
+      return;
+    }
+    const quoted = line.match(/^\s*>\s?(.*)$/);
+    if (quoted) {
+      output.push("<blockquote>" + formatNoteInlineText(quoted[1]) + "</blockquote>");
+      return;
+    }
+    output.push("<p>" + formatNoteInlineText(line) + "</p>");
+  });
+  closeList();
+  return output.join("");
+}
+
+function renderNoteMarkdownPreview() {
+  const preview = $("noteMarkdownPreview");
+  if (!preview || !notePreviewActive) return;
+  const note = getSelectedNoteItem();
+  preview.innerHTML = note
+    ? buildNotesMarkdownPreview(note.content, { readOnly: isStickyNoteLockedForCurrentMode(note) })
+    : '<p class="note-preview-empty">Select a note to preview.</p>';
+}
+
+function updateNotePreviewVisibility() {
+  const note = getSelectedNoteItem();
+  const active = notePreviewActive && Boolean(note);
+  const field = $("noteContentField");
+  const preview = $("noteMarkdownPreview");
+  const toggle = $("notePreviewToggle");
+  if (!field || !preview || !toggle) return;
+  field.hidden = active;
+  preview.hidden = !active;
+  toggle.disabled = !note;
+  toggle.setAttribute("aria-label", active ? "Return to edit note" : "Preview formatted note");
+  document.querySelectorAll('#noteFormattingToolbar [data-note-format]').forEach((button) => {
+    button.disabled = active || !note || isStickyNoteLockedForCurrentMode(note);
+  });
+  toggle.setAttribute("aria-pressed", String(active));
+  toggle.textContent = active ? "✎ Edit" : "◉ Preview";
+  toggle.title = active ? "Return to text editing" : "Preview formatting and check off items";
+  if (active) renderNoteMarkdownPreview();
+}
+
+function replaceNoteEditorRange(replacement, start, end, cursorStart, cursorEnd = cursorStart) {
+  const textarea = $("noteContent");
+  if (textarea.value.length - (end - start) + replacement.length > textarea.maxLength) {
+    showToast("Note is at its maximum length");
+    return false;
+  }
+  textarea.focus();
+  textarea.setRangeText(replacement, start, end, "end");
+  textarea.setSelectionRange(cursorStart, cursorEnd);
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  return true;
+}
+
+function applyNoteFormatting(action) {
+  const note = getSelectedNoteItem();
+  const textarea = $("noteContent");
+  if (!note || !textarea || notePreviewActive || isStickyNoteLockedForCurrentMode(note)) return;
+  const value = textarea.value;
+  const from = textarea.selectionStart;
+  const to = textarea.selectionEnd;
+  const wrappers = { bold: "**", italic: "*", strike: "~~" };
+  if (Object.prototype.hasOwnProperty.call(wrappers, action)) {
+    const marker = wrappers[action];
+    const selected = value.slice(from, to);
+    const wrapped = selected.length >= marker.length * 2 &&
+      selected.startsWith(marker) && selected.endsWith(marker);
+    const insert = wrapped ? selected.slice(marker.length, -marker.length) :
+      marker + selected + marker;
+    const start = from + (wrapped ? 0 : marker.length);
+    const finish = start + (wrapped ? insert.length : selected.length);
+    replaceNoteEditorRange(insert, from, to, start, finish);
+    return;
+  }
+  if (action === "divider") {
+    const prefix = from > 0 && value[from - 1] !== "\n" ? "\n" : "";
+    const suffix = to < value.length && value[to] !== "\n" ? "\n" : "";
+    const insert = prefix + "---\n" + suffix;
+    replaceNoteEditorRange(insert, from, to, from + insert.length);
+    return;
+  }
+  const lineStart = value.lastIndexOf("\n", Math.max(0, from - 1)) + 1;
+  const targetEnd = Math.max(from, to > from ? to - 1 : to);
+  const endIndex = value.indexOf("\n", targetEnd);
+  const lineEnd = endIndex < 0 ? value.length : endIndex;
+  const selectedLines = value.slice(lineStart, lineEnd).split("\n");
+  const pattern = {
+    bullet: /^[-*+]\s+(?!\[[xX ]\])/,
+    number: /^\d+[.)]\s+/,
+    checklist: /^[-*+]\s+\[[xX ]\]\s*/,
+    heading: /^##\s+/,
+    quote: /^>\s+/
+  }[action];
+  if (!pattern) return;
+  const already = selectedLines.every((line) => pattern.test(line));
+  const anyPrefix = /^(?:[-*+]\s+\[[xX ]\]\s*|[-*+]\s+|\d+[.)]\s+|#{1,3}\s+|>\s+)/;
+  const transformed = selectedLines.map((line, index) => {
+    if (already) return line.replace(pattern, "");
+    const text = line.replace(anyPrefix, "");
+    const prefix = action === "bullet" ? "- " :
+      action === "number" ? (index + 1) + ". " :
+      action === "checklist" ? "- [ ] " :
+      action === "heading" ? "## " : "> ";
+    return prefix + text;
+  }).join("\n");
+  const multi = to > from && selectedLines.length > 1;
+  const newCursor = lineStart + transformed.length;
+  replaceNoteEditorRange(transformed, lineStart, lineEnd,
+    multi ? lineStart : newCursor, newCursor);
+}
+
+function handleNoteListEnter(event) {
+  if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey ||
+      event.metaKey || event.isComposing) return;
+  const textarea = event.currentTarget;
+  const note = getSelectedNoteItem();
+  if (!note || isStickyNoteLockedForCurrentMode(note)) return;
+  const caret = textarea.selectionStart;
+  if (caret !== textarea.selectionEnd) return;
+  const lineStart = textarea.value.lastIndexOf("\n", Math.max(0, caret - 1)) + 1;
+  const lineEnd = textarea.value.indexOf("\n", caret);
+  if (lineEnd !== -1 && caret !== lineEnd) return;
+  const match = textarea.value.slice(lineStart, caret).match(/^(\s*)(- \[[xX ]\] |- |\d+[.)] )(.*)$/);
+  if (!match) return;
+  event.preventDefault();
+  if (!match[3].trim()) {
+    replaceNoteEditorRange(match[1], lineStart, caret, lineStart + match[1].length);
+    return;
+  }
+  const prefix = match[2].startsWith("- [") ? "- [ ] " :
+    match[2] === "- " ? "- " : (parseInt(match[2], 10) + 1) + ". ";
+  const insertion = "\n" + match[1] + prefix;
+  replaceNoteEditorRange(insertion, caret, caret, caret + insertion.length);
+}
+
+function updateNoteChecklistFromPreview(event) {
+  const target = event.target;
+  if (!target.matches('input[data-note-check-line]')) return;
+  const note = getSelectedNoteItem();
+  if (!note || isStickyNoteLockedForCurrentMode(note)) return;
+  const lineIndex = Number(target.dataset.noteCheckLine);
+  const lines = note.content.split(/\r?\n/);
+  if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex >= lines.length) return;
+  const pattern = /^(\s*[-*+]\s+\[)[xX ](\]\s*)/;
+  if (!pattern.test(lines[lineIndex])) return;
+  lines[lineIndex] = lines[lineIndex].replace(pattern, "$1" + (target.checked ? "x" : " ") + "$2");
+  $("noteContent").value = lines.join("\n");
+  updateSelectedNoteFromEditor();
+  renderNoteMarkdownPreview();
 }
 
 function renderNotesEditor() {
@@ -984,6 +1209,7 @@ function renderNotesEditor() {
     $("noteStatus").textContent = "Saved";
     setNotesEditorDisabled(true);
     updateNoteEditorMeta(null);
+    updateNotePreviewVisibility();
     return;
   }
 
@@ -998,6 +1224,7 @@ function renderNotesEditor() {
   $("noteContent").value = note.content;
   $("noteStatus").textContent = locked ? "Locked · unlock on desktop to edit" : "Saved";
   updateNoteEditorMeta(note);
+  updateNotePreviewVisibility();
 }
 
 function getStickyLayoutMode() {
@@ -1418,7 +1645,7 @@ function getSelectedNoteLinesForTasks() {
   if (!note) return [];
   return note.content
     .split("\n")
-    .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+    .map((line) => line.replace(/^[-•*]\s*(?:\[[xX ]\]\s*)?/, "").replace(/^\d+[.)]\s*/, "").trim())
     .filter((line) => line.length >= 4)
     .slice(0, 12);
 }
@@ -12477,7 +12704,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.17.3-Notes-Collapse-Free";
+const BACKUP_APP_VERSION = "7O.17.4-Notes-Formatting-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -16554,6 +16781,26 @@ $("notesSearchInput").addEventListener("input", (event) => {
 });
 $("noteSticky").addEventListener("change", updateSelectedNoteFromEditor);
 $("deleteNoteButton").addEventListener("click", deleteSelectedNoteItem);
+document.querySelectorAll("#noteFormattingToolbar [data-note-format]").forEach((button) => {
+  button.addEventListener("click", () => applyNoteFormatting(button.dataset.noteFormat));
+});
+$("notePreviewToggle").addEventListener("click", () => {
+  if (!getSelectedNoteItem()) return;
+  notePreviewActive = !notePreviewActive;
+  updateNotePreviewVisibility();
+});
+$("noteMarkdownPreview").addEventListener("change", updateNoteChecklistFromPreview);
+$("noteContent").addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+    const key = event.key.toLowerCase();
+    if (key === "b" || key === "i") {
+      event.preventDefault();
+      applyNoteFormatting(key === "b" ? "bold" : "italic");
+      return;
+    }
+  }
+  handleNoteListEnter(event);
+});
 
 renderNotesCenter();
 

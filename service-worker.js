@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o17-3-notes-sidebar-collapse";
+const CACHE_NAME = "the-box-os-phase-7o17-4-notes-formatting-checklists";
 
 const APP_FILES = [
   "./",
