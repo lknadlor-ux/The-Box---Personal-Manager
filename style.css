@@ -22328,3 +22328,82 @@ html.phone-ui .desktop-icons {
 .dock.minimal-dock {
   z-index: 90;
 }
+
+
+/* ==========================================================================
+   Phase 7O.13.8 — True Tablet Browser Fullscreen
+   Tablet now uses native browser fullscreen so Chrome tabs/address bars can
+   disappear. The prior app-only fallback remains for phone/iOS/safe-render.
+   ========================================================================== */
+
+/* Solid compositor-safe surface BEFORE requesting native fullscreen. */
+html.box-native-fullscreen-preparing,
+html.box-native-fullscreen-preparing body,
+html.box-native-fullscreen-preparing .desktop-shell,
+html.box-native-fullscreen-preparing .desktop {
+  background: var(--bg) !important;
+}
+
+html.box-native-fullscreen-preparing .topbar,
+html.box-native-fullscreen-preparing .dock,
+html.box-native-fullscreen-preparing .launcher,
+html.box-native-fullscreen-preparing .app-window,
+html.box-native-fullscreen-preparing .desktop-icons {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  filter: none !important;
+}
+
+/* Avoid transformed compositor layers during the fullscreen handoff. */
+html.box-native-fullscreen-preparing .desktop-shell,
+html.box-native-fullscreen-preparing .desktop,
+html.box-native-fullscreen-preparing .app-window.open {
+  transform: none !important;
+}
+
+/* Once native fullscreen is active, force the document to occupy the actual
+   fullscreen viewport rather than the pre-fullscreen browser-tab viewport. */
+html.box-native-fullscreen,
+html.box-native-fullscreen body,
+html.box-native-fullscreen .desktop-shell {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  background: var(--bg) !important;
+}
+
+html.box-native-fullscreen .desktop-shell {
+  position: fixed !important;
+  inset: 0 !important;
+}
+
+html.box-native-fullscreen .desktop {
+  height: 100% !important;
+  min-height: 100% !important;
+}
+
+/* Native fullscreen should keep The Box chrome and selected Tablet/Windows
+   layout exactly as chosen by the user. Only browser chrome disappears. */
+html.tablet-ui.box-native-fullscreen .topbar,
+html.view-mode-windows.box-native-fullscreen .topbar,
+html.tablet-ui.box-native-fullscreen .dock,
+html.view-mode-windows.box-native-fullscreen .dock {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Android tablet performance safeguards remain active in true fullscreen. */
+html.performance-ui.box-native-fullscreen .topbar,
+html.performance-ui.box-native-fullscreen .dock,
+html.performance-ui.box-native-fullscreen .launcher,
+html.performance-ui.box-native-fullscreen .app-window,
+html.performance-ui.box-native-fullscreen .desktop-icons {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Do not show the app-only fallback exit control while native fullscreen is
+   active. Browser/system gestures and the normal Full Screen button can exit. */
+html.box-native-fullscreen .fullscreen-fallback-exit {
+  display: none !important;
+}

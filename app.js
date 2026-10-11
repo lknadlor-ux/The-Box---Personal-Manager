@@ -1720,7 +1720,7 @@ function updateFullscreenUi() {
         "Browser full screen is active. The Box layout and navigation stay unchanged.";
     } else if (fallbackActive) {
       help.textContent =
-        "Immersive phone/tablet mode is active. On iPhone, Add to Home Screen gives the cleanest browser-free experience.";
+        "Immersive app mode is active. Browser tabs/address bars can only be hidden by native browser fullscreen or an installed PWA.";
     } else if (isStandaloneAppMode()) {
       help.textContent =
         "The Box is already running as an installed app. Full screen can still maximize the workspace where supported.";
@@ -1754,11 +1754,12 @@ function enterFullscreenFallback() {
 function shouldPreferFullscreenFallback() {
   const detected = getDetectedDeviceLayout();
 
+  // Tablet should use native browser fullscreen so Chrome tabs/address bars
+  // can actually disappear. Fallback is reserved for phone/iOS/safe-render
+  // paths where native page fullscreen is unavailable or unreliable.
   return Boolean(
-    detected.androidDevice ||
-    detected.tablet ||
+    detected.iosDevice ||
     detected.safeRenderer ||
-    document.documentElement.classList.contains("tablet-ui") ||
     document.documentElement.classList.contains("phone-ui")
   );
 }
@@ -1774,19 +1775,50 @@ async function enterBoxFullscreen() {
     root.requestFullscreen ||
     root.webkitRequestFullscreen;
 
-  if (requestFullscreen) {
-    try {
-      await requestFullscreen.call(root);
-      boxFullscreenFallbackActive = false;
-      closeLauncher();
-      updateFullscreenUi();
-      return;
-    } catch (error) {
-      // Fall through to The Box immersive fallback.
-    }
+  if (!requestFullscreen) {
+    enterFullscreenFallback();
+    return;
   }
 
-  enterFullscreenFallback();
+  // Android/Chromium tablets can be sensitive to heavy compositing during the
+  // fullscreen transition. Prepare a solid, non-blurred surface first.
+  root.classList.add("box-native-fullscreen-preparing");
+  closeLauncher();
+
+  await new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(resolve);
+    });
+  });
+
+  try {
+    if (root.requestFullscreen) {
+      try {
+        await root.requestFullscreen({ navigationUI: "hide" });
+      } catch (optionError) {
+        // Older Chromium builds may not accept the options object.
+        await root.requestFullscreen();
+      }
+    } else {
+      await root.webkitRequestFullscreen();
+    }
+
+    boxFullscreenFallbackActive = false;
+    root.classList.remove("box-native-fullscreen-preparing");
+    updateFullscreenUi();
+
+    // Chromium sometimes needs a second viewport pass after browser chrome
+    // disappears.
+    window.setTimeout(() => {
+      updateAppViewportHeight();
+      window.dispatchEvent(new Event("resize"));
+    }, 120);
+
+    return;
+  } catch (error) {
+    root.classList.remove("box-native-fullscreen-preparing");
+    enterFullscreenFallback();
+  }
 }
 
 async function exitBoxFullscreen() {
@@ -1804,6 +1836,7 @@ async function exitBoxFullscreen() {
   }
 
   boxFullscreenFallbackActive = false;
+  document.documentElement.classList.remove("box-native-fullscreen-preparing");
   updateFullscreenUi();
 }
 
@@ -1817,9 +1850,13 @@ async function toggleBoxFullscreen() {
 
 function handleFullscreenChange() {
   // Escape/F11/system gestures can end native fullscreen without our button.
+  const root = document.documentElement;
+  root.classList.remove("box-native-fullscreen-preparing");
+
   if (!getNativeFullscreenElement()) {
-    document.documentElement.classList.remove("box-native-fullscreen");
+    root.classList.remove("box-native-fullscreen");
   }
+
   updateFullscreenUi();
 }
 
@@ -11393,7 +11430,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.13.7-Free";
+const BACKUP_APP_VERSION = "7O.13.8-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
