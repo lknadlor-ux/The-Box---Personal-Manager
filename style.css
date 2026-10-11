@@ -24528,3 +24528,84 @@ html.performance-ui .memory-frame-drag-handle {
     transition: none !important;
   }
 }
+
+/* ==========================================================================
+   Phase 7O.17.3 — Notes List Collapse (Windows / Tablet / Mobile)
+   Only UI state changes; selected note and content are never modified.
+   ========================================================================== */
+.notes-sidebar-title-row,
+.notes-editor-heading-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.notes-editor-heading-main > div {
+  min-width: 0;
+}
+
+.notes-sidebar-toggle,
+.notes-sidebar-restore {
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  transition: background .15s ease, border-color .15s ease;
+}
+
+.notes-sidebar-toggle:hover,
+.notes-sidebar-restore:hover {
+  color: var(--accent);
+  border-color: var(--border-focus);
+  background: var(--surface-hover);
+}
+
+.notes-sidebar-toggle:focus-visible,
+.notes-sidebar-restore:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.notes-sidebar-restore[hidden] {
+  display: none !important;
+}
+
+.app-window[data-app-window="notes"] .notes-workspace.notes-sidebar-collapsed {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.app-window[data-app-window="notes"] .notes-workspace.notes-sidebar-collapsed > .notes-sidebar {
+  display: none !important;
+}
+
+.app-window[data-app-window="notes"] .notes-workspace.notes-sidebar-collapsed > .notes-editor-panel {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (pointer: coarse) {
+  .notes-sidebar-toggle,
+  .notes-sidebar-restore {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notes-sidebar-toggle,
+  .notes-sidebar-restore {
+    transition: none;
+  }
+}
