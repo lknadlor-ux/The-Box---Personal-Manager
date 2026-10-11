@@ -1077,6 +1077,10 @@ function updateNotePreviewVisibility() {
   field.hidden = active;
   preview.hidden = !active;
   toggle.disabled = !note;
+  toggle.setAttribute("aria-label", active ? "Return to edit note" : "Preview formatted note");
+  document.querySelectorAll('#noteFormattingToolbar [data-note-format]').forEach((button) => {
+    button.disabled = active || !note || isStickyNoteLockedForCurrentMode(note);
+  });
   toggle.setAttribute("aria-pressed", String(active));
   toggle.textContent = active ? "✎ Edit" : "◉ Preview";
   toggle.title = active ? "Return to text editing" : "Preview formatting and check off items";
@@ -1641,7 +1645,7 @@ function getSelectedNoteLinesForTasks() {
   if (!note) return [];
   return note.content
     .split("\n")
-    .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+    .map((line) => line.replace(/^[-•*]\s*(?:\[[xX ]\]\s*)?/, "").replace(/^\d+[.)]\s*/, "").trim())
     .filter((line) => line.length >= 4)
     .slice(0, 12);
 }
