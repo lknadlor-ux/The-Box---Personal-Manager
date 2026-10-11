@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o17-4-notes-formatting-checklists";
+const CACHE_NAME = "the-box-os-phase-7o17-5-notes-layout-scroll-hotfix";
 
 const APP_FILES = [
   "./",

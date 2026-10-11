@@ -24801,3 +24801,250 @@ html.phone-ui .app-window[data-app-window="notes"] .note-markdown-preview {
     min-width: 40px;
   }
 }
+
+/* ==========================================================================
+   Phase 7O.17.5 — Notes responsive layout + reliable editor access
+   The Notes window owns vertical overflow. Its grid must grow with the editor
+   instead of shrinking its children into a clipped, fixed-height grid row.
+   ========================================================================== */
+.app-window[data-app-window="notes"] > .window-content.notes-window-redesign {
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-block: 16px 28px;
+}
+
+/* Compact header: title and counters occupy one row when there is room. */
+.app-window[data-app-window="notes"] .notes-hero {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  flex-flow: row wrap !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px !important;
+  padding: 10px 13px !important;
+}
+
+.app-window[data-app-window="notes"] .notes-hero .productivity-hero-copy {
+  flex: 1 1 290px;
+  min-width: 0;
+}
+
+.app-window[data-app-window="notes"] .notes-hero .productivity-hero-copy h2 {
+  margin: 2px 0 3px;
+  font-size: clamp(17px, 2.2vw, 22px);
+  line-height: 1.2;
+}
+
+.app-window[data-app-window="notes"] .notes-hero .productivity-hero-copy p {
+  max-width: none;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.app-window[data-app-window="notes"] .notes-overview-stats {
+  display: flex !important;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.app-window[data-app-window="notes"] .notes-overview-stats > div {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 9px;
+}
+
+.app-window[data-app-window="notes"] .notes-overview-stats strong {
+  font-size: 15px;
+}
+
+.app-window[data-app-window="notes"] .notes-overview-stats span {
+  margin: 0;
+  font-size: 8px;
+}
+
+/* All three top actions stay on one tidy row on desktop/tablet. */
+.app-window[data-app-window="notes"] .notes-window-redesign .notes-toolbar {
+  display: grid !important;
+  grid-template-columns: max-content max-content minmax(130px, 1fr) !important;
+  align-items: end;
+  gap: 8px !important;
+  margin: 0 !important;
+  padding: 8px !important;
+}
+
+.app-window[data-app-window="notes"] .notes-toolbar > button {
+  width: auto !important;
+  min-height: 36px;
+  padding: 7px 12px;
+}
+
+.app-window[data-app-window="notes"] .notes-toolbar .notes-search-field {
+  grid-column: auto !important;
+  width: auto !important;
+  min-width: 0;
+}
+
+.app-window[data-app-window="notes"] .notes-toolbar #notesSearchInput {
+  min-height: 36px;
+}
+
+/* A natural-height grid gives the whole Notes window real scrollHeight. */
+.app-window[data-app-window="notes"] .notes-workspace {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  align-items: stretch;
+}
+
+.app-window[data-app-window="notes"] .notes-sidebar {
+  min-height: 0;
+  max-height: 660px;
+  overflow: hidden;
+}
+
+.app-window[data-app-window="notes"] .notes-editor-panel {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 495px;
+  overflow: visible !important;
+}
+
+.app-window[data-app-window="notes"] .note-content-field {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+}
+
+.app-window[data-app-window="notes"] #noteContent {
+  display: block;
+  height: clamp(310px, 43vh, 560px);
+  min-height: 310px;
+  max-height: none;
+  resize: vertical;
+  overflow-y: auto !important;
+  touch-action: pan-y;
+}
+
+.app-window[data-app-window="notes"] .note-markdown-preview:not([hidden]) {
+  flex: 0 0 auto !important;
+  min-height: 310px;
+  max-height: none;
+  overflow-y: visible;
+}
+
+.app-window[data-app-window="notes"] .notes-editor-footer {
+  flex: 0 0 auto;
+  position: static;
+}
+
+/* When the Notes window itself gets narrow, do not force three controls wide. */
+.app-window.window-narrow[data-app-window="notes"] .notes-window-redesign .notes-toolbar,
+.app-window.window-compact[data-app-window="notes"] .notes-window-redesign .notes-toolbar,
+html.phone-ui .app-window[data-app-window="notes"] .notes-window-redesign .notes-toolbar {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+}
+
+.app-window.window-narrow[data-app-window="notes"] .notes-toolbar > button,
+.app-window.window-compact[data-app-window="notes"] .notes-toolbar > button,
+html.phone-ui .app-window[data-app-window="notes"] .notes-toolbar > button {
+  width: 100% !important;
+}
+
+.app-window.window-narrow[data-app-window="notes"] .notes-toolbar .notes-search-field,
+.app-window.window-compact[data-app-window="notes"] .notes-toolbar .notes-search-field,
+html.phone-ui .app-window[data-app-window="notes"] .notes-toolbar .notes-search-field {
+  grid-column: 1 / -1 !important;
+  grid-row: auto;
+  width: 100% !important;
+}
+
+/* Window height can be smaller than the editor; it must remain scrollable. */
+.app-window.window-short[data-app-window="notes"] .notes-hero .productivity-hero-copy p,
+.app-window.window-very-short[data-app-window="notes"] .notes-hero .productivity-hero-copy p {
+  display: none;
+}
+
+.app-window.window-narrow[data-app-window="notes"] .notes-sidebar,
+.app-window.window-compact[data-app-window="notes"] .notes-sidebar {
+  max-height: 270px !important;
+  overflow: hidden !important;
+}
+
+.app-window.window-narrow[data-app-window="notes"] .notes-list,
+.app-window.window-compact[data-app-window="notes"] .notes-list {
+  flex: 1 1 auto !important;
+  max-height: 220px;
+  min-height: 0;
+  overflow-y: auto !important;
+}
+
+/* Phone display modes retain page scrolling and avoid nested scroll traps. */
+html.phone-ui .app-window[data-app-window="notes"] > .window-content.notes-window-redesign {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(110px + env(safe-area-inset-bottom)) !important;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .notes-hero {
+  margin-bottom: 10px;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .notes-toolbar {
+  margin-bottom: 10px !important;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .notes-sidebar {
+  max-height: 260px !important;
+  overflow: hidden !important;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .notes-list {
+  flex: 1 1 auto !important;
+  max-height: 185px !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .notes-editor-panel {
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .note-content-field[hidden] {
+  display: none !important;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] #noteContent {
+  height: clamp(320px, 46vh, 560px) !important;
+  min-height: 300px !important;
+  max-height: 68vh !important;
+}
+
+html.phone-ui .app-window[data-app-window="notes"] .note-markdown-preview:not([hidden]) {
+  min-height: 300px;
+  overflow-y: visible;
+}
+
+/* Keep the same behavior in forced Tablet/Windows mode on a small viewport. */
+@media (max-width: 700px) {
+  .app-window[data-app-window="notes"] .notes-window-redesign .notes-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .app-window[data-app-window="notes"] .notes-hero .productivity-hero-copy {
+    flex-basis: 100%;
+  }
+
+  .app-window[data-app-window="notes"] .notes-overview-stats {
+    width: 100%;
+  }
+}
