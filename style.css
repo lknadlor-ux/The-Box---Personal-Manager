@@ -21947,3 +21947,211 @@ html.box-native-fullscreen body,
 html.box-native-fullscreen .desktop-shell {
   background: var(--bg) !important;
 }
+
+
+/* ==========================================================================
+   Phase 7O.13.5 — Minimal Dock
+   Windows / Tablet bottom dock now mirrors Mobile's five-core-item model:
+   Home · Tasks · Calendar · Notes · More.
+   ========================================================================== */
+
+.dock.minimal-dock {
+  left: 50%;
+  right: auto;
+  bottom: 10px;
+  width: auto;
+  max-width: none;
+  height: auto;
+  justify-content: center;
+  gap: 2px;
+  padding: 5px;
+  overflow: visible;
+  border-radius: 16px;
+  transform: translateX(-50%);
+}
+
+.dock.minimal-dock .dock-item {
+  position: relative;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 11px;
+}
+
+.dock.minimal-dock .dock-icon {
+  min-width: 24px;
+  min-height: 24px;
+  font-size: 18px;
+}
+
+.dock.minimal-dock .dock-more-icon {
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+/* Keep the dock visually quiet. Native title/aria labels still identify each
+   icon on hover / assistive technology. */
+.dock.minimal-dock .dock-label {
+  display: none !important;
+}
+
+.dock.minimal-dock .dock-item:hover,
+.dock.minimal-dock .dock-item:focus-visible,
+.dock.minimal-dock .dock-item.active {
+  transform: none;
+}
+
+.dock.minimal-dock .dock-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.dock.minimal-dock .dock-item.active::after {
+  right: 18px;
+  bottom: 3px;
+  left: 18px;
+  width: auto;
+  height: 2px;
+  border-radius: 999px;
+}
+
+/* A single tiny badge on More replaces the separate Alerts icon. */
+.dock-minimal-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border: 2px solid var(--surface-solid);
+  border-radius: 999px;
+  background: var(--danger);
+  color: white;
+  font-size: 6.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.dock-minimal-badge.hidden {
+  display: none !important;
+}
+
+/* Tablet keeps the same compact five-icon dock rather than widening it. */
+html.tablet-ui .dock.minimal-dock {
+  bottom: 9px;
+  padding: 5px;
+}
+
+/* Mobile already has its own Home · Tasks · Calendar · Notes · More navigation,
+   so the desktop/tablet dock remains hidden there as before. */
+html.phone-ui .dock.minimal-dock {
+  display: none !important;
+}
+
+/* Performance-mode tablet uses an opaque lightweight dock surface. */
+html.performance-ui .dock.minimal-dock {
+  background: var(--surface-solid);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .18) !important;
+}
+
+
+/* ==========================================================================
+   Phase 7O.13.6 — Cloud Workspace Navigation
+   ========================================================================== */
+
+.auth-card {
+  position: relative;
+}
+
+.auth-back-button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  min-height: 38px !important;
+  padding: 0 !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 11px !important;
+  background: var(--surface-soft) !important;
+  color: var(--text-soft) !important;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.auth-back-button:hover,
+.auth-back-button:focus-visible {
+  border-color: var(--border-focus) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+
+.auth-brand {
+  padding-right: 48px;
+}
+
+.signed-in-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.signed-in-panel > p {
+  margin: 0;
+}
+
+.signed-in-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.signed-in-actions button {
+  min-height: 43px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.signed-in-actions .auth-return-button {
+  border-color: transparent;
+  background: var(--accent);
+  color: white;
+  font-weight: 750;
+}
+
+.signed-in-actions .auth-return-button:hover,
+.signed-in-actions .auth-return-button:focus-visible {
+  filter: brightness(1.06);
+}
+
+@media (max-width: 680px) {
+  .auth-card {
+    padding: 22px 18px;
+  }
+
+  .auth-back-button {
+    top: 12px;
+    right: 12px;
+  }
+
+  .auth-brand {
+    padding-right: 44px;
+  }
+
+  .signed-in-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .signed-in-actions button {
+    width: 100%;
+  }
+}

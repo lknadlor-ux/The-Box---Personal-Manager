@@ -4397,19 +4397,32 @@ function updateClock() {
 }
 
 
-function updateMobileNavigation(appName = mobileActiveApp) {
-  const mapped = ["dashboard", "tasks", "calendar", "notes"].includes(appName)
+function getPrimaryNavigationKey(appName = mobileActiveApp) {
+  return ["dashboard", "tasks", "calendar", "notes"].includes(appName)
     ? appName
     : "more";
+}
+
+function updateMobileNavigation(appName = mobileActiveApp) {
+  const mapped = getPrimaryNavigationKey(appName);
 
   document.querySelectorAll("[data-mobile-nav-app]").forEach((item) => {
     item.classList.toggle("active", item.dataset.mobileNavApp === mapped);
   });
 }
 
+function updateDockNavigation(appName = mobileActiveApp) {
+  const mapped = getPrimaryNavigationKey(appName);
+
+  document.querySelectorAll("[data-dock-nav-app]").forEach((item) => {
+    item.classList.toggle("active", item.dataset.dockNavApp === mapped);
+  });
+}
+
 function setMobileActiveApp(appName) {
   mobileActiveApp = appName || "dashboard";
   updateMobileNavigation(mobileActiveApp);
+  updateDockNavigation(mobileActiveApp);
 }
 
 function toggleMobileMoreMenu() {
@@ -4419,8 +4432,10 @@ function toggleMobileMoreMenu() {
 
   if (opening) {
     updateMobileNavigation("more");
+    updateDockNavigation("more");
   } else {
     updateMobileNavigation(mobileActiveApp);
+    updateDockNavigation(mobileActiveApp);
   }
 }
 
@@ -4452,9 +4467,7 @@ function openApp(appName) {
 
   setMobileActiveApp(appName);
 
-  document.querySelectorAll(".dock-item").forEach((item) => {
-    item.classList.toggle("active", item.dataset.openApp === appName);
-  });
+  updateDockNavigation(appName);
 
   closeLauncher();
 
@@ -4885,6 +4898,7 @@ function openLauncher() {
 function closeLauncher() {
   $("launcher").classList.remove("open");
   updateMobileNavigation(mobileActiveApp);
+  updateDockNavigation(mobileActiveApp);
 }
 
 function initializeWindowControls() {
@@ -11169,10 +11183,10 @@ function openReminderSource(item) {
 function updateReminderBadges(summary) {
   const count = summary.attention + summary.today;
   const topBadge = $("notificationBadge");
-  const dockBadge = $("dockReminderBadge");
+  const dockMoreBadge = $("dockMoreBadge");
   const mobileMoreBadge = $("mobileMoreBadge");
 
-  [topBadge, dockBadge, mobileMoreBadge].forEach((badge) => {
+  [topBadge, dockMoreBadge, mobileMoreBadge].forEach((badge) => {
     if (!badge) return;
     badge.textContent = count > 99 ? "99+" : String(count);
     badge.classList.toggle("hidden", count === 0);
@@ -11379,7 +11393,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.13.4-Free";
+const BACKUP_APP_VERSION = "7O.13.6-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -14833,7 +14847,9 @@ $("projectOpenTasksButton").addEventListener("click", () => {
 
 $("launcherButton").addEventListener("click", toggleMobileMoreMenu);
 $("mobileMoreButton").addEventListener("click", toggleMobileMoreMenu);
+$("dockMoreButton").addEventListener("click", toggleMobileMoreMenu);
 updateMobileNavigation(mobileActiveApp);
+updateDockNavigation(mobileActiveApp);
 
 $("closeLauncherButton").addEventListener("click", closeLauncher);
 
@@ -15780,8 +15796,18 @@ window.BoxOSCloudHydrate = function cloudHydrate(data) {
   renderAll();
 };
 
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (!$("authOverlay").classList.contains("open")) return;
+
+  event.preventDefault();
+  closeAuthOverlay();
+});
+
 $("accountButton").addEventListener("click", openAuthOverlay);
+$("authBackButton").addEventListener("click", closeAuthOverlay);
 $("continueLocalButton").addEventListener("click", closeAuthOverlay);
+$("returnToAppButton").addEventListener("click", closeAuthOverlay);
 
 $("authForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -15836,11 +15862,24 @@ $("signUpButton").addEventListener("click", async () => {
 });
 
 $("syncNowButton").addEventListener("click", async () => {
-  $("authMessage").textContent = "Syncing…";
+  const button = $("syncNowButton");
+  button.disabled = true;
+  button.textContent = "Syncing…";
+  $("authMessage").textContent = "Syncing your workspace…";
+
   const result = await window.BoxCloud.syncNow();
-  $("authMessage").textContent = result.error
-    ? result.error.message
-    : "Cloud sync complete.";
+
+  button.disabled = false;
+  button.textContent = "Sync now";
+
+  if (result.error) {
+    $("authMessage").textContent = result.error.message;
+    return;
+  }
+
+  $("authMessage").textContent =
+    "Cloud sync complete. You can return to The Box without refreshing.";
+  showToast("Cloud sync complete");
 });
 
 $("signOutButton").addEventListener("click", async () => {

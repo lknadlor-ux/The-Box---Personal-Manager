@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o13-4">
+  <link rel="stylesheet" href="style.css?v=7o13-6">
 </head>
 <body>
   <div class="desktop-shell">
@@ -3458,111 +3458,36 @@
       </button>
     </nav>
 
-    <footer class="dock" aria-label="Application dock">
-      <button class="dock-item active" data-open-app="dashboard" title="Dashboard" aria-label="Dashboard">
+    <footer class="dock minimal-dock" aria-label="Application dock">
+      <button class="dock-item active" data-open-app="dashboard" data-dock-nav-app="dashboard"
+        title="Home" aria-label="Home">
         <span class="dock-icon" aria-hidden="true">⌂</span>
         <span class="dock-label">Home</span>
       </button>
-      <button class="dock-item" data-open-app="tasks" title="Tasks" aria-label="Tasks">
+
+      <button class="dock-item" data-open-app="tasks" data-dock-nav-app="tasks"
+        title="Tasks" aria-label="Tasks">
         <span class="dock-icon" aria-hidden="true">✓</span>
         <span class="dock-label">Tasks</span>
       </button>
-      <button class="dock-item" data-open-app="calendar" title="Calendar" aria-label="Calendar">
+
+      <button class="dock-item" data-open-app="calendar" data-dock-nav-app="calendar"
+        title="Calendar" aria-label="Calendar">
         <span class="dock-icon" aria-hidden="true">◫</span>
         <span class="dock-label">Calendar</span>
       </button>
-      <button class="dock-item" data-open-app="notes" title="Notes" aria-label="Notes">
+
+      <button class="dock-item" data-open-app="notes" data-dock-nav-app="notes"
+        title="Notes" aria-label="Notes">
         <span class="dock-icon" aria-hidden="true">✎</span>
         <span class="dock-label">Notes</span>
       </button>
-      <button class="dock-item" data-open-app="journal" title="Journal" aria-label="Journal">
-        <span class="dock-icon" aria-hidden="true">☷</span>
-        <span class="dock-label">Journal</span>
-      </button>
-      <button class="dock-item our-space-dock-item" data-open-app="ourspace" title="Our Space" aria-label="Our Space">
-        <span class="dock-icon" aria-hidden="true">♥</span>
-        <span class="dock-label">Us</span>
-      </button>
-      <button class="dock-item" data-open-app="documents" title="Documents" aria-label="Documents">
-        <span class="dock-icon" aria-hidden="true">▣</span>
-        <span class="dock-label">Files</span>
-      </button>
-      <button class="dock-item" data-open-app="pharmacy" title="Pharmacy" aria-label="Pharmacy">
-        <span class="dock-icon" aria-hidden="true">⚕</span>
-        <span class="dock-label">Pharmacy</span>
-      </button>
-      <button class="dock-item" data-open-app="clinic" title="Clinic" aria-label="Clinic">
-        <span class="dock-icon" aria-hidden="true">✚</span>
-        <span class="dock-label">Clinic</span>
-      </button>
-      <button class="dock-item" data-open-app="sk" title="SK" aria-label="SK">
-        <span class="dock-icon" aria-hidden="true">🏛</span>
-        <span class="dock-label">SK</span>
-      </button>
-      <button class="dock-item" data-open-app="finance" title="Finance" aria-label="Finance">
-        <span class="dock-icon" aria-hidden="true">₱</span>
-        <span class="dock-label">Finance</span>
-      </button>
-      <button class="dock-item" data-open-app="focus" title="Focus" aria-label="Focus">
-        <span class="dock-icon" aria-hidden="true">◉</span>
-        <span class="dock-label">Focus</span>
-      </button>
-      <button class="dock-item" data-open-app="assistant" title="Assistant" aria-label="Assistant">
-        <span class="dock-icon" aria-hidden="true">✦</span>
-        <span class="dock-label">Assistant</span>
-      </button>
-      <button class="dock-item" data-open-app="templates" title="Templates and Reports" aria-label="Templates and Reports">
-        <span class="dock-icon" aria-hidden="true">▤</span>
-        <span class="dock-label">Templates</span>
-      </button>
-      <button class="dock-item" data-open-app="insights" title="Insights" aria-label="Insights">
-        <span class="dock-icon" aria-hidden="true">⌁</span>
-        <span class="dock-label">Insights</span>
-      </button>
-      <button class="dock-item" data-open-app="routines" title="Routines" aria-label="Routines">
-        <span class="dock-icon" aria-hidden="true">↻</span>
-        <span class="dock-label">Routines</span>
-      </button>
-      <button class="dock-item" data-open-app="goals" title="Goals" aria-label="Goals">
-        <span class="dock-icon" aria-hidden="true">◎</span>
-        <span class="dock-label">Goals</span>
-      </button>
-      <button class="dock-item" data-open-app="agenda" title="Agenda" aria-label="Agenda">
-        <span class="dock-icon" aria-hidden="true">≡</span>
-        <span class="dock-label">Agenda</span>
-      </button>
-      <button class="dock-item" data-open-app="today" title="Today" aria-label="Today">
-        <span class="dock-icon" aria-hidden="true">☀</span>
-        <span class="dock-label">Today</span>
-      </button>
-      <button class="dock-item" data-open-app="weeklyreview" title="Weekly Review" aria-label="Weekly Review">
-        <span class="dock-icon" aria-hidden="true">◷</span>
-        <span class="dock-label">Review</span>
-      </button>
-      <button class="dock-item" data-open-app="workspaces" title="Workspaces" aria-label="Workspaces">
-        <span class="dock-icon" aria-hidden="true">▦</span>
-        <span class="dock-label">Workspaces</span>
-      </button>
-      <button class="dock-item" data-open-app="activity" title="Activity Timeline" aria-label="Activity Timeline">
-        <span class="dock-icon" aria-hidden="true">↺</span>
-        <span class="dock-label">Activity</span>
-      </button>
-      <button class="dock-item" data-open-app="projects" title="Projects" aria-label="Projects">
-        <span class="dock-icon" aria-hidden="true">◆</span>
-        <span class="dock-label">Projects</span>
-      </button>
-      <button class="dock-item" data-open-app="favorites" title="Favorites" aria-label="Favorites">
-        <span class="dock-icon" aria-hidden="true">★</span>
-        <span class="dock-label">Favorites</span>
-      </button>
-      <button class="dock-item" data-open-app="reminders" title="Reminders" aria-label="Reminders">
-        <span class="dock-icon dock-reminder-icon" aria-hidden="true">♢</span>
-        <span class="dock-label">Alerts</span>
-        <strong id="dockReminderBadge" class="dock-reminder-badge hidden">0</strong>
-      </button>
-      <button class="dock-item" data-open-app="backup" title="Backup &amp; Restore" aria-label="Backup and Restore">
-        <span class="dock-icon" aria-hidden="true">⇩</span>
-        <span class="dock-label">Backup</span>
+
+      <button id="dockMoreButton" class="dock-item dock-more-item" type="button"
+        data-dock-nav-app="more" title="More apps" aria-label="More apps">
+        <span class="dock-icon dock-more-icon" aria-hidden="true">•••</span>
+        <span class="dock-label">More</span>
+        <strong id="dockMoreBadge" class="dock-minimal-badge hidden">0</strong>
       </button>
     </footer>
   </div>
@@ -4146,10 +4071,13 @@
 
   <div id="authOverlay" class="auth-overlay">
     <section class="auth-card">
+      <button id="authBackButton" class="auth-back-button" type="button"
+        aria-label="Back to The Box" title="Back to The Box">←</button>
+
       <div class="auth-brand">
         <div class="auth-logo">T</div>
         <div>
-          <small>THE BOX OS 6.1</small>
+          <small>THE BOX OS 7O.13.6</small>
           <h2>Cloud workspace</h2>
         </div>
       </div>
@@ -4180,8 +4108,11 @@
 
       <div id="signedInPanel" class="signed-in-panel hidden">
         <p>Signed in as <strong id="signedInEmail"></strong></p>
-        <button id="syncNowButton" type="button">Sync now</button>
-        <button id="signOutButton" type="button">Sign out</button>
+        <div class="signed-in-actions">
+          <button id="syncNowButton" type="button">Sync now</button>
+          <button id="returnToAppButton" class="auth-return-button" type="button">Back to The Box</button>
+          <button id="signOutButton" type="button">Sign out</button>
+        </div>
       </div>
 
       <p class="auth-security">
@@ -4195,6 +4126,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o13-4"></script>
+  <script src="app.js?v=7o13-6"></script>
 </body>
 </html>
