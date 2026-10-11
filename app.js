@@ -117,6 +117,10 @@ function updateDeviceUiClasses() {
   root.classList.toggle("phone-ui", phoneMode);
   root.classList.toggle("safe-render-ui", safeRendererMode);
   root.classList.toggle("tablet-ui", tabletMode);
+  root.classList.toggle(
+    "performance-ui",
+    detected.androidDevice || detected.tablet || detected.safeRenderer
+  );
   root.classList.toggle("view-mode-auto", selectedMode === "auto");
   root.classList.toggle("view-mode-mobile", selectedMode === "mobile");
   root.classList.toggle("view-mode-tablet", selectedMode === "tablet");
@@ -1616,16 +1620,16 @@ function updateSelectedNoteFromEditor() {
   $("noteEditorHeading").textContent = note.title || "Untitled note";
   $("noteStatus").textContent = "Saving…";
   updateNoteEditorMeta(note);
-  renderNotesList();
-  renderDesktopStickyNotes();
 
   clearTimeout(noteSaveTimer);
   noteSaveTimer = setTimeout(() => {
     persistNoteItems();
     $("noteStatus").textContent = "Saved";
+    renderNotesList();
+    renderDesktopStickyNotes();
     renderDashboard();
-    renderFavoritesHub();
-    renderActivityTimeline();
+    renderIfAppOpen("favorites", renderFavoritesHub);
+    renderIfAppOpen("activity", renderActivityTimeline);
   }, 450);
 }
 
@@ -1731,12 +1735,13 @@ function updateFullscreenUi() {
   // Recalculate open-window breakpoints after the browser or fallback viewport
   // changes. We intentionally do not alter the user's selected device layout.
   window.requestAnimationFrame(() => {
-    document.querySelectorAll(".app-window").forEach((windowElement) => {
+    document.querySelectorAll(".app-window.open").forEach((windowElement) => {
       updateWindowResponsiveState(windowElement);
       if (!isCompactWindowMode()) {
         clampWindowToDesktop(windowElement);
       }
     });
+    renderDesktopStickyNotes();
   });
 }
 
@@ -1746,7 +1751,24 @@ function enterFullscreenFallback() {
   updateFullscreenUi();
 }
 
+function shouldPreferFullscreenFallback() {
+  const detected = getDetectedDeviceLayout();
+
+  return Boolean(
+    detected.androidDevice ||
+    detected.tablet ||
+    detected.safeRenderer ||
+    document.documentElement.classList.contains("tablet-ui") ||
+    document.documentElement.classList.contains("phone-ui")
+  );
+}
+
 async function enterBoxFullscreen() {
+  if (shouldPreferFullscreenFallback()) {
+    enterFullscreenFallback();
+    return;
+  }
+
   const root = document.documentElement;
   const requestFullscreen =
     root.requestFullscreen ||
@@ -1760,8 +1782,7 @@ async function enterBoxFullscreen() {
       updateFullscreenUi();
       return;
     } catch (error) {
-      // Some mobile browsers expose the API but reject page-level fullscreen.
-      // Fall back to a layout-safe immersive mode.
+      // Fall through to The Box immersive fallback.
     }
   }
 
@@ -4351,25 +4372,28 @@ function updateClock() {
 
   const dailyQuote = getDailyQuote(now);
 
-  $("greeting").textContent = greeting;
-  $("welcomeMessage").textContent = `“${dailyQuote}”`;
-  $("welcomeDate").textContent = now.toLocaleDateString("en-PH", {
+  const welcomeDate = now.toLocaleDateString("en-PH", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: "numeric"
   });
-
-  $("systemTime").textContent = now.toLocaleTimeString("en-US", {
+  const systemTime = now.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true
   });
-
-  $("systemDate").textContent = now.toLocaleDateString("en-PH", {
+  const systemDate = now.toLocaleDateString("en-PH", {
     month: "short",
     day: "numeric"
   });
+  const quoteText = `“${dailyQuote}”`;
+
+  if ($("greeting").textContent !== greeting) $("greeting").textContent = greeting;
+  if ($("welcomeMessage").textContent !== quoteText) $("welcomeMessage").textContent = quoteText;
+  if ($("welcomeDate").textContent !== welcomeDate) $("welcomeDate").textContent = welcomeDate;
+  if ($("systemTime").textContent !== systemTime) $("systemTime").textContent = systemTime;
+  if ($("systemDate").textContent !== systemDate) $("systemDate").textContent = systemDate;
 }
 
 
@@ -4400,6 +4424,20 @@ function toggleMobileMoreMenu() {
   }
 }
 
+function isAppWindowOpen(appName) {
+  const windowElement = document.querySelector(`[data-app-window="${appName}"]`);
+  return Boolean(
+    windowElement &&
+    windowElement.classList.contains("open") &&
+    !windowElement.classList.contains("minimized")
+  );
+}
+
+function renderIfAppOpen(appName, renderer) {
+  if (!isAppWindowOpen(appName) || typeof renderer !== "function") return;
+  renderer();
+}
+
 function openApp(appName) {
   const windowElement = document.querySelector(`[data-app-window="${appName}"]`);
   if (!windowElement) return;
@@ -4419,6 +4457,20 @@ function openApp(appName) {
   });
 
   closeLauncher();
+
+  if (appName === "tasks") renderTasks();
+
+  if (appName === "calendar") {
+    renderCalendar();
+    renderEvents();
+  }
+
+  if (appName === "finance") renderFinance();
+  if (appName === "documents") renderDocuments();
+
+  if (["pharmacy", "clinic", "sk"].includes(appName)) {
+    renderWorkspaceTaskList(appName, $(`${appName}TaskList`));
+  }
 
   if (appName === "documents" && window.BoxCloud?.isReady()) {
     const forceVisibleMobileRefresh =
@@ -8781,13 +8833,13 @@ function renderDocuments() {
 
 async function loadDocuments({ silent = false } = {}) {
   if (!window.BoxCloud?.isReady() || documentsLoading) {
-    renderDocuments();
+    renderIfAppOpen("documents", renderDocuments);
     return;
   }
 
   documentsLoading = true;
   if (!silent) setDocumentUploadStatus("Loading documents and folders…");
-  renderDocuments();
+  renderIfAppOpen("documents", renderDocuments);
 
   const [documentResult, folderResult] = await Promise.all([
     window.BoxCloud.listDocuments(),
@@ -8803,28 +8855,28 @@ async function loadDocuments({ silent = false } = {}) {
       `Document Vault unavailable: ${firstError.message}. Run the Phase 6B.3 Supabase migration SQL before using document links and version history.`,
       "error"
     );
-    renderTasks();
-    renderEvents();
-    renderDocuments();
+    renderIfAppOpen("tasks", renderTasks);
+    renderIfAppOpen("calendar", renderEvents);
+    renderIfAppOpen("documents", renderDocuments);
     return;
   }
 
   documents = documentResult.data || [];
   documentFolders = folderResult.data || [];
   if (!silent) setDocumentUploadStatus("Vault is up to date.", "success");
-  renderTasks();
-  renderEvents();
-  renderDocuments();
   renderDashboard();
-  renderFavoritesHub();
-  renderProjectsHub();
-  renderRoutinesHub();
-  renderInsights();
-  renderActivityTimeline();
-  renderWorkspacesHub();
-  renderWeeklyReview();
-  renderTodayPlanner();
-  renderAgenda();
+  renderIfAppOpen("tasks", renderTasks);
+  renderIfAppOpen("calendar", renderEvents);
+  renderIfAppOpen("documents", renderDocuments);
+  renderIfAppOpen("favorites", renderFavoritesHub);
+  renderIfAppOpen("projects", renderProjectsHub);
+  renderIfAppOpen("routines", renderRoutinesHub);
+  renderIfAppOpen("insights", renderInsights);
+  renderIfAppOpen("activity", renderActivityTimeline);
+  renderIfAppOpen("workspaces", renderWorkspacesHub);
+  renderIfAppOpen("weeklyreview", renderWeeklyReview);
+  renderIfAppOpen("today", renderTodayPlanner);
+  renderIfAppOpen("agenda", renderAgenda);
   if (isCommandPaletteOpen()) renderCommandPalette();
 }
 
@@ -11327,7 +11379,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.13.3-Free";
+const BACKUP_APP_VERSION = "7O.13.4-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -14230,25 +14282,39 @@ function renderFavoritesHub() {
 }
 
 function renderAll() {
-  renderTasks();
   renderDashboard();
-  renderCalendar();
-  renderEvents();
-  renderFinance();
-  renderDocuments();
-  renderBackupCenter();
-  renderTemplateCenter();
-  renderReminderCenter();
-  renderNotesCenter();
-  renderFavoritesHub();
-  renderProjectsHub();
-  renderGoalsHub();
-  renderRoutinesHub();
-  renderActivityTimeline();
-  renderWorkspacesHub();
-  renderWeeklyReview();
-  renderTodayPlanner();
-  renderAgenda();
+  renderDesktopStickyNotes();
+
+  renderIfAppOpen("tasks", renderTasks);
+
+  if (isAppWindowOpen("calendar")) {
+    renderCalendar();
+    renderEvents();
+  }
+
+  renderIfAppOpen("finance", renderFinance);
+  renderIfAppOpen("documents", renderDocuments);
+  renderIfAppOpen("backup", renderBackupCenter);
+  renderIfAppOpen("templates", renderTemplateCenter);
+  renderIfAppOpen("reminders", renderReminderCenter);
+  renderIfAppOpen("notes", renderNotesCenter);
+  renderIfAppOpen("favorites", renderFavoritesHub);
+  renderIfAppOpen("projects", renderProjectsHub);
+  renderIfAppOpen("goals", renderGoalsHub);
+  renderIfAppOpen("routines", renderRoutinesHub);
+  renderIfAppOpen("insights", renderInsights);
+  renderIfAppOpen("activity", renderActivityTimeline);
+  renderIfAppOpen("workspaces", renderWorkspacesHub);
+  renderIfAppOpen("weeklyreview", renderWeeklyReview);
+  renderIfAppOpen("today", renderTodayPlanner);
+  renderIfAppOpen("agenda", renderAgenda);
+
+  ["pharmacy", "clinic", "sk"].forEach((workspace) => {
+    if (isAppWindowOpen(workspace)) {
+      renderWorkspaceTaskList(workspace, $(`${workspace}TaskList`));
+    }
+  });
+
   if (isCommandPaletteOpen()) renderCommandPalette();
 }
 

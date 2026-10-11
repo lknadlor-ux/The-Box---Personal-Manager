@@ -21874,3 +21874,76 @@ html.phone-ui .app-window[data-app-window="notes"] .notes-editor-footer {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+
+/* ==========================================================================
+   Phase 7O.13.4 — Performance + Tablet Fullscreen Hotfix
+   ========================================================================== */
+
+html.performance-ui .topbar,
+html.performance-ui .dock,
+html.performance-ui .launcher,
+html.performance-ui .app-window,
+html.performance-ui .modal-card,
+html.performance-ui .command-palette-card,
+html.performance-ui .quick-capture-card,
+html.performance-ui .auth-card,
+html.performance-ui .fullscreen-fallback-exit {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+html.performance-ui .app-window,
+html.performance-ui .launcher,
+html.performance-ui .dock,
+html.performance-ui .modal-card,
+html.performance-ui .command-palette-card {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .22) !important;
+}
+
+html.performance-ui .app-window,
+html.performance-ui .dock-item,
+html.performance-ui .app-tile,
+html.performance-ui button,
+html.performance-ui .desktop-sticky-note {
+  transition-duration: .08s !important;
+}
+
+html.performance-ui.touch-ui .dock-item:hover,
+html.performance-ui.touch-ui .app-tile:hover,
+html.performance-ui.touch-ui .desktop-sticky-note:hover {
+  transform: none !important;
+}
+
+/* Solid immersive surface for Android/tablet fallback fullscreen. */
+html.performance-ui.box-fallback-fullscreen,
+html.performance-ui.box-fallback-fullscreen body,
+html.performance-ui.box-fallback-fullscreen .desktop-shell,
+html.performance-ui.box-fallback-fullscreen .desktop {
+  background: var(--bg) !important;
+}
+
+html.performance-ui.box-fallback-fullscreen .desktop {
+  inset: 0 !important;
+  width: 100% !important;
+  height: var(--box-viewport-height, 100dvh) !important;
+}
+
+html.performance-ui.box-fallback-fullscreen .app-window.open {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+html.performance-ui.box-fallback-fullscreen .fullscreen-fallback-exit {
+  z-index: 10000 !important;
+  display: grid;
+  background: var(--surface-solid) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+html.box-native-fullscreen,
+html.box-native-fullscreen body,
+html.box-native-fullscreen .desktop-shell {
+  background: var(--bg) !important;
+}

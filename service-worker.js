@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o13-3-notes-scroll-hotfix";
+const CACHE_NAME = "the-box-os-phase-7o13-4-performance-fullscreen";
 
 const APP_FILES = [
   "./",
