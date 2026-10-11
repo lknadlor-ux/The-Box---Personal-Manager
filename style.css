@@ -23160,3 +23160,234 @@ html.performance-ui .desk-clock-switch {
     transform: none !important;
   }
 }
+
+
+/* ==========================================================================
+   Phase 7O.16.1 — Desk Clock Visual Polish
+   Applies only to Desk mode. The normal Clock window and all clock controls
+   remain unchanged.
+   ========================================================================== */
+
+/* Center the display slightly above the physical center of a landscape tablet.
+   This leaves more visual breathing room below the date and makes the layout
+   feel like a purpose-built desk clock rather than an enlarged app window. */
+html.desk-clock-mode .desk-clock-stage {
+  position: relative;
+  isolation: isolate;
+  display: grid !important;
+  place-content: center !important;
+  align-content: center !important;
+  justify-items: center !important;
+  padding: clamp(36px, 6vw, 96px) !important;
+  overflow: hidden;
+}
+
+/* Keep the exact center behind the time darker while allowing the Crimson
+   Nebula to remain vivid around the edges. */
+html.desk-clock-mode .desk-clock-stage::before {
+  position: absolute;
+  inset: -8%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 44% 34% at 50% 47%,
+      rgba(2, 1, 2, .72) 0%,
+      rgba(5, 1, 3, .55) 38%,
+      rgba(8, 1, 4, .18) 68%,
+      transparent 100%
+    );
+  content: "";
+}
+
+/* Add restrained edge arcs similar to the selected visual concept without
+   loading a wallpaper image or video. */
+html.desk-clock-mode .desk-clock-stage::after {
+  position: absolute;
+  inset: -18%;
+  z-index: -2;
+  pointer-events: none;
+  opacity: .72;
+  background:
+    radial-gradient(
+      ellipse 56% 28% at 4% 42%,
+      transparent 0 46%,
+      rgba(255, 52, 69, .18) 48%,
+      rgba(255, 28, 49, .42) 50%,
+      rgba(132, 4, 26, .16) 54%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 64% 30% at 101% 41%,
+      transparent 0 47%,
+      rgba(255, 57, 72, .15) 49%,
+      rgba(255, 24, 46, .38) 51%,
+      rgba(128, 5, 25, .14) 55%,
+      transparent 61%
+    ),
+    radial-gradient(
+      ellipse 62% 24% at 52% 107%,
+      transparent 0 48%,
+      rgba(255, 43, 61, .12) 50%,
+      rgba(225, 15, 40, .27) 52%,
+      transparent 59%
+    );
+  filter: blur(2px);
+  content: "";
+}
+
+/* Clock composition ------------------------------------------------------- */
+html.desk-clock-mode .desk-clock-time-row {
+  display: grid !important;
+  grid-template-columns: auto auto auto;
+  align-items: end;
+  justify-content: center;
+  column-gap: clamp(13px, 1.65vw, 28px);
+  width: auto;
+  max-width: min(94vw, 1280px);
+  margin: 0 auto;
+  line-height: 1;
+}
+
+html.desk-clock-mode .desk-clock-hours-minutes {
+  color: #f5f3f6 !important;
+  font-size: clamp(132px, 20.8vw, 340px) !important;
+  font-weight: 760 !important;
+  line-height: .80 !important;
+  letter-spacing: -.078em !important;
+  text-shadow:
+    0 2px 0 rgba(255,255,255,.025),
+    0 18px 52px rgba(0,0,0,.28) !important;
+}
+
+html.desk-clock-mode .desk-clock-seconds {
+  align-self: end;
+  margin-bottom: .10em;
+  color: #ff4355 !important;
+  font-size: clamp(38px, 4.7vw, 78px) !important;
+  font-weight: 790 !important;
+  line-height: .92 !important;
+  letter-spacing: -.045em !important;
+  text-shadow: 0 0 30px rgba(255, 45, 65, .12);
+}
+
+html.desk-clock-mode .desk-clock-period {
+  align-self: end;
+  margin-bottom: .16em;
+  color: rgba(226, 222, 230, .86) !important;
+  font-size: clamp(23px, 2.7vw, 44px) !important;
+  font-weight: 760 !important;
+  line-height: .95 !important;
+  letter-spacing: .08em !important;
+}
+
+/* Date hierarchy is deliberately quieter than the time. */
+html.desk-clock-mode .desk-clock-date {
+  margin-top: clamp(28px, 3.5vw, 50px) !important;
+  color: rgba(226, 222, 230, .86) !important;
+  font-size: clamp(21px, 2.35vw, 40px) !important;
+  font-weight: 590 !important;
+  line-height: 1.15;
+  letter-spacing: -.025em !important;
+  text-shadow: 0 10px 34px rgba(0,0,0,.26);
+}
+
+/* Restore the small status line in Desk mode as seen in the selected concept. */
+html.desk-clock-mode .desk-clock-status {
+  display: block !important;
+  margin-top: clamp(10px, 1.25vw, 18px) !important;
+  color: rgba(194, 187, 198, .60) !important;
+  font-size: clamp(9px, .95vw, 14px) !important;
+  font-weight: 520;
+  line-height: 1;
+  letter-spacing: .22em !important;
+  text-transform: uppercase;
+}
+
+/* The selected concept uses more visible nebula edges than 7O.16's heavily
+   dimmed clock mode. Keep the center readable while allowing richer red detail
+   around the perimeter. */
+html.desk-clock-mode body:not(.light-theme) .live-background {
+  filter: brightness(.88) saturate(1.08) contrast(1.04) !important;
+}
+
+html.desk-clock-mode body:not(.light-theme) .crimson-nebula-primary {
+  opacity: .82 !important;
+}
+
+html.desk-clock-mode body:not(.light-theme) .crimson-nebula-secondary {
+  opacity: .55 !important;
+}
+
+html.desk-clock-mode body:not(.light-theme) .crimson-nebula-stars {
+  opacity: .27 !important;
+}
+
+/* Keep Desk mode controls invisible until intentionally approached, but make
+   touch access practical on the Honor Pad. */
+html.desk-clock-mode .desk-clock-mode-toolbar {
+  top: 14px;
+  right: 14px;
+  opacity: .08;
+}
+
+html.desk-clock-mode .desk-clock-mode-toolbar:focus-within,
+html.desk-clock-mode .desk-clock-mode-toolbar:hover {
+  opacity: .90;
+}
+
+html.touch-ui.desk-clock-mode .desk-clock-mode-toolbar {
+  opacity: .14;
+}
+
+html.touch-ui.desk-clock-mode .desk-clock-mode-toolbar button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Honor Pad / tablet landscape tuning. */
+@media (min-width: 900px) and (max-width: 1500px) {
+  html.desk-clock-mode .desk-clock-stage {
+    padding-top: 4.5vh !important;
+    padding-bottom: 7vh !important;
+  }
+
+  html.desk-clock-mode .desk-clock-hours-minutes {
+    font-size: clamp(138px, 20vw, 286px) !important;
+  }
+
+  html.desk-clock-mode .desk-clock-seconds {
+    font-size: clamp(38px, 4.3vw, 66px) !important;
+  }
+
+  html.desk-clock-mode .desk-clock-period {
+    font-size: clamp(22px, 2.5vw, 37px) !important;
+  }
+
+  html.desk-clock-mode .desk-clock-date {
+    font-size: clamp(20px, 2.15vw, 32px) !important;
+  }
+}
+
+/* Compact landscape fallback. */
+@media (max-height: 650px) and (min-width: 700px) {
+  html.desk-clock-mode .desk-clock-hours-minutes {
+    font-size: clamp(108px, 18vw, 220px) !important;
+  }
+
+  html.desk-clock-mode .desk-clock-date {
+    margin-top: 20px !important;
+  }
+}
+
+/* If seconds are hidden the PM indicator should sit closer to the main time. */
+html.desk-clock-mode .desk-clock-seconds[hidden] + .desk-clock-period {
+  margin-left: -4px;
+}
+
+/* Reduced motion still keeps the polished static composition. */
+@media (prefers-reduced-motion: reduce) {
+  html.desk-clock-mode .desk-clock-stage::after {
+    opacity: .58;
+  }
+}
