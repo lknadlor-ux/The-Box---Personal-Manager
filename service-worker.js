@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o17-1-memory-frame-display-hotfix";
+const CACHE_NAME = "the-box-os-phase-7o17-2-memory-frame-gallery-polish";
 
 const APP_FILES = [
   "./",

@@ -72,7 +72,7 @@
     })();
   </script>
 <link href="manifest.json" rel="manifest"/>
-<link href="style.css?v=7o17-1" rel="stylesheet"/>
+<link href="style.css?v=7o17-2" rel="stylesheet"/>
 </head>
 <body>
 <div class="desktop-shell">
@@ -2259,6 +2259,7 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 <label>
 <span>Photo fit</span>
 <select id="memoryFrameFitSelect">
+<option selected value="adaptive">Adaptive</option>
 <option value="cover">Fill frame</option>
 <option value="contain">Fit entire photo</option>
 </select>
@@ -2309,14 +2310,14 @@ Photos stay on this device in browser storage. The slideshow loads only the curr
 <div class="memory-frame-preview-image"></div>
 <div>
 <strong>Move · Resize · Lock</strong>
-<p>Unlocked frames can be positioned and resized in Windows, Tablet, or Mobile view. Each mode remembers its own layout.</p>
+<p>The photo is the focus. Controls stay hidden until hover or tap, and each viewing mode remembers its own position and size.</p>
 </div>
 </div>
 <div class="memory-frame-preview-demo">
 <div class="memory-frame-preview-controls">AUTO</div>
 <div>
 <strong>Automatic slideshow</strong>
-<p>The frame changes photos on its own. No playback bar is shown on the desktop widget, and animation pauses when Edge is in the background.</p>
+<p>The frame changes photos on its own. The desktop stays clean, with only the photo visible until you interact with it.</p>
 </div>
 </div>
 </article>
@@ -3752,6 +3753,6 @@ Photos stay on this device in browser storage. The slideshow loads only the curr
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="cloud.js"></script>
-<script src="app.js?v=7o17-1"></script>
+<script src="app.js?v=7o17-2"></script>
 </body>
 </html>

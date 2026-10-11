@@ -222,6 +222,7 @@ const STORAGE = {
   clockShowSeconds: "theBoxOSClockShowSeconds",
   clockShowDate: "theBoxOSClockShowDate",
   memoryFrameConfig: "theBoxOSMemoryFrameConfig",
+  memoryFrameGalleryMigration: "theBoxOSMemoryFrameGalleryMigration",
   timerMinutes: "theBoxOS4TimerMinutes",
   focusTotal: "theBoxOS4FocusTotal",
   windowLayouts: "theBoxOSWindowLayouts",
@@ -1400,7 +1401,7 @@ const MEMORY_FRAME_MAX_PHOTOS = 40;
 const MEMORY_FRAME_MAX_FILE_SIZE = 15 * 1024 * 1024;
 const MEMORY_FRAME_INTERVALS = new Set([5, 8, 10, 15, 30, 60]);
 const MEMORY_FRAME_STYLES = new Set(["frame", "cinematic", "polaroid"]);
-const MEMORY_FRAME_FITS = new Set(["cover", "contain"]);
+const MEMORY_FRAME_FITS = new Set(["adaptive", "cover", "contain"]);
 
 let memoryFrameDbPromise = null;
 let memoryFrameCurrentIndex = 0;
@@ -1412,6 +1413,7 @@ let memoryFrameCurrentPhotoId = null;
 let memoryFrameRequestedPhotoId = null;
 let memoryFrameImageLoadToken = 0;
 let memoryFrameManagerRenderToken = 0;
+let memoryFrameControlsTimer = null;
 
 function createMemoryFramePhotoId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -1472,7 +1474,7 @@ function normalizeMemoryFrameConfig(value = {}) {
     enabled: Boolean(value.enabled),
     interval: MEMORY_FRAME_INTERVALS.has(interval) ? interval : 10,
     shuffle: Boolean(value.shuffle),
-    fit: MEMORY_FRAME_FITS.has(value.fit) ? value.fit : "cover",
+    fit: MEMORY_FRAME_FITS.has(value.fit) ? value.fit : "adaptive",
     style: MEMORY_FRAME_STYLES.has(value.style) ? value.style : "frame",
     showCaption: value.showCaption !== false,
     photos,
@@ -1489,6 +1491,15 @@ function saveMemoryFrameConfig() {
     STORAGE.memoryFrameConfig,
     JSON.stringify(memoryFrameConfig)
   );
+}
+
+function migrateMemoryFrameGalleryLayout() {
+  if (localStorage.getItem(STORAGE.memoryFrameGalleryMigration) === "1") return;
+
+  memoryFrameConfig.fit = "adaptive";
+  memoryFrameConfig.layouts = {};
+  saveMemoryFrameConfig();
+  localStorage.setItem(STORAGE.memoryFrameGalleryMigration, "1");
 }
 
 function openMemoryFrameDb() {
@@ -1650,22 +1661,20 @@ function getDefaultMemoryFrameLayout(mode, bounds) {
   const tablet = mode === "tablet";
 
   const targetWidth = mobile
-    ? Math.min(390, Math.round(bounds.width * 0.90))
+    ? Math.min(390, Math.round(bounds.width * 0.88))
     : tablet
-      ? Math.min(410, Math.round(bounds.width * 0.46))
-      : Math.min(430, Math.round(bounds.width * 0.33));
+      ? Math.min(430, Math.round(bounds.width * 0.44))
+      : Math.min(450, Math.round(bounds.width * 0.34));
 
   const width = Math.max(
     limits.minWidth,
     Math.min(targetWidth, limits.maxWidth)
   );
 
+  const targetRatio = mobile ? 0.70 : 0.75;
   const height = Math.max(
     limits.minHeight,
-    Math.min(
-      Math.round(width * (mobile ? 0.60 : 0.66)),
-      limits.maxHeight
-    )
+    Math.min(Math.round(width * targetRatio), limits.maxHeight)
   );
 
   let x;
@@ -1673,20 +1682,19 @@ function getDefaultMemoryFrameLayout(mode, bounds) {
 
   if (mobile) {
     x = Math.max(6, Math.round((bounds.width - width) / 2));
-    const maxY = Math.max(6, bounds.height - height - 8);
-    const preferredY = Math.max(220, Math.round(bounds.height * 0.46));
-    y = Math.min(preferredY, maxY);
+    const maxY = Math.max(6, bounds.height - height - 10);
+    const preferredY = Math.round(bounds.height * 0.48);
+    y = Math.max(8, Math.min(preferredY, maxY));
   } else {
-    x = Math.max(12, bounds.width - width - (tablet ? 22 : 34));
-    y = Math.max(
-      76,
-      Math.min(tablet ? 108 : 96, bounds.height - height - 76)
-    );
+    const centerX = bounds.width * (tablet ? 0.68 : 0.74);
+    const centerY = bounds.height * (tablet ? 0.57 : 0.59);
+    x = Math.round(centerX - width / 2);
+    y = Math.round(centerY - height / 2);
   }
 
   return {
-    x: Math.min(x, Math.max(0, bounds.width - width)),
-    y: Math.min(y, Math.max(0, bounds.height - height)),
+    x: Math.max(0, Math.min(x, Math.max(0, bounds.width - width))),
+    y: Math.max(0, Math.min(y, Math.max(0, bounds.height - height))),
     width,
     height,
     locked: false
@@ -1818,6 +1826,8 @@ function clearMemoryFrameWidgetImages() {
   memoryFrameRequestedPhotoId = null;
 
   const widget = document.querySelector(".memory-frame-widget");
+  widget?.style.removeProperty("--memory-frame-backdrop-image");
+  widget?.removeAttribute("data-effective-photo-fit");
   widget?.querySelectorAll("[data-memory-frame-image]").forEach((image) => {
     image.removeAttribute("src");
     image.classList.remove("active");
@@ -1836,6 +1846,57 @@ function updateMemoryFrameWidgetMeta() {
     caption.hidden =
       !memoryFrameConfig.showCaption ||
       !String(photo?.caption || "").trim();
+  }
+}
+
+function getMemoryFrameAdaptiveFit(widget, image) {
+  if (memoryFrameConfig.fit !== "adaptive") return memoryFrameConfig.fit;
+
+  const media = widget?.querySelector(".memory-frame-media");
+  const frameWidth = media?.clientWidth || widget?.clientWidth || 1;
+  const frameHeight = media?.clientHeight || widget?.clientHeight || 1;
+  const frameRatio = frameWidth / Math.max(1, frameHeight);
+  const photoRatio =
+    (image?.naturalWidth || 1) / Math.max(1, image?.naturalHeight || 1);
+
+  // Use contain whenever the source and frame proportions differ
+  // substantially. The blurred same-photo backdrop fills the remaining area.
+  const ratioDistance = Math.abs(Math.log(photoRatio / frameRatio));
+  return ratioDistance > 0.22 ? "contain" : "cover";
+}
+
+function applyMemoryFrameImageFit(widget, image) {
+  if (!widget || !image) return;
+
+  const effectiveFit = getMemoryFrameAdaptiveFit(widget, image);
+  image.style.objectFit = effectiveFit;
+  widget.dataset.effectivePhotoFit = effectiveFit;
+}
+
+function applyMemoryFrameCurrentFit(widget = document.querySelector(".memory-frame-widget")) {
+  if (!widget) return;
+  const activeImage = widget.querySelector("[data-memory-frame-image].active");
+  if (activeImage?.naturalWidth) {
+    applyMemoryFrameImageFit(widget, activeImage);
+  }
+}
+
+function hideMemoryFrameControls(widget) {
+  window.clearTimeout(memoryFrameControlsTimer);
+  memoryFrameControlsTimer = null;
+  widget?.classList.remove("controls-visible");
+}
+
+function revealMemoryFrameControls(widget, duration = 3600) {
+  if (!widget) return;
+
+  widget.classList.add("controls-visible");
+  window.clearTimeout(memoryFrameControlsTimer);
+
+  if (duration > 0) {
+    memoryFrameControlsTimer = window.setTimeout(() => {
+      widget.classList.remove("controls-visible");
+    }, duration);
   }
 }
 
@@ -2014,7 +2075,15 @@ async function showMemoryFramePhoto(
   }
 
   incoming.alt = photo.caption || photo.name || "Memory Frame photo";
-  incoming.style.objectFit = memoryFrameConfig.fit;
+  applyMemoryFrameImageFit(widget, incoming);
+
+  const activePhotoUrl = memoryFrameImageObjectUrls[incomingIndex];
+  if (activePhotoUrl) {
+    widget.style.setProperty(
+      "--memory-frame-backdrop-image",
+      `url("${activePhotoUrl}")`
+    );
+  }
 
   if (immediate) widget.classList.add("no-photo-transition");
   incoming.classList.add("active");
@@ -2062,9 +2131,8 @@ function ensureMemoryFrameWidget() {
   widget.className = "memory-frame-widget";
   widget.innerHTML = `
     <div class="memory-frame-widget-toolbar">
-      <div class="memory-frame-drag-handle" data-memory-frame-drag title="Drag to move">
+      <div class="memory-frame-drag-handle" data-memory-frame-drag title="Drag to move" aria-label="Drag Memory Frame">
         <span class="memory-frame-drag-grip" aria-hidden="true">⋮⋮</span>
-        <strong>Memory Frame</strong>
       </div>
       <div class="memory-frame-widget-actions">
         <button type="button" data-memory-frame-lock aria-label="Lock Memory Frame">🔓</button>
@@ -2085,6 +2153,7 @@ function ensureMemoryFrameWidget() {
   widget.querySelector("[data-memory-frame-settings]").addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
+    revealMemoryFrameControls(widget, 0);
     openApp("memoryframe");
   });
 
@@ -2098,7 +2167,19 @@ function ensureMemoryFrameWidget() {
     layout.locked = !layout.locked;
     setMemoryFrameLayout(mode, layout);
     applyMemoryFrameLayout(widget, layout);
+    revealMemoryFrameControls(widget);
     showToast(layout.locked ? "Memory Frame locked" : "Memory Frame unlocked");
+  });
+
+  widget.querySelector(".memory-frame-media").addEventListener("click", (event) => {
+    if (event.pointerType === "mouse") return;
+    event.stopPropagation();
+
+    if (widget.classList.contains("controls-visible")) {
+      hideMemoryFrameControls(widget);
+    } else {
+      revealMemoryFrameControls(widget);
+    }
   });
 
   widget.querySelector("[data-memory-frame-drag]").addEventListener("pointerdown", (event) => {
@@ -2131,6 +2212,7 @@ function beginMemoryFramePointerInteraction(event, widget, type) {
 
   document.documentElement.classList.add("memory-frame-layout-active");
   widget.classList.add(type === "move" ? "moving" : "resizing");
+  revealMemoryFrameControls(widget, 0);
 
   const move = (moveEvent) => {
     if (finished) return;
@@ -2176,6 +2258,8 @@ function beginMemoryFramePointerInteraction(event, widget, type) {
     const live = getLiveMemoryFrameLayout(widget, mode, bounds);
     setMemoryFrameLayout(mode, live);
     applyMemoryFrameLayout(widget, live);
+    applyMemoryFrameCurrentFit(widget);
+    revealMemoryFrameControls(widget);
   };
 
   target.addEventListener("pointermove", move);
@@ -2209,8 +2293,11 @@ function renderMemoryFrameDesktop() {
   widget.dataset.photoFit = memoryFrameConfig.fit;
 
   widget.querySelectorAll("[data-memory-frame-image]").forEach((image) => {
-    image.style.objectFit = memoryFrameConfig.fit;
+    if (memoryFrameConfig.fit !== "adaptive") {
+      image.style.objectFit = memoryFrameConfig.fit;
+    }
   });
+  applyMemoryFrameCurrentFit(widget);
 
   updateMemoryFrameWidgetMeta();
 
@@ -2548,7 +2635,7 @@ function initializeMemoryFrame() {
   fit?.addEventListener("change", (event) => {
     memoryFrameConfig.fit = MEMORY_FRAME_FITS.has(event.currentTarget.value)
       ? event.currentTarget.value
-      : "cover";
+      : "adaptive";
     saveMemoryFrameConfig();
     renderMemoryFrameDesktop();
   });
@@ -2587,6 +2674,8 @@ function initializeMemoryFrame() {
 
   window.addEventListener("resize", refreshLayout);
   window.visualViewport?.addEventListener("resize", refreshLayout);
+
+  migrateMemoryFrameGalleryLayout();
 
   openMemoryFrameDb()
     .then(() => setMemoryFrameStatus(memoryFrameConfig.photos.length ? "Slideshow ready" : "Add photos to begin"))
@@ -12352,7 +12441,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.17.1-Memory-Frame-Hotfix-Free";
+const BACKUP_APP_VERSION = "7O.17.2-Memory-Frame-Gallery-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
