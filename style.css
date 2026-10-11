@@ -22155,3 +22155,176 @@ html.performance-ui .dock.minimal-dock {
     width: 100%;
   }
 }
+
+
+/* ==========================================================================
+   Phase 7O.13.7 — Home Desktop Layout Polish
+   Balances the hero, summaries, workspace shortcuts and free desktop area.
+   ========================================================================== */
+
+/* Give the welcome area a deliberate content column instead of stretching it
+   around a tall wall of shortcuts. */
+.desktop-welcome {
+  top: 38px;
+  left: 28px;
+  width: min(730px, calc(100vw - 360px));
+  max-width: 730px;
+}
+
+.desktop-welcome h1 {
+  max-width: 680px;
+  margin: 8px 0 9px;
+  font-size: clamp(30px, 3.55vw, 50px);
+  line-height: 1.04;
+  letter-spacing: -.045em;
+  text-wrap: balance;
+}
+
+.desktop-welcome p {
+  max-width: 620px;
+}
+
+.desktop-summary {
+  display: grid;
+  grid-template-columns: 104px 104px minmax(220px, 1fr);
+  gap: 8px;
+  width: min(640px, 100%);
+  margin-top: 20px;
+}
+
+.desktop-summary div,
+.desktop-summary .next-event-summary {
+  min-width: 0;
+  max-width: none;
+  padding: 11px 12px;
+}
+
+.desktop-summary .next-event-summary {
+  width: auto;
+}
+
+/* The former 20-icon wall is now a small Workspace quick-access card.
+   Everything else belongs in the More launcher. */
+.desktop-icons {
+  position: absolute;
+  top: 34px;
+  right: 24px;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(2, 112px);
+  gap: 7px;
+  width: auto;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(13, 16, 23, .76);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+body.light-theme .desktop-icons {
+  background: rgba(248, 249, 252, .82);
+}
+
+.desktop-icons-heading {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  padding: 0 3px 3px;
+}
+
+.desktop-icons-heading small {
+  color: var(--text-muted);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.desktop-icons-heading button {
+  min-height: 24px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 7px;
+  font-weight: 750;
+}
+
+.desktop-icon {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  width: 112px;
+  min-height: 48px;
+  padding: 6px 7px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  text-align: left;
+}
+
+.desktop-icon:hover,
+.desktop-icon:focus-visible {
+  border-color: var(--border);
+  background: var(--surface-soft);
+}
+
+.desktop-icon span {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  box-shadow: none;
+  font-size: 16px;
+}
+
+.desktop-icon strong {
+  overflow: hidden;
+  font-size: 8.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Touch/tablet hardware in manually selected Windows view still gets the same
+   balanced Windows-style layout, without restoring the old shortcut wall. */
+html.performance-ui.view-mode-windows .desktop-icons {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: var(--surface-solid);
+}
+
+html.performance-ui.view-mode-windows .desktop-welcome {
+  width: min(720px, calc(100vw - 330px));
+}
+
+/* On medium Windows-style canvases, move the quick workspace card under the
+   summary rather than squeezing the quote. */
+@media (max-width: 1050px) and (min-width: 681px) {
+  html.view-mode-windows .desktop-welcome,
+  html:not(.tablet-ui):not(.phone-ui) .desktop-welcome {
+    width: calc(100vw - 56px);
+    max-width: 760px;
+  }
+
+  html.view-mode-windows .desktop-icons,
+  html:not(.tablet-ui):not(.phone-ui) .desktop-icons {
+    top: 276px;
+    right: 24px;
+  }
+}
+
+/* Native Tablet and Phone remain deliberately clean: their desktop shortcuts
+   stay hidden and apps remain available through More. */
+html.tablet-ui:not(.view-mode-windows) .desktop-icons,
+html.phone-ui .desktop-icons {
+  display: none !important;
+}
+
+/* Keep the minimal dock visually independent from the quick workspace card. */
+.dock.minimal-dock {
+  z-index: 90;
+}

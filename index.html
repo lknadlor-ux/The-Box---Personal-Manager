@@ -74,7 +74,7 @@
   </script>
 
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css?v=7o13-6">
+  <link rel="stylesheet" href="style.css?v=7o13-7">
 </head>
 <body>
   <div class="desktop-shell">
@@ -358,7 +358,12 @@
 
       <section id="desktopStickyNotes" class="desktop-sticky-notes" aria-label="Sticky notes"></section>
 
-      <section class="desktop-icons">
+      <section class="desktop-icons" aria-label="Workspace shortcuts">
+        <div class="desktop-icons-heading">
+          <small>WORKSPACES</small>
+          <button type="button" data-open-app="workspaces">View all</button>
+        </div>
+
         <button class="desktop-icon" data-open-app="pharmacy">
           <span>⚕</span>
           <strong>Pharmacy</strong>
@@ -377,86 +382,6 @@
         <button class="desktop-icon" data-open-app="finance">
           <span>₱</span>
           <strong>Finance</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="documents">
-          <span>▣</span>
-          <strong>Documents</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="notes">
-          <span>✎</span>
-          <strong>Notes</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="journal">
-          <span>☷</span>
-          <strong>Journal</strong>
-        </button>
-
-        <button class="desktop-icon our-space-desktop-icon" data-open-app="ourspace">
-          <span>♥</span>
-          <strong>Our Space</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="calendar">
-          <span>◫</span>
-          <strong>Calendar</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="insights">
-          <span>⌁</span>
-          <strong>Insights</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="routines">
-          <span>↻</span>
-          <strong>Routines</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="goals">
-          <span>◎</span>
-          <strong>Goals</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="agenda">
-          <span>≡</span>
-          <strong>Agenda</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="today">
-          <span>☀</span>
-          <strong>Today</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="weeklyreview">
-          <span>◷</span>
-          <strong>Weekly Review</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="workspaces">
-          <span>▦</span>
-          <strong>Workspaces</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="activity">
-          <span>↺</span>
-          <strong>Activity</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="projects">
-          <span>◆</span>
-          <strong>Projects</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="favorites">
-          <span>★</span>
-          <strong>Favorites</strong>
-        </button>
-
-        <button class="desktop-icon" data-open-app="templates">
-          <span>▤</span>
-          <strong>Templates</strong>
         </button>
       </section>
 
@@ -4126,6 +4051,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="cloud.js"></script>
-  <script src="app.js?v=7o13-6"></script>
+  <script src="app.js?v=7o13-7"></script>
 </body>
 </html>
