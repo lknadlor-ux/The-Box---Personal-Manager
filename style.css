@@ -22447,3 +22447,385 @@ html.performance-ui.view-mode-windows .desktop-welcome {
 .app-window.slim-disabled-window.maximized {
   display: none !important;
 }
+
+
+/* ==========================================================================
+   Phase 7O.15 — Live Crimson Nebula Background
+   Code-only live wallpaper: no video, image download, canvas, or paid API.
+   ========================================================================== */
+
+/* Dark-mode palette shifts toward the selected Crimson Nebula concept. */
+body:not(.light-theme) {
+  --bg: #050305;
+  --surface: rgba(15, 8, 11, .91);
+  --surface-solid: #11090d;
+  --surface-soft: #1a0e13;
+  --surface-hover: #261219;
+  --border: rgba(255, 118, 128, .105);
+  --border-strong: rgba(255, 118, 128, .19);
+  --border-focus: rgba(255, 70, 84, .54);
+  --accent: #ff5362;
+  --accent-two: #c61e35;
+  --accent-soft: rgba(255, 60, 76, .14);
+  --accent-soft-strong: rgba(255, 60, 76, .22);
+  --danger: #ff5362;
+  --shadow: 0 28px 90px rgba(0, 0, 0, .52);
+  background: #050305;
+}
+
+.desktop-shell {
+  isolation: isolate;
+  background: transparent;
+}
+
+.live-background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 78% 34%, rgba(97, 4, 17, .48), transparent 34%),
+    radial-gradient(ellipse at 17% 80%, rgba(62, 4, 12, .42), transparent 38%),
+    linear-gradient(135deg, #040203 0%, #070305 42%, #0d0307 100%);
+  opacity: 1;
+  transition: opacity .35s ease;
+  contain: strict;
+}
+
+/* Broad red cloud mass. All motion is transform/opacity based to minimize
+   layout/paint work compared with video/canvas animation. */
+.crimson-nebula-layer {
+  position: absolute;
+  inset: -18%;
+  transform-origin: center;
+  pointer-events: none;
+}
+
+.crimson-nebula-primary {
+  background:
+    radial-gradient(ellipse at 78% 36%,
+      rgba(255, 46, 62, .36) 0%,
+      rgba(178, 14, 34, .24) 12%,
+      rgba(86, 6, 19, .17) 28%,
+      transparent 52%),
+    radial-gradient(ellipse at 23% 73%,
+      rgba(219, 18, 41, .22) 0%,
+      rgba(110, 5, 22, .15) 24%,
+      transparent 52%),
+    radial-gradient(ellipse at 63% 68%,
+      rgba(128, 7, 25, .14) 0%,
+      transparent 48%);
+  opacity: .96;
+  transform: translate3d(0, 0, 0) scale(1.08) rotate(-3deg);
+  animation: crimsonNebulaDriftA 48s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.crimson-nebula-secondary {
+  background:
+    radial-gradient(ellipse at 82% 37%,
+      transparent 0 22%,
+      rgba(255, 69, 78, .20) 23%,
+      rgba(172, 14, 30, .10) 27%,
+      transparent 33%),
+    radial-gradient(ellipse at 14% 86%,
+      transparent 0 32%,
+      rgba(232, 24, 48, .16) 33%,
+      rgba(106, 4, 21, .08) 37%,
+      transparent 44%),
+    conic-gradient(from 224deg at 72% 45%,
+      transparent 0 16%,
+      rgba(158, 8, 29, .09) 22%,
+      rgba(255, 39, 56, .16) 26%,
+      transparent 34% 100%);
+  opacity: .84;
+  transform: translate3d(0, 0, 0) scale(1.14);
+  animation: crimsonNebulaDriftB 66s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.crimson-nebula-stars {
+  position: absolute;
+  inset: -8%;
+  opacity: .33;
+  background-image:
+    radial-gradient(circle, rgba(255, 132, 140, .75) 0 1px, transparent 1.35px),
+    radial-gradient(circle, rgba(255, 58, 73, .56) 0 1.1px, transparent 1.45px),
+    radial-gradient(circle, rgba(255, 210, 214, .35) 0 .8px, transparent 1.15px);
+  background-size: 113px 113px, 179px 179px, 251px 251px;
+  background-position: 17px 31px, 73px 11px, 19px 149px;
+  animation: crimsonStarDrift 110s linear infinite;
+  will-change: transform;
+}
+
+@keyframes crimsonNebulaDriftA {
+  0% {
+    transform: translate3d(-2.5%, -1.5%, 0) scale(1.08) rotate(-3deg);
+  }
+  50% {
+    transform: translate3d(1.5%, 1%, 0) scale(1.12) rotate(-1deg);
+  }
+  100% {
+    transform: translate3d(3%, -1%, 0) scale(1.10) rotate(1deg);
+  }
+}
+
+@keyframes crimsonNebulaDriftB {
+  0% {
+    transform: translate3d(2%, 1%, 0) scale(1.14) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(-1.5%, -2%, 0) scale(1.18) rotate(2deg);
+  }
+  100% {
+    transform: translate3d(-3%, 1.5%, 0) scale(1.15) rotate(-1deg);
+  }
+}
+
+@keyframes crimsonStarDrift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-40px, 24px, 0); }
+}
+
+/* Existing grid stays barely visible over the nebula. */
+body:not(.light-theme) .desktop {
+  background-color: transparent !important;
+  background-image:
+    linear-gradient(rgba(255, 90, 100, .018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 90, 100, .018) 1px, transparent 1px) !important;
+}
+
+/* Glass surfaces pick up a dark wine tint without sacrificing legibility. */
+body:not(.light-theme) .topbar {
+  background: rgba(8, 4, 6, .83);
+}
+
+body:not(.light-theme) .desktop-summary div {
+  background: rgba(15, 8, 11, .77);
+}
+
+body:not(.light-theme) .dock.minimal-dock {
+  background: rgba(13, 7, 10, .90);
+  border-color: rgba(255, 88, 101, .14);
+}
+
+body:not(.light-theme) .desktop-sticky-note {
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .38);
+}
+
+/* User modes -------------------------------------------------------------- */
+body.background-live .crimson-nebula-primary,
+body.background-live .crimson-nebula-secondary,
+body.background-live .crimson-nebula-stars {
+  animation-play-state: running;
+}
+
+body.background-minimal .crimson-nebula-primary {
+  animation-duration: 90s;
+  animation-play-state: running;
+}
+
+body.background-minimal .crimson-nebula-secondary {
+  display: none;
+}
+
+body.background-minimal .crimson-nebula-stars {
+  opacity: .16;
+  animation: none;
+}
+
+body.background-static .crimson-nebula-primary,
+body.background-static .crimson-nebula-secondary,
+body.background-static .crimson-nebula-stars,
+body.background-paused .crimson-nebula-primary,
+body.background-paused .crimson-nebula-secondary,
+body.background-paused .crimson-nebula-stars {
+  animation-play-state: paused !important;
+}
+
+body.background-static .crimson-nebula-primary {
+  transform: translate3d(0, 0, 0) scale(1.08) rotate(-2deg);
+}
+
+body.background-static .crimson-nebula-secondary {
+  transform: translate3d(0, 0, 0) scale(1.14);
+}
+
+body.background-static .crimson-nebula-stars {
+  transform: none;
+}
+
+/* Crimson Nebula is intentionally a dark-mode wallpaper. */
+body.light-theme .live-background {
+  opacity: 0;
+}
+
+/* Background control panel ------------------------------------------------ */
+.background-panel {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 18px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: rgba(255,255,255,.018);
+}
+
+.background-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.background-panel-heading > div {
+  min-width: 0;
+}
+
+.background-panel-heading small,
+.background-panel-heading strong,
+.background-panel-heading span {
+  display: block;
+}
+
+.background-panel-heading small {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .11em;
+}
+
+.background-panel-heading strong {
+  margin-top: 3px;
+  font-size: 12px;
+}
+
+.background-panel-heading span {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.background-mode-current {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--accent) !important;
+  background: var(--accent-soft);
+  font-size: 8px !important;
+  font-weight: 800;
+}
+
+.background-mode-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.background-mode-options button {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--text);
+  text-align: left;
+}
+
+.background-mode-options button.active {
+  border-color: rgba(255, 83, 98, .54);
+  background: rgba(255, 56, 74, .10);
+}
+
+.background-mode-options button strong {
+  align-self: end;
+  font-size: 9px;
+}
+
+.background-mode-options button small {
+  align-self: start;
+  color: var(--text-muted);
+  font-size: 7px;
+}
+
+.background-preview {
+  grid-row: 1 / 3;
+  display: block;
+  width: 40px;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 9px;
+  background:
+    radial-gradient(ellipse at 75% 35%, rgba(255, 51, 67, .8), transparent 36%),
+    radial-gradient(ellipse at 20% 80%, rgba(130, 8, 27, .7), transparent 42%),
+    #090305;
+}
+
+.background-preview.minimal {
+  opacity: .74;
+}
+
+.background-preview.static {
+  filter: saturate(.72) brightness(.75);
+}
+
+.background-mode-help {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+/* Honor Pad / Android performance mode: keep the wallpaper live but use only
+   the broadest low-cost layer. This avoids reintroducing the lag fixed in
+   7O.13.4 while still giving the desktop visible movement. */
+html.performance-ui body.background-live .crimson-nebula-secondary {
+  opacity: .34;
+  animation-duration: 92s;
+}
+
+html.performance-ui body.background-live .crimson-nebula-stars {
+  opacity: .18;
+  animation-duration: 160s;
+}
+
+html.performance-ui body.background-live .crimson-nebula-primary {
+  animation-duration: 72s;
+}
+
+/* True browser fullscreen keeps the wallpaper attached to the real viewport. */
+html.box-native-fullscreen .live-background,
+html.box-fallback-fullscreen .live-background {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Accessibility / battery respect. */
+@media (prefers-reduced-motion: reduce) {
+  .crimson-nebula-primary,
+  .crimson-nebula-secondary,
+  .crimson-nebula-stars {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .background-mode-options {
+    grid-template-columns: 1fr;
+  }
+
+  .background-mode-options button {
+    grid-template-columns: 46px 1fr;
+  }
+}

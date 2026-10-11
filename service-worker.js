@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o14-slim-cleanup";
+const CACHE_NAME = "the-box-os-phase-7o15-live-crimson-nebula";
 
 const APP_FILES = [
   "./",

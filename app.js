@@ -214,6 +214,7 @@ const STORAGE = {
   notes: "theBoxOS4Notes",
   finance: "theBoxOS4Finance",
   theme: "theBoxOS4Theme",
+  backgroundMode: "theBoxOSBackgroundMode",
   timerMinutes: "theBoxOS4TimerMinutes",
   focusTotal: "theBoxOS4FocusTotal",
   windowLayouts: "theBoxOSWindowLayouts",
@@ -11115,7 +11116,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.14-Slim-Free";
+const BACKUP_APP_VERSION = "7O.15-Live-Crimson-Free";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -11173,6 +11174,7 @@ function buildLocalBackupData() {
     customTemplates: customTemplates.map((template) => ({ ...template })),
     preferences: {
       theme: localStorage.getItem(STORAGE.theme) || "dark",
+      backgroundMode: normalizeBackgroundMode(localStorage.getItem(STORAGE.backgroundMode) || "live"),
       timerMinutes: Number(localStorage.getItem(STORAGE.timerMinutes) || 25),
       focusTotal: Number(localStorage.getItem(STORAGE.focusTotal) || 0),
       windowLayouts: readWindowLayouts(),
@@ -11459,6 +11461,9 @@ function restoreBackupPreferences(preferences = {}) {
   const theme = preferences.theme === "light" ? "light" : "dark";
   localStorage.setItem(STORAGE.theme, theme);
 
+  const backgroundMode = normalizeBackgroundMode(preferences.backgroundMode || "live");
+  localStorage.setItem(STORAGE.backgroundMode, backgroundMode);
+
   const minutes = Math.min(180, Math.max(1, Number(preferences.timerMinutes) || 25));
   localStorage.setItem(STORAGE.timerMinutes, String(minutes));
   selectedTimerMinutes = minutes;
@@ -11483,6 +11488,7 @@ function restoreBackupPreferences(preferences = {}) {
 
   document.body.classList.toggle("light-theme", theme === "light");
   $("themeButton").textContent = theme === "light" ? "☀" : "☾";
+  applyBackgroundMode(backgroundMode);
   updateTimerDisplay();
 }
 
@@ -13998,6 +14004,81 @@ function restoreTheme() {
     document.body.classList.contains("light-theme") ? "☀" : "☾";
 }
 
+const BACKGROUND_MODES = ["live", "minimal", "static"];
+
+function normalizeBackgroundMode(value) {
+  return BACKGROUND_MODES.includes(value) ? value : "live";
+}
+
+function updateBackgroundModeUI(mode = "live") {
+  const normalized = normalizeBackgroundMode(mode);
+  const labels = {
+    live: "Live",
+    minimal: "Minimal",
+    static: "Static"
+  };
+
+  document.querySelectorAll("[data-background-mode]").forEach((button) => {
+    const active = button.dataset.backgroundMode === normalized;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  if ($("backgroundModeCurrent")) {
+    $("backgroundModeCurrent").textContent = labels[normalized];
+  }
+
+  if ($("backgroundModeHelp")) {
+    $("backgroundModeHelp").textContent =
+      document.body.classList.contains("light-theme")
+        ? "Crimson Nebula is shown in dark mode. Your selected motion level is saved."
+        : normalized === "live"
+          ? "Live uses slow layered motion. It pauses automatically when Edge is in the background."
+          : normalized === "minimal"
+            ? "Minimal keeps one slow moving nebula layer for lower GPU use."
+            : "Static keeps the Crimson Nebula look without continuous animation.";
+  }
+}
+
+function applyBackgroundMode(mode, { persist = false, notify = false } = {}) {
+  const normalized = normalizeBackgroundMode(mode);
+  document.body.classList.remove(
+    "background-live",
+    "background-minimal",
+    "background-static"
+  );
+  document.body.classList.add(`background-${normalized}`);
+
+  if (persist) {
+    localStorage.setItem(STORAGE.backgroundMode, normalized);
+  }
+
+  updateBackgroundModeUI(normalized);
+
+  if (notify) {
+    const labels = {
+      live: "Live Crimson Nebula",
+      minimal: "Minimal Crimson Nebula",
+      static: "Static Crimson Nebula"
+    };
+    showToast(`${labels[normalized]} enabled`);
+  }
+}
+
+function restoreBackgroundMode() {
+  applyBackgroundMode(
+    normalizeBackgroundMode(localStorage.getItem(STORAGE.backgroundMode) || "live")
+  );
+}
+
+function updateBackgroundVisibilityState() {
+  document.body.classList.toggle("background-paused", document.hidden);
+}
+
+document.addEventListener("visibilitychange", updateBackgroundVisibilityState);
+updateBackgroundVisibilityState();
+
+
 function setTimer(minutes) {
   clearInterval(timerInterval);
   timerInterval = null;
@@ -14493,6 +14574,15 @@ document.querySelectorAll("[data-view-mode-option]").forEach((button) => {
   });
 });
 
+document.querySelectorAll("[data-background-mode]").forEach((button) => {
+  button.addEventListener("click", () => {
+    applyBackgroundMode(button.dataset.backgroundMode, {
+      persist: true,
+      notify: true
+    });
+  });
+});
+
 $("fullscreenButton").addEventListener("click", toggleBoxFullscreen);
 $("launcherFullscreenButton").addEventListener("click", toggleBoxFullscreen);
 $("fullscreenFallbackExitButton").addEventListener("click", exitBoxFullscreen);
@@ -14507,6 +14597,7 @@ $("themeButton").addEventListener("click", () => {
     document.body.classList.contains("light-theme") ? "light" : "dark"
   );
   restoreTheme();
+  restoreBackgroundMode();
 });
 
 $("mobileCommandButton").addEventListener("click", () => openCommandPalette());
@@ -15565,6 +15656,7 @@ normalizeData();
 ensureScheduledRoutineTasks({ silent: true });
 initializeWindowControls();
 restoreTheme();
+restoreBackgroundMode();
 updateFullscreenUi();
 updateClock();
 setInterval(updateClock, 1000);

@@ -72,10 +72,15 @@
     })();
   </script>
 <link href="manifest.json" rel="manifest"/>
-<link href="style.css?v=7o14" rel="stylesheet"/>
+<link href="style.css?v=7o15" rel="stylesheet"/>
 </head>
 <body>
 <div class="desktop-shell">
+<div aria-hidden="true" class="live-background" id="liveBackground">
+<span class="crimson-nebula-layer crimson-nebula-primary"></span>
+<span class="crimson-nebula-layer crimson-nebula-secondary"></span>
+<span class="crimson-nebula-stars"></span>
+</div>
 <header class="topbar">
 <div class="topbar-left">
 <button aria-label="Open launcher" class="topbar-button launcher-topbar-button" id="launcherButton">⊞</button>
@@ -158,6 +163,36 @@
 <span aria-hidden="true">⛶</span>
 <strong>Enter full screen</strong>
 </button>
+</section>
+<section aria-labelledby="backgroundPanelTitle" class="background-panel">
+<div class="background-panel-heading">
+<div>
+<small>BACKGROUND</small>
+<strong id="backgroundPanelTitle">Crimson Nebula</strong>
+<span>Dark-mode live wallpaper · no video or external service.</span>
+</div>
+<span class="background-mode-current" id="backgroundModeCurrent">Live</span>
+</div>
+<div aria-label="Background motion" class="background-mode-options" role="group">
+<button aria-pressed="true" data-background-mode="live" type="button">
+<span class="background-preview live"></span>
+<strong>Live</strong>
+<small>Slow nebula drift</small>
+</button>
+<button aria-pressed="false" data-background-mode="minimal" type="button">
+<span class="background-preview minimal"></span>
+<strong>Minimal</strong>
+<small>Gentle motion</small>
+</button>
+<button aria-pressed="false" data-background-mode="static" type="button">
+<span class="background-preview static"></span>
+<strong>Static</strong>
+<small>Lowest GPU use</small>
+</button>
+</div>
+<p class="background-mode-help" id="backgroundModeHelp">
+Dark mode uses the Crimson Nebula background. Light mode keeps the clean light surface.
+</p>
 </section>
 <div class="launcher-grid">
 <button class="app-tile" data-open-app="dashboard">
@@ -3542,6 +3577,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="cloud.js"></script>
-<script src="app.js?v=7o14"></script>
+<script src="app.js?v=7o15"></script>
 </body>
 </html>
