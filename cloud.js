@@ -22,6 +22,7 @@ window.BoxCloud = (() => {
   let syncing = false;
   let collectionTimers = {};
   let noteTimer = null;
+  let noteWriteChain = Promise.resolve();
 
   const DOCUMENT_BUCKET = "box-documents";
   const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
@@ -102,23 +103,41 @@ window.BoxCloud = (() => {
   }
 
   async function saveNote(text) {
-    if (!isReady()) return { error: null };
+    if (!isReady()) return { error: new Error("Sign in first.") };
+    const writingUserId = session.user.id;
 
     const { error } = await client
       .from("notes")
       .upsert({
-        user_id: session.user.id,
+        user_id: writingUserId,
         content: text,
         updated_at: new Date().toISOString()
       }, { onConflict: "user_id" });
 
     emit(error ? "error" : "online", error ? "Sync error" : "Synced");
+    if (!error) {
+      window.dispatchEvent(new CustomEvent("boxcloudnotesaved", {
+        detail: { content: text, userId: writingUserId }
+      }));
+    }
     return { error };
+  }
+
+  // Serialize writes so slow network responses cannot reorder successive edits.
+  function writeNoteInOrder(text, expectedUserId = session?.user?.id) {
+    noteWriteChain = noteWriteChain.catch(() => {}).then(() => {
+      if (!isReady() || session.user.id !== expectedUserId) {
+        return { error: new Error("Notes session changed before saving.") };
+      }
+      return saveNote(text);
+    });
+    return noteWriteChain;
   }
 
   function queueNoteSync(text) {
     clearTimeout(noteTimer);
-    noteTimer = setTimeout(() => saveNote(text), 700);
+    const queuedUserId = session?.user?.id;
+    noteTimer = setTimeout(() => { writeNoteInOrder(text, queuedUserId); }, 700);
   }
 
   function createUuid() {
@@ -925,11 +944,17 @@ window.BoxCloud = (() => {
         events: eventsResult.data,
         finance_entries: financeResult.data,
         notes: noteResult.data?.content,
+        notesUserId: session.user.id,
         custom_templates: templatesResult.data || [],
         journal_entries: journalResult.data || [],
         our_space_plans: ourSpaceResult.data || []
       });
     } else {
+      const previousNotesOwner = localStorage.getItem("theBoxOSNotesOwnerId") || "";
+      if (previousNotesOwner && previousNotesOwner !== session.user.id &&
+          typeof window.BoxOSCloudHydrate === "function") {
+        window.BoxOSCloudHydrate({ notes: "", notesUserId: session.user.id });
+      }
       await syncNow();
     }
 
@@ -947,7 +972,9 @@ window.BoxCloud = (() => {
       const localTasks = JSON.parse(localStorage.getItem("theBoxOS4Tasks") || "[]");
       const localEvents = JSON.parse(localStorage.getItem("theBoxOS4Events") || "[]");
       const localFinance = JSON.parse(localStorage.getItem("theBoxOS4Finance") || "[]");
-      const localNotes = localStorage.getItem("theBoxOS4Notes") || "";
+      const previousNotesOwner = localStorage.getItem("theBoxOSNotesOwnerId") || "";
+      const localNotes = previousNotesOwner && previousNotesOwner !== session.user.id
+        ? "" : (localStorage.getItem("theBoxOS4Notes") || "");
       const localTemplates = JSON.parse(localStorage.getItem("theBoxOSCustomTemplates") || "[]");
       const localJournal = JSON.parse(localStorage.getItem("theBoxOSJournalEntries") || "[]");
       const localOurSpace = JSON.parse(localStorage.getItem("theBoxOSOurSpacePlans") || "[]");
@@ -956,7 +983,7 @@ window.BoxCloud = (() => {
         replaceCollection("tasks", localTasks),
         replaceCollection("events", localEvents),
         replaceCollection("finance_entries", localFinance),
-        saveNote(localNotes),
+        writeNoteInOrder(localNotes),
         replaceCustomTemplates(localTemplates),
         replaceJournalEntries(localJournal),
         replaceOurSpacePlans(localOurSpace)
