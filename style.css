@@ -25159,3 +25159,96 @@ html.phone-ui .app-window[data-app-window="notes"] .notes-pro-check-row input[ty
   min-height: 44px;
   font-size: 16px;
 }
+
+/* Phase 7O.18.3 — private Vault attachments within Notes Pro. */
+.app-window[data-app-window="notes"] .notes-pro-attachments {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+.app-window[data-app-window="notes"] .notes-pro-attachments[hidden] { display: none !important; }
+.app-window[data-app-window="notes"] .notes-pro-attachments-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.app-window[data-app-window="notes"] .notes-pro-attachments-heading strong { font-size: 12px; }
+.app-window[data-app-window="notes"] .notes-pro-attachments-heading small {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.app-window[data-app-window="notes"] .notes-pro-attachment-list {
+  display: grid;
+  gap: 6px;
+}
+.app-window[data-app-window="notes"] .notes-pro-attachment-list > small {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.app-window[data-app-window="notes"] .notes-pro-attachment-item {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.app-window[data-app-window="notes"] .notes-pro-attachment-item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.app-window[data-app-window="notes"] .notes-pro-attachment-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.app-window[data-app-window="notes"] .notes-pro-attachment-controls > label {
+  flex: 1 1 170px;
+}
+.app-window[data-app-window="notes"] .notes-pro-attachment-controls > button,
+.app-window[data-app-window="notes"] .notes-pro-attachment-item > button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.app-window[data-app-window="notes"] .notes-pro-attachment-controls > button:disabled,
+.app-window[data-app-window="notes"] .notes-pro-attachment-item > button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.app-window[data-app-window="notes"] #notesAttachmentFileInput {
+  width: 100%;
+  min-height: 35px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+@media (max-width: 700px) {
+  .app-window[data-app-window="notes"] .notes-pro-attachment-controls {
+    align-items: stretch;
+  }
+  .app-window[data-app-window="notes"] .notes-pro-attachment-controls > button {
+    min-height: 42px;
+  }
+  .app-window[data-app-window="notes"] .notes-pro-attachment-item > button {
+    padding-inline: 6px;
+  }
+}
