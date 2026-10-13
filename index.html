@@ -72,7 +72,7 @@
     })();
   </script>
 <link href="manifest.json" rel="manifest"/>
-<link href="style.css?v=7o17-5" rel="stylesheet"/>
+<link href="style.css?v=7o18-1" rel="stylesheet"/>
 </head>
 <body>
 <div class="desktop-shell">
@@ -751,6 +751,20 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 </div>
 <span class="notes-count-badge" id="notesCount">0</span>
 </div>
+<div class="notes-pro-navigation">
+<label class="notes-pro-field">View
+<select id="notesLibraryView" aria-label="Notes library view">
+<option value="all">All active notes</option><option value="pinned">Pinned notes</option>
+<option value="archive">Archive</option><option value="trash">Trash</option>
+</select></label>
+<div class="notes-pro-folder-controls">
+<label class="notes-pro-field">Folder
+<select id="notesFolderFilter" aria-label="Filter notes by folder"><option value="">All folders</option></select></label>
+<button type="button" id="notesAddFolderButton" aria-label="Add notes folder" title="New folder">＋</button>
+<button type="button" id="notesRenameFolderButton" aria-label="Rename selected folder" title="Rename folder">✎</button>
+<button type="button" id="notesRemoveFolderButton" aria-label="Remove selected folder" title="Remove folder">×</button>
+</div>
+</div>
 <div class="notes-list" id="notesList"></div>
 <p class="empty-state" id="notesEmptyState">No notes yet. Create one to get started.</p>
 </aside>
@@ -770,6 +784,13 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 <span>▱ Sticky note</span>
 </label>
 </div>
+</div>
+<div class="notes-pro-actions" id="notesProActions">
+<label class="notes-pro-field">Move to folder
+<select id="noteFolderAssign" aria-label="Note folder"><option value="">Unfiled</option></select>
+</label>
+<button type="button" id="notePinButton" title="Pin or unpin note">☆ Pin</button>
+<button type="button" id="noteArchiveButton">Archive</button>
 </div>
 <label class="note-title-field">
                   Title
@@ -793,6 +814,7 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
 </div>
 <button class="note-format-preview-toggle" id="notePreviewToggle" type="button" aria-label="Preview formatted note" aria-pressed="false" title="Preview formatting and check off items">◉ Preview</button>
 </div>
+<section class="notes-pro-inline-list" id="notesInlineChecklist" aria-label="Editable note checklist" hidden></section>
 <label class="note-content-field" id="noteContentField">
                   Note
                   <textarea id="noteContent" maxlength="250000" placeholder="Start writing..." spellcheck="true"></textarea>
@@ -3778,6 +3800,6 @@ Photos stay on this device in browser storage. The slideshow loads only the curr
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="cloud.js"></script>
-<script src="app.js?v=7o17-5"></script>
+<script src="app.js?v=7o18-1"></script>
 </body>
 </html>
