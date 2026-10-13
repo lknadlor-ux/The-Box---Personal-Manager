@@ -22,6 +22,7 @@ window.BoxCloud = (() => {
   let syncing = false;
   let collectionTimers = {};
   let noteTimer = null;
+  let noteWriteChain = Promise.resolve();
 
   const DOCUMENT_BUCKET = "box-documents";
   const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
@@ -113,12 +114,23 @@ window.BoxCloud = (() => {
       }, { onConflict: "user_id" });
 
     emit(error ? "error" : "online", error ? "Sync error" : "Synced");
+    if (!error) {
+      window.dispatchEvent(new CustomEvent("boxcloudnotesaved", {
+        detail: { content: text, userId: session.user.id }
+      }));
+    }
     return { error };
+  }
+
+  // Serialize writes so slow network responses cannot reorder successive edits.
+  function writeNoteInOrder(text) {
+    noteWriteChain = noteWriteChain.catch(() => {}).then(() => saveNote(text));
+    return noteWriteChain;
   }
 
   function queueNoteSync(text) {
     clearTimeout(noteTimer);
-    noteTimer = setTimeout(() => saveNote(text), 700);
+    noteTimer = setTimeout(() => { writeNoteInOrder(text); }, 700);
   }
 
   function createUuid() {
@@ -925,6 +937,7 @@ window.BoxCloud = (() => {
         events: eventsResult.data,
         finance_entries: financeResult.data,
         notes: noteResult.data?.content,
+        notesUserId: session.user.id,
         custom_templates: templatesResult.data || [],
         journal_entries: journalResult.data || [],
         our_space_plans: ourSpaceResult.data || []
@@ -956,7 +969,7 @@ window.BoxCloud = (() => {
         replaceCollection("tasks", localTasks),
         replaceCollection("events", localEvents),
         replaceCollection("finance_entries", localFinance),
-        saveNote(localNotes),
+        writeNoteInOrder(localNotes),
         replaceCustomTemplates(localTemplates),
         replaceJournalEntries(localJournal),
         replaceOurSpacePlans(localOurSpace)
