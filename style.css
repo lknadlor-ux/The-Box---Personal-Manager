@@ -25048,3 +25048,114 @@ html.phone-ui .app-window[data-app-window="notes"] .note-markdown-preview:not([h
     width: 100%;
   }
 }
+
+/* ==========================================================================
+   Phase 7O.18.1–2 — Notes Pro library, folders and inline checklist
+   These rules never change the 7O.17.5 scroll ownership of the Notes window.
+   ========================================================================== */
+.app-window[data-app-window="notes"] .notes-pro-navigation {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.app-window[data-app-window="notes"] .notes-pro-folder-controls {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 30px 30px 30px;
+  align-items: end;
+  gap: 4px;
+}
+.app-window[data-app-window="notes"] .notes-pro-field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+}
+.app-window[data-app-window="notes"] .notes-pro-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 33px;
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 11px;
+}
+.app-window[data-app-window="notes"] .notes-pro-folder-controls > button,
+.app-window[data-app-window="notes"] .notes-pro-actions > button {
+  min-height: 33px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.app-window[data-app-window="notes"] .notes-pro-folder-controls > button:disabled,
+.app-window[data-app-window="notes"] .notes-pro-actions > button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.app-window[data-app-window="notes"] .notes-pro-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: end;
+}
+.app-window[data-app-window="notes"] .notes-pro-actions > .notes-pro-field {
+  flex: 1 1 120px;
+  max-width: 240px;
+}
+.app-window[data-app-window="notes"] .notes-pro-inline-list {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 7px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+.app-window[data-app-window="notes"] .notes-pro-inline-list[hidden] {
+  display: none !important;
+}
+.app-window[data-app-window="notes"] .notes-pro-inline-list > small {
+  font-size: 9px;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+  font-weight: 750;
+}
+.app-window[data-app-window="notes"] .notes-pro-check-row {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+.app-window[data-app-window="notes"] .notes-pro-check-row input[type="checkbox"] {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  accent-color: var(--accent);
+}
+.app-window[data-app-window="notes"] .notes-pro-check-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  min-height: 35px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+.app-window[data-app-window="notes"] .notes-pro-check-row input[type="text"]:focus {
+  border-color: var(--border-focus);
+  background: var(--surface-soft);
+}
+html.phone-ui .app-window[data-app-window="notes"] .notes-pro-check-row input[type="text"] {
+  min-height: 44px;
+  font-size: 16px;
+}

@@ -482,6 +482,9 @@ let currentReminderItems = [];
 let reminderCheckTimer = null;
 
 let noteItems = [];
+let noteFolders = [];
+let notesLibraryView = "all";
+let selectedNotesFolderId = "";
 let selectedNoteId = null;
 let notesSearchTerm = "";
 let noteSaveTimer = null;
@@ -764,6 +767,59 @@ function normalizeStickyLayouts(value = {}) {
   return layouts;
 }
 
+
+function normalizeNoteAttachments(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value.filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      id: String(item.id || "").slice(0, 100),
+      name: String(item.name || "Attachment").slice(0, 250),
+      mimeType: String(item.mimeType || item.mime_type || "").slice(0, 120),
+      size: Math.max(0, Number(item.size || item.size_bytes) || 0)
+    }))
+    .filter((item) => {
+      if (!item.id || seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    }).slice(0, 30);
+}
+
+function normalizeNoteFolders(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value.filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      id: String(item.id || "").slice(0, 100),
+      name: String(item.name || "").trim().slice(0, 60),
+      updatedAt: item.updatedAt || new Date().toISOString(),
+      deletedAt: item.deletedAt || null
+    }))
+    .filter((item) => {
+      if (!item.id || !item.name || seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    }).slice(0, 100);
+}
+
+function decodeNotesFolders(raw) {
+  try {
+    const value = JSON.parse(String(raw || ""));
+    return normalizeNoteFolders(value?.folders);
+  } catch (_) {
+    return [];
+  }
+}
+
+function getActiveNoteItems() {
+  return noteItems.filter((note) => !note.deletedAt && !note.archivedAt);
+}
+
+function getActiveNoteFolders() {
+  return noteFolders.filter((folder) => !folder.deletedAt)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function normalizeNoteItem(note = {}) {
   const now = new Date().toISOString();
   return {
@@ -771,6 +827,11 @@ function normalizeNoteItem(note = {}) {
     title: String(note.title || "").trim().slice(0, 180),
     content: String(note.content || "").slice(0, 250000),
     sticky: Boolean(note.sticky),
+    pinned: Boolean(note.pinned),
+    folderId: String(note.folderId || "").slice(0, 100),
+    archivedAt: note.archivedAt || null,
+    deletedAt: note.deletedAt || null,
+    attachments: normalizeNoteAttachments(note.attachments),
     stickyLayouts: normalizeStickyLayouts(note.stickyLayouts),
     createdAt: note.createdAt || note.created_at || now,
     updatedAt: note.updatedAt || note.updated_at || note.createdAt || note.created_at || now
@@ -819,13 +880,15 @@ function decodeNotesPayload(rawValue) {
 function serializeNotesPayload(items = noteItems) {
   return JSON.stringify({
     format: "the-box-notes-v2",
-    version: 2,
+    version: 3,
+    folders: normalizeNoteFolders(noteFolders),
     items: normalizeNoteItems(items)
   });
 }
 
 function persistNoteItems({ sync = true } = {}) {
   noteItems = normalizeNoteItems(noteItems);
+  noteFolders = normalizeNoteFolders(noteFolders);
   const payload = serializeNotesPayload(noteItems);
   localStorage.setItem(STORAGE.notes, payload);
 
@@ -843,15 +906,12 @@ function getSortedNoteItems(items = noteItems) {
 
 function initializeNoteItems(rawValue = localStorage.getItem(STORAGE.notes) || "") {
   noteItems = decodeNotesPayload(rawValue);
+  noteFolders = decodeNotesFolders(rawValue);
   persistNoteItems({ sync: false });
-
-  if (selectedNoteId && !noteItems.some((note) => note.id === selectedNoteId)) {
+  if (selectedNoteId && !getActiveNoteItems().some((note) => note.id === selectedNoteId)) {
     selectedNoteId = null;
   }
-
-  if (!selectedNoteId && noteItems.length) {
-    selectedNoteId = getSortedNoteItems(noteItems)[0]?.id || null;
-  }
+  if (!selectedNoteId) selectedNoteId = getSortedNoteItems(getActiveNoteItems())[0]?.id || null;
 }
 
 function getSelectedNoteItem() {
@@ -861,11 +921,15 @@ function getSelectedNoteItem() {
 function getFilteredNoteItems() {
   const query = notesSearchTerm.toLocaleLowerCase();
   return getSortedNoteItems(noteItems.filter((note) => {
+    if (notesLibraryView === "trash") {
+      if (!note.deletedAt) return false;
+    } else if (notesLibraryView === "archive") {
+      if (!note.archivedAt || note.deletedAt) return false;
+    } else if (note.archivedAt || note.deletedAt) return false;
+    if (notesLibraryView === "pinned" && !note.pinned) return false;
+    if (selectedNotesFolderId && note.folderId !== selectedNotesFolderId) return false;
     if (!query) return true;
-    return [note.title, note.content]
-      .join(" ")
-      .toLocaleLowerCase()
-      .includes(query);
+    return [note.title, note.content].join(" ").toLocaleLowerCase().includes(query);
   }));
 }
 
@@ -922,15 +986,201 @@ function initializeNotesListCollapse() {
   setNotesListCollapsed(collapsed, { persist: false });
 }
 
+
+function renderNotesProLibraryControls() {
+  const view = $("notesLibraryView");
+  const folder = $("notesFolderFilter");
+  if (!view || !folder) return;
+  view.value = notesLibraryView;
+  const active = getActiveNoteFolders();
+  folder.innerHTML = '<option value="">All folders</option>' +
+    active.map((item) => '<option value="' + escapeHtml(item.id) + '">' +
+      escapeHtml(item.name) + "</option>").join("");
+  if (!active.some((item) => item.id === selectedNotesFolderId)) selectedNotesFolderId = "";
+  folder.value = selectedNotesFolderId;
+  $("notesRenameFolderButton").disabled = !selectedNotesFolderId;
+  $("notesRemoveFolderButton").disabled = !selectedNotesFolderId;
+}
+
+function renderNotesProEditorControls(note) {
+  const assign = $("noteFolderAssign");
+  const pin = $("notePinButton");
+  const archive = $("noteArchiveButton");
+  const restore = $("noteRestoreButton");
+  const del = $("deleteNoteButton");
+  if (!assign || !pin || !archive || !restore || !del) return;
+  assign.innerHTML = '<option value="">Unfiled</option>' +
+    getActiveNoteFolders().map((folder) =>
+      '<option value="' + escapeHtml(folder.id) + '">' +
+      escapeHtml(folder.name) + "</option>").join("");
+  assign.value = note?.folderId || "";
+  const locked = !note || Boolean(note.deletedAt || note.archivedAt) ||
+    isStickyNoteLockedForCurrentMode(note);
+  assign.disabled = locked;
+  pin.disabled = locked;
+  pin.textContent = note?.pinned ? "★ Unpin" : "☆ Pin";
+  archive.disabled = !note || Boolean(note.deletedAt) || isStickyNoteLockedForCurrentMode(note);
+  archive.textContent = note?.archivedAt ? "Restore from archive" : "Archive";
+  restore.hidden = !note?.deletedAt;
+  restore.disabled = !note?.deletedAt || isStickyNoteLockedForCurrentMode(note);
+  del.textContent = note?.deletedAt ? "Delete permanently" : "Move to Trash";
+  del.disabled = !note || isStickyNoteLockedForCurrentMode(note);
+}
+
+function renderNotesInlineChecklist() {
+  const region = $("notesInlineChecklist");
+  if (!region) return;
+  const note = getSelectedNoteItem();
+  if (!note || notePreviewActive || note.deletedAt || note.archivedAt) {
+    region.hidden = true;
+    region.replaceChildren();
+    return;
+  }
+  const matches = [];
+  String($("noteContent").value).split(/\r?\n/).forEach((line, index) => {
+    const check = line.match(/^(\s*[-*+]\s+\[)([xX ])(\]\s*)(.*)$/);
+    if (check) matches.push({ line: index, checked: check[2].toLowerCase() === "x", text: check[4] });
+  });
+  region.hidden = !matches.length;
+  region.replaceChildren();
+  if (!matches.length) return;
+  const heading = document.createElement("small");
+  heading.textContent = "CHECKLIST · Tick or edit items while writing";
+  region.appendChild(heading);
+  matches.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "notes-pro-check-row";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = item.checked;
+    cb.setAttribute("aria-label", "Complete checklist item");
+    cb.addEventListener("change", () => updateNotesInlineItem(item.line, { checked: cb.checked }));
+    const field = document.createElement("input");
+    field.type = "text";
+    field.maxLength = 1500;
+    field.value = item.text;
+    field.setAttribute("aria-label", "Checklist item text");
+    field.addEventListener("change", () => updateNotesInlineItem(item.line, { text: field.value }));
+    row.append(cb, field);
+    region.appendChild(row);
+  });
+}
+
+function updateNotesInlineItem(lineIndex, changes) {
+  const note = getSelectedNoteItem();
+  if (!note || note.deletedAt || note.archivedAt || isStickyNoteLockedForCurrentMode(note)) return;
+  const lines = $("noteContent").value.split(/\r?\n/);
+  const match = lines[lineIndex]?.match(/^(\s*[-*+]\s+\[)([xX ])(\]\s*)(.*)$/);
+  if (!match) return;
+  const checked = changes.checked === undefined ? match[2] : (changes.checked ? "x" : " ");
+  const text = changes.text === undefined ? match[4] : String(changes.text).replace(/[\r\n]/g, " ");
+  lines[lineIndex] = match[1] + checked + match[3] + text;
+  $("noteContent").value = lines.join("\n");
+  updateSelectedNoteFromEditor();
+  renderNotesInlineChecklist();
+}
+
+function createNotesFolder() {
+  const name = window.prompt("New Notes folder name (up to 60 characters):");
+  if (name === null) return;
+  const clean = name.trim().slice(0, 60);
+  if (!clean) return;
+  if (getActiveNoteFolders().some((folder) => folder.name.toLocaleLowerCase() === clean.toLocaleLowerCase())) {
+    showToast("This folder already exists");
+    return;
+  }
+  const id = createNoteItemId();
+  noteFolders.push({ id, name: clean, updatedAt: new Date().toISOString(), deletedAt: null });
+  selectedNotesFolderId = id;
+  notesLibraryView = "all";
+  persistNoteItems();
+  renderNotesCenter();
+}
+
+function renameNotesFolder() {
+  const item = getActiveNoteFolders().find((folder) => folder.id === selectedNotesFolderId);
+  if (!item) return;
+  const name = window.prompt("Rename Notes folder:", item.name);
+  if (name === null) return;
+  const clean = name.trim().slice(0, 60);
+  if (!clean) return;
+  if (getActiveNoteFolders().some((folder) => folder.id !== item.id &&
+      folder.name.toLocaleLowerCase() === clean.toLocaleLowerCase())) {
+    showToast("This folder already exists");
+    return;
+  }
+  item.name = clean;
+  item.updatedAt = new Date().toISOString();
+  persistNoteItems();
+  renderNotesCenter();
+}
+
+function removeNotesFolder() {
+  const item = getActiveNoteFolders().find((folder) => folder.id === selectedNotesFolderId);
+  if (!item || !window.confirm('Remove folder "' + item.name + '"? Notes will become unfiled.')) return;
+  item.deletedAt = new Date().toISOString();
+  item.updatedAt = item.deletedAt;
+  noteItems.forEach((note) => {
+    if (note.folderId === item.id) {
+      note.folderId = "";
+      note.updatedAt = item.updatedAt;
+    }
+  });
+  selectedNotesFolderId = "";
+  persistNoteItems();
+  renderNotesCenter();
+}
+
+function restoreNoteFromTrash() {
+  const note = getSelectedNoteItem();
+  if (!note || !note.deletedAt || isStickyNoteLockedForCurrentMode(note)) return;
+  note.deletedAt = null;
+  note.updatedAt = new Date().toISOString();
+  selectedNoteId = null;
+  persistNoteItems();
+  renderNotesCenter();
+  showToast("Note restored from Trash");
+}
+
+function changeSelectedNoteFolder(id) {
+  const note = getSelectedNoteItem();
+  if (!note || note.archivedAt || note.deletedAt || isStickyNoteLockedForCurrentMode(note)) return;
+  if (id && !getActiveNoteFolders().some((folder) => folder.id === id)) return;
+  note.folderId = id || "";
+  note.updatedAt = new Date().toISOString();
+  persistNoteItems();
+  renderNotesCenter();
+}
+
+function toggleNotePin() {
+  const note = getSelectedNoteItem();
+  if (!note || note.archivedAt || note.deletedAt || isStickyNoteLockedForCurrentMode(note)) return;
+  note.pinned = !note.pinned;
+  note.updatedAt = new Date().toISOString();
+  persistNoteItems();
+  renderNotesCenter();
+}
+
+function toggleNoteArchive() {
+  const note = getSelectedNoteItem();
+  if (!note || note.deletedAt || isStickyNoteLockedForCurrentMode(note)) return;
+  note.archivedAt = note.archivedAt ? null : new Date().toISOString();
+  note.updatedAt = new Date().toISOString();
+  selectedNoteId = null;
+  persistNoteItems();
+  renderNotesCenter();
+  showToast(note.archivedAt ? "Note archived" : "Note restored");
+}
+
 function renderNotesList() {
   const list = $("notesList");
   if (!list) return;
 
   const filtered = getFilteredNoteItems();
-  const stickyCount = noteItems.filter((note) => note.sticky).length;
+  const stickyCount = getActiveNoteItems().filter((note) => note.sticky).length;
 
   $("notesCount").textContent = String(filtered.length);
-  if ($("notesOverviewTotal")) $("notesOverviewTotal").textContent = String(noteItems.length);
+  if ($("notesOverviewTotal")) $("notesOverviewTotal").textContent = String(getActiveNoteItems().length);
   if ($("notesOverviewSticky")) $("notesOverviewSticky").textContent = String(stickyCount);
   $("notesEmptyState").hidden = filtered.length > 0;
 
@@ -942,7 +1192,7 @@ function renderNotesList() {
     >
       <span class="note-card-top">
         <strong>${escapeHtml(note.title || "Untitled note")}</strong>
-        <span>${note.sticky ? "▱" : ""}</span>
+        <span>${note.pinned ? "★ " : ""}${note.sticky ? "▱" : ""}</span>
       </span>
       <p>${escapeHtml(getNotePreview(note))}</p>
       <span class="note-card-meta">
@@ -958,7 +1208,7 @@ function renderNotesList() {
 }
 
 function setNotesEditorDisabled(disabled) {
-  ["noteTitle", "noteSticky", "noteContent"].forEach((id) => {
+  ["noteTitle", "noteSticky", "noteContent", "noteFolderAssign", "notePinButton", "noteArchiveButton", "noteRestoreButton"].forEach((id) => {
     const element = $(id);
     if (element) element.disabled = disabled;
   });
@@ -1209,11 +1459,13 @@ function renderNotesEditor() {
     $("noteStatus").textContent = "Saved";
     setNotesEditorDisabled(true);
     updateNoteEditorMeta(null);
+    renderNotesProEditorControls(null);
+    renderNotesInlineChecklist();
     updateNotePreviewVisibility();
     return;
   }
 
-  const locked = isStickyNoteLockedForCurrentMode(note);
+  const locked = isStickyNoteLockedForCurrentMode(note) || Boolean(note.deletedAt || note.archivedAt);
   setNotesEditorDisabled(locked);
   $("noteEditorMode").textContent = locked
     ? "LOCKED STICKY NOTE"
@@ -1224,6 +1476,8 @@ function renderNotesEditor() {
   $("noteContent").value = note.content;
   $("noteStatus").textContent = locked ? "Locked · unlock on desktop to edit" : "Saved";
   updateNoteEditorMeta(note);
+  renderNotesProEditorControls(note);
+  renderNotesInlineChecklist();
   updateNotePreviewVisibility();
 }
 
@@ -1453,7 +1707,7 @@ function toggleStickyNoteLock(noteId, card) {
 
   const mode = getStickyLayoutMode();
   const bounds = getStickyNoteContainerRect();
-  const stickyNotes = getSortedNoteItems(noteItems.filter((item) => item.sticky));
+  const stickyNotes = getSortedNoteItems(getActiveNoteItems().filter((item) => item.sticky));
   const index = Math.max(0, stickyNotes.findIndex((item) => item.id === note.id));
 
   // IMPORTANT: lock the card exactly where it is visibly sitting now.
@@ -1469,7 +1723,7 @@ function toggleStickyNoteLock(noteId, card) {
 }
 
 function resetStickyNoteLayoutsForCurrentMode() {
-  const stickyNotes = noteItems.filter((note) => note.sticky);
+  const stickyNotes = getActiveNoteItems().filter((note) => note.sticky);
   if (!stickyNotes.length) {
     showToast("No sticky notes to reset");
     return;
@@ -1492,7 +1746,7 @@ function renderDesktopStickyNotes() {
   const container = $("desktopStickyNotes");
   if (!container) return;
 
-  const stickyNotes = getSortedNoteItems(noteItems.filter((note) => note.sticky));
+  const stickyNotes = getSortedNoteItems(getActiveNoteItems().filter((note) => note.sticky));
   container.hidden = stickyNotes.length === 0;
   container.innerHTML = "";
   if (!stickyNotes.length) return;
@@ -1559,8 +1813,9 @@ function renderNotesCenter() {
   if (!$("notesList")) return;
   $("notesSearchInput").value = notesSearchTerm;
 
-  if (!selectedNoteId && noteItems.length) {
-    selectedNoteId = getSortedNoteItems(noteItems)[0]?.id || null;
+  renderNotesProLibraryControls();
+  if (!getFilteredNoteItems().some((note) => note.id === selectedNoteId)) {
+    selectedNoteId = getFilteredNoteItems()[0]?.id || null;
   }
 
   renderNotesList();
@@ -1569,7 +1824,7 @@ function renderNotesCenter() {
 }
 
 function selectNoteItem(noteId) {
-  if (!noteItems.some((note) => note.id === noteId)) return;
+  if (!getFilteredNoteItems().some((note) => note.id === noteId)) return;
   selectedNoteId = noteId;
   renderNotesList();
   renderNotesEditor();
@@ -1597,7 +1852,7 @@ function createNewNoteItem() {
 function updateSelectedNoteFromEditor() {
   const note = getSelectedNoteItem();
   if (!note) return;
-  if (isStickyNoteLockedForCurrentMode(note)) {
+  if (isStickyNoteLockedForCurrentMode(note) || note.deletedAt || note.archivedAt) {
     renderNotesEditor();
     return;
   }
@@ -1611,6 +1866,7 @@ function updateSelectedNoteFromEditor() {
   $("noteEditorHeading").textContent = note.title || "Untitled note";
   $("noteStatus").textContent = "Saving…";
   updateNoteEditorMeta(note);
+  if (!$("notesInlineChecklist").contains(document.activeElement)) renderNotesInlineChecklist();
 
   clearTimeout(noteSaveTimer);
   noteSaveTimer = setTimeout(() => {
@@ -1631,18 +1887,23 @@ function deleteSelectedNoteItem() {
     showToast("Unlock this sticky note before deleting it");
     return;
   }
-  if (!window.confirm(`Delete “${note.title || "Untitled note"}”?`)) return;
-
-  noteItems = noteItems.filter((item) => item.id !== note.id);
-  selectedNoteId = getSortedNoteItems(noteItems)[0]?.id || null;
+  if (note.deletedAt) {
+    if (!window.confirm("Permanently delete this note? The linked Vault files are NOT deleted.")) return;
+    noteItems = noteItems.filter((item) => item.id !== note.id);
+    showToast("Note permanently deleted; Vault files kept");
+  } else {
+    note.deletedAt = new Date().toISOString();
+    note.updatedAt = note.deletedAt;
+    showToast("Note moved to Trash");
+  }
+  selectedNoteId = null;
   persistNoteItems();
   renderNotesCenter();
-  showToast("Note deleted");
 }
 
 function getSelectedNoteLinesForTasks() {
   const note = getSelectedNoteItem();
-  if (!note) return [];
+  if (!note || note.deletedAt || note.archivedAt) return [];
   return note.content
     .split("\n")
     .map((line) => line.replace(/^[-•*]\s*(?:\[[xX ]\]\s*)?/, "").replace(/^\d+[.)]\s*/, "").trim())
@@ -7688,7 +7949,7 @@ function renderDashboardStickyNote() {
   if (!button) return;
 
   const sticky = getSortedNoteItems(
-    noteItems.filter((note) => note.sticky)
+    getActiveNoteItems().filter((note) => note.sticky)
   )[0];
 
   button.dataset.noteId = sticky?.id || "";
@@ -12704,7 +12965,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.17.4-Notes-Formatting-Free";
+const BACKUP_APP_VERSION = "7O.18.1-Notes-Pro-Library";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -16768,6 +17029,23 @@ $("dashboardOurSpacePlan").addEventListener("click", () => {
   if (planId) selectOurSpacePlan(planId);
 });
 
+$("notesLibraryView").addEventListener("change", (event) => {
+  notesLibraryView = event.target.value;
+  selectedNoteId = null;
+  renderNotesCenter();
+});
+$("notesFolderFilter").addEventListener("change", (event) => {
+  selectedNotesFolderId = event.target.value;
+  selectedNoteId = null;
+  renderNotesCenter();
+});
+$("notesAddFolderButton").addEventListener("click", createNotesFolder);
+$("notesRenameFolderButton").addEventListener("click", renameNotesFolder);
+$("notesRemoveFolderButton").addEventListener("click", removeNotesFolder);
+$("noteFolderAssign").addEventListener("change", (event) => changeSelectedNoteFolder(event.target.value));
+$("notePinButton").addEventListener("click", toggleNotePin);
+$("noteArchiveButton").addEventListener("click", toggleNoteArchive);
+$("noteRestoreButton").addEventListener("click", restoreNoteFromTrash);
 $("notesSidebarToggle").addEventListener("click", () => setNotesListCollapsed(true));
 $("notesSidebarRestore").addEventListener("click", () => setNotesListCollapsed(false));
 $("newNoteButton").addEventListener("click", createNewNoteItem);
@@ -16788,6 +17066,7 @@ $("notePreviewToggle").addEventListener("click", () => {
   if (!getSelectedNoteItem()) return;
   notePreviewActive = !notePreviewActive;
   updateNotePreviewVisibility();
+  renderNotesInlineChecklist();
 });
 $("noteMarkdownPreview").addEventListener("change", updateNoteChecklistFromPreview);
 $("noteContent").addEventListener("keydown", (event) => {
