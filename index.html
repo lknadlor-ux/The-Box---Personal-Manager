@@ -72,7 +72,7 @@
     })();
   </script>
 <link href="manifest.json" rel="manifest"/>
-<link href="style.css?v=7o18-1" rel="stylesheet"/>
+<link href="style.css?v=7o18-3" rel="stylesheet"/>
 </head>
 <body>
 <div class="desktop-shell">
@@ -821,6 +821,23 @@ Dark mode uses the Crimson Nebula background. Light mode keeps the clean light s
                   <textarea id="noteContent" maxlength="250000" placeholder="Start writing..." spellcheck="true"></textarea>
 </label>
 <div class="note-markdown-preview" id="noteMarkdownPreview" role="region" aria-label="Formatted note preview" hidden></div>
+<section class="notes-pro-attachments" id="notesAttachmentsPanel" aria-label="Private note attachments">
+<div class="notes-pro-attachments-heading"><strong><span aria-hidden="true">📎</span> Attachments</strong><small id="notesAttachmentsStatus" role="status">Sign in to use your private Documents Vault.</small></div>
+<div class="notes-pro-attachment-list" id="notesAttachmentList"></div>
+<div class="notes-pro-attachment-controls">
+<label class="notes-pro-field">Choose file to upload
+<input id="notesAttachmentFileInput" type="file" multiple accept="image/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx"/>
+</label>
+<button type="button" id="notesAttachmentUploadButton">Upload &amp; attach</button>
+</div>
+<div class="notes-pro-attachment-controls">
+<label class="notes-pro-field">Or link an existing Vault file
+<select id="notesVaultFilePicker" aria-label="Existing Vault document"><option value="">Select a document</option></select>
+</label>
+<button type="button" id="notesVaultAttachButton">Attach</button>
+<button type="button" id="notesVaultRefreshButton" aria-label="Refresh Vault files" title="Refresh Vault files">↻</button>
+</div>
+</section>
 <div class="notes-editor-footer">
 <div class="notes-editor-meta">
 <span id="noteWordCount">0 words</span>
@@ -3801,6 +3818,6 @@ Photos stay on this device in browser storage. The slideshow loads only the curr
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <script src="cloud.js"></script>
-<script src="app.js?v=7o18-1"></script>
+<script src="app.js?v=7o18-3"></script>
 </body>
 </html>
