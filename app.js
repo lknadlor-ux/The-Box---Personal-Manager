@@ -861,7 +861,7 @@ function mergePendingNotesPayload(localRaw, remoteRaw) {
     if (!old || String(note.updatedAt) >= String(old.updatedAt)) byId.set(note.id, note);
   });
   const mergedItems = normalizeNoteItems(Array.from(byId.values())
-    .filter((note) => !removed.has(note.id) || String(note.updatedAt) > removed.get(note.id)));
+    .filter((note) => !removed.has(note.id)));
   const folders = new Map();
   [...decodeNotesFolders(remoteRaw), ...decodeNotesFolders(localRaw)].forEach((folder) => {
     const old = folders.get(folder.id);
@@ -1586,7 +1586,7 @@ function renderNoteMarkdownPreview() {
   if (!preview || !notePreviewActive) return;
   const note = getSelectedNoteItem();
   preview.innerHTML = note
-    ? buildNotesMarkdownPreview(note.content, { readOnly: isStickyNoteLockedForCurrentMode(note) })
+    ? buildNotesMarkdownPreview(note.content, { readOnly: isStickyNoteLockedForCurrentMode(note) || Boolean(note.archivedAt || note.deletedAt) })
     : '<p class="note-preview-empty">Select a note to preview.</p>';
 }
 
@@ -1708,7 +1708,7 @@ function updateNoteChecklistFromPreview(event) {
   const target = event.target;
   if (!target.matches('input[data-note-check-line]')) return;
   const note = getSelectedNoteItem();
-  if (!note || isStickyNoteLockedForCurrentMode(note)) return;
+  if (!note || note.archivedAt || note.deletedAt || isStickyNoteLockedForCurrentMode(note)) return;
   const lineIndex = Number(target.dataset.noteCheckLine);
   const lines = note.content.split(/\r?\n/);
   if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex >= lines.length) return;
@@ -1741,14 +1741,16 @@ function renderNotesEditor() {
 
   const locked = isStickyNoteLockedForCurrentMode(note) || Boolean(note.deletedAt || note.archivedAt);
   setNotesEditorDisabled(locked);
-  $("noteEditorMode").textContent = locked
+  $("noteEditorMode").textContent = note.deletedAt ? "NOTE IN TRASH" : note.archivedAt ? "ARCHIVED NOTE" : locked
     ? "LOCKED STICKY NOTE"
     : (note.sticky ? "STICKY NOTE" : "NOTE");
   $("noteEditorHeading").textContent = note.title || "Untitled note";
   $("noteTitle").value = note.title;
   $("noteSticky").checked = note.sticky;
   $("noteContent").value = note.content;
-  $("noteStatus").textContent = locked ? "Locked · unlock on desktop to edit" : "Saved";
+  $("noteStatus").textContent = note.deletedAt ? "In Trash · restore to edit" :
+    note.archivedAt ? "Archived · restore to edit" :
+    locked ? "Locked · unlock on desktop to edit" : "Saved";
   updateNoteEditorMeta(note);
   renderNotesProEditorControls(note);
   renderNotesInlineChecklist();
