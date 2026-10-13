@@ -103,12 +103,13 @@ window.BoxCloud = (() => {
   }
 
   async function saveNote(text) {
-    if (!isReady()) return { error: null };
+    if (!isReady()) return { error: new Error("Sign in first.") };
+    const writingUserId = session.user.id;
 
     const { error } = await client
       .from("notes")
       .upsert({
-        user_id: session.user.id,
+        user_id: writingUserId,
         content: text,
         updated_at: new Date().toISOString()
       }, { onConflict: "user_id" });
@@ -116,21 +117,27 @@ window.BoxCloud = (() => {
     emit(error ? "error" : "online", error ? "Sync error" : "Synced");
     if (!error) {
       window.dispatchEvent(new CustomEvent("boxcloudnotesaved", {
-        detail: { content: text, userId: session.user.id }
+        detail: { content: text, userId: writingUserId }
       }));
     }
     return { error };
   }
 
   // Serialize writes so slow network responses cannot reorder successive edits.
-  function writeNoteInOrder(text) {
-    noteWriteChain = noteWriteChain.catch(() => {}).then(() => saveNote(text));
+  function writeNoteInOrder(text, expectedUserId = session?.user?.id) {
+    noteWriteChain = noteWriteChain.catch(() => {}).then(() => {
+      if (!isReady() || session.user.id !== expectedUserId) {
+        return { error: new Error("Notes session changed before saving.") };
+      }
+      return saveNote(text);
+    });
     return noteWriteChain;
   }
 
   function queueNoteSync(text) {
     clearTimeout(noteTimer);
-    noteTimer = setTimeout(() => { writeNoteInOrder(text); }, 700);
+    const queuedUserId = session?.user?.id;
+    noteTimer = setTimeout(() => { writeNoteInOrder(text, queuedUserId); }, 700);
   }
 
   function createUuid() {
@@ -943,6 +950,11 @@ window.BoxCloud = (() => {
         our_space_plans: ourSpaceResult.data || []
       });
     } else {
+      const previousNotesOwner = localStorage.getItem("theBoxOSNotesOwnerId") || "";
+      if (previousNotesOwner && previousNotesOwner !== session.user.id &&
+          typeof window.BoxOSCloudHydrate === "function") {
+        window.BoxOSCloudHydrate({ notes: "", notesUserId: session.user.id });
+      }
       await syncNow();
     }
 
@@ -960,7 +972,9 @@ window.BoxCloud = (() => {
       const localTasks = JSON.parse(localStorage.getItem("theBoxOS4Tasks") || "[]");
       const localEvents = JSON.parse(localStorage.getItem("theBoxOS4Events") || "[]");
       const localFinance = JSON.parse(localStorage.getItem("theBoxOS4Finance") || "[]");
-      const localNotes = localStorage.getItem("theBoxOS4Notes") || "";
+      const previousNotesOwner = localStorage.getItem("theBoxOSNotesOwnerId") || "";
+      const localNotes = previousNotesOwner && previousNotesOwner !== session.user.id
+        ? "" : (localStorage.getItem("theBoxOS4Notes") || "");
       const localTemplates = JSON.parse(localStorage.getItem("theBoxOSCustomTemplates") || "[]");
       const localJournal = JSON.parse(localStorage.getItem("theBoxOSJournalEntries") || "[]");
       const localOurSpace = JSON.parse(localStorage.getItem("theBoxOSOurSpacePlans") || "[]");
