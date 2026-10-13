@@ -1,40 +1,37 @@
-# The Box OS — Phase 7O.17.5
+# The Box OS — Phase 7O.18.1–2 (Notes Pro: Editor and Folders)
 
-## Notes layout and scroll hotfix
+## Changes
+- Live, editable checklist rows appear in Edit mode for checklist items already in a note. Check and uncheck items without switching to Preview; text can also be changed in the checklist rows.
+- Library views: All active notes, Pinned, Archive and Trash.
+- Organize notes into optional folders; create, rename and remove folders. Removing a folder unfiles its notes instead of deleting them.
+- Pin notes independently from existing desktop Sticky status.
+- Archive and restore individual notes.
+- Move notes to Trash and permanently delete only after separate confirmation; Vault files are never removed when a note is deleted.
+- Preserves existing Markdown formatting, plain-text editor, collapsible sidebar and desktop sticky notes.
+- Extends existing `the-box-notes-v2` JSON payload to version 3 with additional optional fields; old notes normalize with empty defaults, without changing the Supabase notes table.
+- Respects the existing 7O.17.5 scrolling fixes for desktop, Honor Pad/tablet, and phone modes.
 
-Fixes the Notes window layout after the 7O.17.4 formatting toolbar addition, specifically when the formatting row pushes the writing area below the visible app window.
+## Modified files
+- `app.js` — additive note metadata, library and folder management, archive/Trash, inline checklist updates, backup release label.
+- `index.html` — accessible library/folder controls, editor options, live checklist region, versioned assets.
+- `style.css` — scoped responsive Notes Pro styles.
+- `service-worker.js` — PWA cache version.
+- `README.md` — this changelog and installation instructions.
 
-### Changes
-- Make the Notes workspace grow to the actual editor height so the Notes window has a working vertical scrollbar.
-- Remove editor-panel clipping, preserving access to the note input box and Delete note footer.
-- Compress the top hero/counters and keep New note, Reset sticky layout, and Search compact on one desktop/tablet row.
-- Use a two-column actions row plus full-width search on narrow, compact and phone windows.
-- Keep the notes list scrollable with a limited height on small devices.
-- Respect mobile bottom safe areas, including dock overlap.
-- Preserve 7O.17.3 sidebar collapse and 7O.17.4 formatting toolbar, Edit/Preview, checklist and note syncing.
-- Refresh CSS version and service-worker cache to load the fix in installed PWAs.
+## Installation / review
+1. Review PR targeting `main` from `feature/7o18-1-notes-inline-folders`.
+2. Do not merge until legacy note backups and browser/device behavior have been checked.
+3. When merged, wait for GitHub Pages deployment, refresh/reopen installed PWAs, then open Notes.
+4. Test the new library view, folder creation, archive/restore, Trash/restore, and inline checklist controls.
+5. Ensure all devices run Notes Pro before editing notes across devices: older app versions can strip new metadata if they sync.
 
-### Files modified
-- `style.css` — focused CSS overrides for Notes responsive sizing and scroll ownership.
-- `index.html` — updated asset query parameters from 7o17-4 to 7o17-5.
-- `service-worker.js` — new offline cache identifier.
-- `README.md` — release notes and installation instructions.
+## Test checklist
+- [ ] Existing notes load with titles, contents, sticky layouts and timestamps unchanged.
+- [ ] Clickable checkboxes update the text, and checklist text edits save.
+- [ ] Create/rename/remove folders without deleting notes.
+- [ ] Archive/restore and Trash/restore individual notes, including sticky notes.
+- [ ] Existing sticky dashboard and desktop widgets ignore archived/trash notes.
+- [ ] Cloud sync roundtrip and backup export/import preserve folder names and status.
+- [ ] Windows, tablet, and phone Notes scrolling remains usable.
 
-### Installation / replacement
-1. Merge the `fix/7o17-5-notes-layout-scroll` pull request into `main`.
-2. Wait for the GitHub Pages deployment (if configured).
-3. Refresh the browser, or close and reopen The Box installed PWA.
-4. Open Notes and try scrolling from the header all the way to the writing field and footer.
-5. Check compact, maximized, tablet, phone, expanded and collapsed sidebar modes.
-
-### Test checklist
-- [ ] Notes editor text field can be reached and scrolled to on a 838×638 window.
-- [ ] Notes editor and footer do not overlap or get clipped.
-- [ ] Hero/counters and action row no longer use unnecessary vertical space.
-- [ ] Notes list and main page remain independently scrollable where needed.
-- [ ] Edit/Preview and checklist buttons still work.
-- [ ] Sidebar collapsed mode expands editor full width.
-- [ ] Phone view remains scrollable with a visible text field and bottom action.
-- [ ] Existing notes remain unchanged.
-
-No changes to note data, Supabase, storage schema or paid services.
+No paid dependencies or third-party editor packages. No DB migration is needed for this phase.
