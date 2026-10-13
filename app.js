@@ -215,6 +215,9 @@ const STORAGE = {
   tasks: "theBoxOS4Tasks",
   events: "theBoxOS4Events",
   notes: "theBoxOS4Notes",
+  notesPendingSync: "theBoxOSNotesPendingSync",
+  notesHydrateBackup: "theBoxOSNotesPreHydrateBackup",
+  notesAccountId: "theBoxOSNotesOwnerId",
   finance: "theBoxOS4Finance",
   theme: "theBoxOS4Theme",
   backgroundMode: "theBoxOSBackgroundMode",
@@ -483,6 +486,7 @@ let reminderCheckTimer = null;
 
 let noteItems = [];
 let noteFolders = [];
+let notesPurgedItems = [];
 let notesLibraryView = "all";
 let selectedNotesFolderId = "";
 let selectedNoteId = null;
@@ -820,6 +824,57 @@ function getActiveNoteFolders() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+
+function normalizeNotesPurged(value) {
+  if (!Array.isArray(value)) return [];
+  const entries = new Map();
+  value.forEach((item) => {
+    const id = String(item?.id || "").slice(0, 100);
+    const deletedAt = String(item?.deletedAt || "");
+    if (!id || !deletedAt) return;
+    if (!entries.has(id) || entries.get(id).deletedAt < deletedAt) {
+      entries.set(id, { id, deletedAt });
+    }
+  });
+  return Array.from(entries.values()).slice(-2000);
+}
+
+function decodeNotesPurged(raw) {
+  try {
+    return normalizeNotesPurged(JSON.parse(String(raw || ""))?.purged);
+  } catch (_) {
+    return [];
+  }
+}
+
+// Merge only when a local pending sync belongs to this signed-in account.
+// Resolve each note/folder by updated timestamp. Tombstones prevent deleted
+// records from returning after an offline edit from another device.
+function mergePendingNotesPayload(localRaw, remoteRaw) {
+  const tombstones = normalizeNotesPurged([
+    ...decodeNotesPurged(localRaw), ...decodeNotesPurged(remoteRaw)
+  ]);
+  const removed = new Map(tombstones.map((item) => [item.id, item.deletedAt]));
+  const byId = new Map();
+  [...decodeNotesPayload(remoteRaw), ...decodeNotesPayload(localRaw)].forEach((note) => {
+    const old = byId.get(note.id);
+    if (!old || String(note.updatedAt) >= String(old.updatedAt)) byId.set(note.id, note);
+  });
+  const mergedItems = normalizeNoteItems(Array.from(byId.values())
+    .filter((note) => !removed.has(note.id) || String(note.updatedAt) > removed.get(note.id)));
+  const folders = new Map();
+  [...decodeNotesFolders(remoteRaw), ...decodeNotesFolders(localRaw)].forEach((folder) => {
+    const old = folders.get(folder.id);
+    if (!old || String(folder.updatedAt) >= String(old.updatedAt)) folders.set(folder.id, folder);
+  });
+  return JSON.stringify({
+    format: "the-box-notes-v2", version: 3,
+    folders: normalizeNoteFolders(Array.from(folders.values())),
+    purged: tombstones,
+    items: mergedItems
+  });
+}
+
 function normalizeNoteItem(note = {}) {
   const now = new Date().toISOString();
   return {
@@ -882,6 +937,7 @@ function serializeNotesPayload(items = noteItems) {
     format: "the-box-notes-v2",
     version: 3,
     folders: normalizeNoteFolders(noteFolders),
+    purged: normalizeNotesPurged(notesPurgedItems),
     items: normalizeNoteItems(items)
   });
 }
@@ -889,11 +945,13 @@ function serializeNotesPayload(items = noteItems) {
 function persistNoteItems({ sync = true } = {}) {
   noteItems = normalizeNoteItems(noteItems);
   noteFolders = normalizeNoteFolders(noteFolders);
+  notesPurgedItems = normalizeNotesPurged(notesPurgedItems);
   const payload = serializeNotesPayload(noteItems);
   localStorage.setItem(STORAGE.notes, payload);
 
-  if (sync && window.BoxCloud?.isReady()) {
-    window.BoxCloud.queueNoteSync(payload);
+  if (sync) {
+    try { localStorage.setItem(STORAGE.notesPendingSync, "1"); } catch (_) {}
+    if (window.BoxCloud?.isReady()) window.BoxCloud.queueNoteSync(payload);
   }
 }
 
@@ -907,6 +965,7 @@ function getSortedNoteItems(items = noteItems) {
 function initializeNoteItems(rawValue = localStorage.getItem(STORAGE.notes) || "") {
   noteItems = decodeNotesPayload(rawValue);
   noteFolders = decodeNotesFolders(rawValue);
+  notesPurgedItems = decodeNotesPurged(rawValue);
   persistNoteItems({ sync: false });
   if (selectedNoteId && !getActiveNoteItems().some((note) => note.id === selectedNoteId)) {
     selectedNoteId = null;
@@ -2103,6 +2162,7 @@ function deleteSelectedNoteItem() {
   }
   if (note.deletedAt) {
     if (!window.confirm("Permanently delete this note? The linked Vault files are NOT deleted.")) return;
+    notesPurgedItems.push({ id: note.id, deletedAt: new Date().toISOString() });
     noteItems = noteItems.filter((item) => item.id !== note.id);
     showToast("Note permanently deleted; Vault files kept");
   } else {
@@ -13179,7 +13239,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.18.1-Notes-Pro-Library";
+const BACKUP_APP_VERSION = "7O.18.5-Notes-Pro-Vault-Sync";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -17230,6 +17290,16 @@ $("eventForm").addEventListener("submit", (event) => {
 
 initializeNoteItems();
 initializeNotesListCollapse();
+window.addEventListener("boxcloudnotesaved", (event) => {
+  const data = event.detail || {};
+  const owner = String(data.userId || "");
+  const known = localStorage.getItem(STORAGE.notesAccountId) || "";
+  if (owner && (!known || known === owner) &&
+      data.content === localStorage.getItem(STORAGE.notes)) {
+    if (!known) localStorage.setItem(STORAGE.notesAccountId, owner);
+    localStorage.removeItem(STORAGE.notesPendingSync);
+  }
+});
 
 $("dashboardStickyNote").addEventListener("click", () => {
   const noteId = $("dashboardStickyNote").dataset.noteId;
@@ -17815,9 +17885,25 @@ window.BoxOSCloudHydrate = function cloudHydrate(data) {
   if (Array.isArray(data.finance_entries)) financeEntries = data.finance_entries;
 
   if (typeof data.notes === "string") {
-    localStorage.setItem(STORAGE.notes, data.notes);
-    initializeNoteItems(data.notes);
+    const localRaw = localStorage.getItem(STORAGE.notes) || "";
+    const cloudUserId = String(data.notesUserId || "");
+    const previousUserId = localStorage.getItem(STORAGE.notesAccountId) || "";
+    const pending = localStorage.getItem(STORAGE.notesPendingSync) === "1";
+    const sameAccount = !previousUserId || previousUserId === cloudUserId;
+    if (localRaw && localRaw !== data.notes) {
+      try { localStorage.setItem(STORAGE.notesHydrateBackup, localRaw); } catch (_) {}
+    }
+    const shouldMerge = pending && localRaw && sameAccount && cloudUserId;
+    const payload = shouldMerge ? mergePendingNotesPayload(localRaw, data.notes) : data.notes;
+    localStorage.setItem(STORAGE.notes, payload);
+    if (cloudUserId) localStorage.setItem(STORAGE.notesAccountId, cloudUserId);
+    initializeNoteItems(payload);
+    if (shouldMerge) persistNoteItems();
+    else localStorage.removeItem(STORAGE.notesPendingSync);
     renderNotesCenter();
+  } else if (localStorage.getItem(STORAGE.notesPendingSync) === "1" &&
+             window.BoxCloud?.isReady() && localStorage.getItem(STORAGE.notes)) {
+    window.BoxCloud.queueNoteSync(localStorage.getItem(STORAGE.notes));
   }
 
   if (Array.isArray(data.custom_templates)) {
