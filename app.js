@@ -482,6 +482,9 @@ let currentReminderItems = [];
 let reminderCheckTimer = null;
 
 let noteItems = [];
+let noteFolders = [];
+let notesLibraryView = "all";
+let selectedNotesFolderId = "";
 let selectedNoteId = null;
 let notesSearchTerm = "";
 let noteSaveTimer = null;
@@ -764,6 +767,59 @@ function normalizeStickyLayouts(value = {}) {
   return layouts;
 }
 
+
+function normalizeNoteAttachments(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value.filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      id: String(item.id || "").slice(0, 100),
+      name: String(item.name || "Attachment").slice(0, 250),
+      mimeType: String(item.mimeType || item.mime_type || "").slice(0, 120),
+      size: Math.max(0, Number(item.size || item.size_bytes) || 0)
+    }))
+    .filter((item) => {
+      if (!item.id || seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    }).slice(0, 30);
+}
+
+function normalizeNoteFolders(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value.filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      id: String(item.id || "").slice(0, 100),
+      name: String(item.name || "").trim().slice(0, 60),
+      updatedAt: item.updatedAt || new Date().toISOString(),
+      deletedAt: item.deletedAt || null
+    }))
+    .filter((item) => {
+      if (!item.id || !item.name || seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    }).slice(0, 100);
+}
+
+function decodeNotesFolders(raw) {
+  try {
+    const value = JSON.parse(String(raw || ""));
+    return normalizeNoteFolders(value?.folders);
+  } catch (_) {
+    return [];
+  }
+}
+
+function getActiveNoteItems() {
+  return noteItems.filter((note) => !note.deletedAt && !note.archivedAt);
+}
+
+function getActiveNoteFolders() {
+  return noteFolders.filter((folder) => !folder.deletedAt)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function normalizeNoteItem(note = {}) {
   const now = new Date().toISOString();
   return {
@@ -771,6 +827,11 @@ function normalizeNoteItem(note = {}) {
     title: String(note.title || "").trim().slice(0, 180),
     content: String(note.content || "").slice(0, 250000),
     sticky: Boolean(note.sticky),
+    pinned: Boolean(note.pinned),
+    folderId: String(note.folderId || "").slice(0, 100),
+    archivedAt: note.archivedAt || null,
+    deletedAt: note.deletedAt || null,
+    attachments: normalizeNoteAttachments(note.attachments),
     stickyLayouts: normalizeStickyLayouts(note.stickyLayouts),
     createdAt: note.createdAt || note.created_at || now,
     updatedAt: note.updatedAt || note.updated_at || note.createdAt || note.created_at || now
@@ -819,13 +880,15 @@ function decodeNotesPayload(rawValue) {
 function serializeNotesPayload(items = noteItems) {
   return JSON.stringify({
     format: "the-box-notes-v2",
-    version: 2,
+    version: 3,
+    folders: normalizeNoteFolders(noteFolders),
     items: normalizeNoteItems(items)
   });
 }
 
 function persistNoteItems({ sync = true } = {}) {
   noteItems = normalizeNoteItems(noteItems);
+  noteFolders = normalizeNoteFolders(noteFolders);
   const payload = serializeNotesPayload(noteItems);
   localStorage.setItem(STORAGE.notes, payload);
 
@@ -843,15 +906,12 @@ function getSortedNoteItems(items = noteItems) {
 
 function initializeNoteItems(rawValue = localStorage.getItem(STORAGE.notes) || "") {
   noteItems = decodeNotesPayload(rawValue);
+  noteFolders = decodeNotesFolders(rawValue);
   persistNoteItems({ sync: false });
-
-  if (selectedNoteId && !noteItems.some((note) => note.id === selectedNoteId)) {
+  if (selectedNoteId && !getActiveNoteItems().some((note) => note.id === selectedNoteId)) {
     selectedNoteId = null;
   }
-
-  if (!selectedNoteId && noteItems.length) {
-    selectedNoteId = getSortedNoteItems(noteItems)[0]?.id || null;
-  }
+  if (!selectedNoteId) selectedNoteId = getSortedNoteItems(getActiveNoteItems())[0]?.id || null;
 }
 
 function getSelectedNoteItem() {
@@ -861,11 +921,15 @@ function getSelectedNoteItem() {
 function getFilteredNoteItems() {
   const query = notesSearchTerm.toLocaleLowerCase();
   return getSortedNoteItems(noteItems.filter((note) => {
+    if (notesLibraryView === "trash") {
+      if (!note.deletedAt) return false;
+    } else if (notesLibraryView === "archive") {
+      if (!note.archivedAt || note.deletedAt) return false;
+    } else if (note.archivedAt || note.deletedAt) return false;
+    if (notesLibraryView === "pinned" && !note.pinned) return false;
+    if (selectedNotesFolderId && note.folderId !== selectedNotesFolderId) return false;
     if (!query) return true;
-    return [note.title, note.content]
-      .join(" ")
-      .toLocaleLowerCase()
-      .includes(query);
+    return [note.title, note.content].join(" ").toLocaleLowerCase().includes(query);
   }));
 }
 
@@ -927,10 +991,10 @@ function renderNotesList() {
   if (!list) return;
 
   const filtered = getFilteredNoteItems();
-  const stickyCount = noteItems.filter((note) => note.sticky).length;
+  const stickyCount = getActiveNoteItems().filter((note) => note.sticky).length;
 
   $("notesCount").textContent = String(filtered.length);
-  if ($("notesOverviewTotal")) $("notesOverviewTotal").textContent = String(noteItems.length);
+  if ($("notesOverviewTotal")) $("notesOverviewTotal").textContent = String(getActiveNoteItems().length);
   if ($("notesOverviewSticky")) $("notesOverviewSticky").textContent = String(stickyCount);
   $("notesEmptyState").hidden = filtered.length > 0;
 
@@ -942,7 +1006,7 @@ function renderNotesList() {
     >
       <span class="note-card-top">
         <strong>${escapeHtml(note.title || "Untitled note")}</strong>
-        <span>${note.sticky ? "▱" : ""}</span>
+        <span>${note.pinned ? "★ " : ""}${note.sticky ? "▱" : ""}</span>
       </span>
       <p>${escapeHtml(getNotePreview(note))}</p>
       <span class="note-card-meta">
@@ -958,7 +1022,7 @@ function renderNotesList() {
 }
 
 function setNotesEditorDisabled(disabled) {
-  ["noteTitle", "noteSticky", "noteContent"].forEach((id) => {
+  ["noteTitle", "noteSticky", "noteContent", "noteFolderAssign", "notePinButton", "noteArchiveButton"].forEach((id) => {
     const element = $(id);
     if (element) element.disabled = disabled;
   });
@@ -1209,11 +1273,13 @@ function renderNotesEditor() {
     $("noteStatus").textContent = "Saved";
     setNotesEditorDisabled(true);
     updateNoteEditorMeta(null);
+    renderNotesProEditorControls(null);
+    renderNotesInlineChecklist();
     updateNotePreviewVisibility();
     return;
   }
 
-  const locked = isStickyNoteLockedForCurrentMode(note);
+  const locked = isStickyNoteLockedForCurrentMode(note) || Boolean(note.deletedAt || note.archivedAt);
   setNotesEditorDisabled(locked);
   $("noteEditorMode").textContent = locked
     ? "LOCKED STICKY NOTE"
@@ -1224,6 +1290,8 @@ function renderNotesEditor() {
   $("noteContent").value = note.content;
   $("noteStatus").textContent = locked ? "Locked · unlock on desktop to edit" : "Saved";
   updateNoteEditorMeta(note);
+  renderNotesProEditorControls(note);
+  renderNotesInlineChecklist();
   updateNotePreviewVisibility();
 }
 
@@ -1453,7 +1521,7 @@ function toggleStickyNoteLock(noteId, card) {
 
   const mode = getStickyLayoutMode();
   const bounds = getStickyNoteContainerRect();
-  const stickyNotes = getSortedNoteItems(noteItems.filter((item) => item.sticky));
+  const stickyNotes = getSortedNoteItems(getActiveNoteItems().filter((item) => item.sticky));
   const index = Math.max(0, stickyNotes.findIndex((item) => item.id === note.id));
 
   // IMPORTANT: lock the card exactly where it is visibly sitting now.
@@ -1469,7 +1537,7 @@ function toggleStickyNoteLock(noteId, card) {
 }
 
 function resetStickyNoteLayoutsForCurrentMode() {
-  const stickyNotes = noteItems.filter((note) => note.sticky);
+  const stickyNotes = getActiveNoteItems().filter((note) => note.sticky);
   if (!stickyNotes.length) {
     showToast("No sticky notes to reset");
     return;
@@ -1492,7 +1560,7 @@ function renderDesktopStickyNotes() {
   const container = $("desktopStickyNotes");
   if (!container) return;
 
-  const stickyNotes = getSortedNoteItems(noteItems.filter((note) => note.sticky));
+  const stickyNotes = getSortedNoteItems(getActiveNoteItems().filter((note) => note.sticky));
   container.hidden = stickyNotes.length === 0;
   container.innerHTML = "";
   if (!stickyNotes.length) return;
@@ -1559,8 +1627,9 @@ function renderNotesCenter() {
   if (!$("notesList")) return;
   $("notesSearchInput").value = notesSearchTerm;
 
-  if (!selectedNoteId && noteItems.length) {
-    selectedNoteId = getSortedNoteItems(noteItems)[0]?.id || null;
+  renderNotesProLibraryControls();
+  if (!getFilteredNoteItems().some((note) => note.id === selectedNoteId)) {
+    selectedNoteId = getFilteredNoteItems()[0]?.id || null;
   }
 
   renderNotesList();
@@ -1569,7 +1638,7 @@ function renderNotesCenter() {
 }
 
 function selectNoteItem(noteId) {
-  if (!noteItems.some((note) => note.id === noteId)) return;
+  if (!getFilteredNoteItems().some((note) => note.id === noteId)) return;
   selectedNoteId = noteId;
   renderNotesList();
   renderNotesEditor();
@@ -1597,7 +1666,7 @@ function createNewNoteItem() {
 function updateSelectedNoteFromEditor() {
   const note = getSelectedNoteItem();
   if (!note) return;
-  if (isStickyNoteLockedForCurrentMode(note)) {
+  if (isStickyNoteLockedForCurrentMode(note) || note.deletedAt || note.archivedAt) {
     renderNotesEditor();
     return;
   }
@@ -1611,6 +1680,7 @@ function updateSelectedNoteFromEditor() {
   $("noteEditorHeading").textContent = note.title || "Untitled note";
   $("noteStatus").textContent = "Saving…";
   updateNoteEditorMeta(note);
+  if (!$("notesInlineChecklist").contains(document.activeElement)) renderNotesInlineChecklist();
 
   clearTimeout(noteSaveTimer);
   noteSaveTimer = setTimeout(() => {
@@ -7688,7 +7758,7 @@ function renderDashboardStickyNote() {
   if (!button) return;
 
   const sticky = getSortedNoteItems(
-    noteItems.filter((note) => note.sticky)
+    getActiveNoteItems().filter((note) => note.sticky)
   )[0];
 
   button.dataset.noteId = sticky?.id || "";
