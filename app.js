@@ -12951,7 +12951,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.17.4-Notes-Formatting-Free";
+const BACKUP_APP_VERSION = "7O.18.1-Notes-Pro-Library";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -17051,6 +17051,7 @@ $("notePreviewToggle").addEventListener("click", () => {
   if (!getSelectedNoteItem()) return;
   notePreviewActive = !notePreviewActive;
   updateNotePreviewVisibility();
+  renderNotesInlineChecklist();
 });
 $("noteMarkdownPreview").addEventListener("change", updateNoteChecklistFromPreview);
 $("noteContent").addEventListener("keydown", (event) => {
