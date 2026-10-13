@@ -1269,9 +1269,11 @@ async function loadNotesVaultCatalog({ force = false } = {}) {
   }
   if (notesVaultLoading || (!force && notesVaultCatalogAt && Date.now() - notesVaultCatalogAt < 120000)) return;
   notesVaultLoading = true;
+  const requestOwner = notesVaultCatalogOwner;
   setNotesAttachmentStatus("Loading your private Vault…");
   try {
     const result = await window.BoxCloud.listDocuments();
+    if (requestOwner !== notesVaultCatalogOwner) return;
     if (result.error) {
       setNotesAttachmentStatus(result.error.message || "Could not load Vault.");
       return;
@@ -2105,10 +2107,13 @@ function selectNoteItem(noteId) {
 
 function createNewNoteItem() {
   const now = new Date().toISOString();
+  if (notesLibraryView === "archive" || notesLibraryView === "trash") notesLibraryView = "all";
   const note = normalizeNoteItem({
     id: createNoteItemId(),
     title: "",
     content: "",
+    folderId: selectedNotesFolderId,
+    pinned: notesLibraryView === "pinned",
     sticky: false,
     createdAt: now,
     updatedAt: now
@@ -17901,9 +17906,23 @@ window.BoxOSCloudHydrate = function cloudHydrate(data) {
     if (shouldMerge) persistNoteItems();
     else localStorage.removeItem(STORAGE.notesPendingSync);
     renderNotesCenter();
-  } else if (localStorage.getItem(STORAGE.notesPendingSync) === "1" &&
-             window.BoxCloud?.isReady() && localStorage.getItem(STORAGE.notes)) {
-    window.BoxCloud.queueNoteSync(localStorage.getItem(STORAGE.notes));
+  } else if (data.notesUserId) {
+    const owner = localStorage.getItem(STORAGE.notesAccountId) || "";
+    const differentAccount = Boolean(owner && owner !== data.notesUserId);
+    if (differentAccount) {
+      const localRaw = localStorage.getItem(STORAGE.notes) || "";
+      if (localRaw) {
+        try { localStorage.setItem(STORAGE.notesHydrateBackup, localRaw); } catch (_) {}
+      }
+      localStorage.setItem(STORAGE.notes, "");
+      localStorage.removeItem(STORAGE.notesPendingSync);
+      initializeNoteItems("");
+      renderNotesCenter();
+    } else if (localStorage.getItem(STORAGE.notesPendingSync) === "1" &&
+               window.BoxCloud?.isReady() && localStorage.getItem(STORAGE.notes)) {
+      window.BoxCloud.queueNoteSync(localStorage.getItem(STORAGE.notes));
+    }
+    localStorage.setItem(STORAGE.notesAccountId, String(data.notesUserId));
   }
 
   if (Array.isArray(data.custom_templates)) {
