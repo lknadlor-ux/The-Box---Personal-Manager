@@ -30,6 +30,9 @@
 5. Sign in to Supabase. Open Notes, choose a note, attach an existing Vault file, upload another file, open it, and unlink it. Confirm both files remain in Documents Vault.
 6. Check folder/archiving, sticky notes, inline checklist, backups, and offline reconnection.
 
+## Repeatable automated checks
+Run `node tests/notes-pro-data-smoke.cjs` from the repository root. The test uses only built-in Node.js modules and checks backward-compatible note decoding, folder and file references, conflict merging, permanent-deletion tombstones, required controls and cloud sync guard structure.
+
 ## Verification checklist
 - [ ] Existing legacy notes load and roundtrip correctly, including note IDs, titles, content, sticky positions and timestamps.
 - [ ] All Notes views and folders work in Windows/tablet/phone.
