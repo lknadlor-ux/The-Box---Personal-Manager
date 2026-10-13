@@ -1172,6 +1172,218 @@ function toggleNoteArchive() {
   showToast(note.archivedAt ? "Note archived" : "Note restored");
 }
 
+
+// Phase 7O.18.3 — Attachments reuse the existing private Supabase Documents Vault.
+let notesVaultCatalog = [];
+let notesVaultCatalogAt = 0;
+let notesVaultCatalogOwner = "";
+let notesVaultLoading = false;
+
+function canEditNotesAttachment(note) {
+  return Boolean(note && !note.deletedAt && !note.archivedAt &&
+    !isStickyNoteLockedForCurrentMode(note) && window.BoxCloud?.isReady());
+}
+
+function setNotesAttachmentStatus(message) {
+  const el = $("notesAttachmentsStatus");
+  if (el) el.textContent = String(message || "");
+}
+
+function renderNotesAttachmentPicker() {
+  const select = $("notesVaultFilePicker");
+  if (!select) return;
+  const selected = select.value;
+  select.replaceChildren(new Option("Select a document", ""));
+  notesVaultCatalog.filter((doc) => !doc.deleted_at).slice(0, 500).forEach((doc) => {
+    select.add(new Option(String(doc.name || "Untitled document"), String(doc.id)));
+  });
+  if (notesVaultCatalog.some((doc) => String(doc.id) === selected)) select.value = selected;
+}
+
+async function loadNotesVaultCatalog({ force = false } = {}) {
+  if (!window.BoxCloud?.isReady()) {
+    notesVaultCatalog = [];
+    notesVaultCatalogAt = 0;
+    renderNotesAttachmentPicker();
+    setNotesAttachmentStatus("Sign in to use your private Documents Vault.");
+    return;
+  }
+  if (notesVaultLoading || (!force && notesVaultCatalogAt && Date.now() - notesVaultCatalogAt < 120000)) return;
+  notesVaultLoading = true;
+  setNotesAttachmentStatus("Loading your private Vault…");
+  try {
+    const result = await window.BoxCloud.listDocuments();
+    if (result.error) {
+      setNotesAttachmentStatus(result.error.message || "Could not load Vault.");
+      return;
+    }
+    notesVaultCatalog = Array.isArray(result.data) ? result.data.filter((doc) => !doc.deleted_at) : [];
+    notesVaultCatalogAt = Date.now();
+    renderNotesAttachmentPicker();
+    renderNotesProAttachments();
+    setNotesAttachmentStatus("Vault ready · linked files stay private");
+  } finally {
+    notesVaultLoading = false;
+  }
+}
+
+async function openNotesVaultAttachment(id) {
+  if (!window.BoxCloud?.isReady()) {
+    showToast("Sign in to open Vault attachments");
+    return;
+  }
+  await loadNotesVaultCatalog();
+  const documentItem = notesVaultCatalog.find((doc) => String(doc.id) === String(id));
+  if (!documentItem || documentItem.deleted_at) {
+    showToast("This Vault document is unavailable");
+    return;
+  }
+  const result = await window.BoxCloud.createDocumentUrl(documentItem.storage_path, 300);
+  const url = result.data?.signedUrl || result.data?.signedURL;
+  if (!url || result.error) {
+    showToast(result.error?.message || "Unable to open attachment");
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function renderNotesProAttachments() {
+  const panel = $("notesAttachmentsPanel");
+  const list = $("notesAttachmentList");
+  if (!panel || !list) return;
+  const note = getSelectedNoteItem();
+  panel.hidden = !note;
+  if (!note) return;
+  const editable = canEditNotesAttachment(note);
+  for (const id of ["notesAttachmentFileInput","notesAttachmentUploadButton",
+    "notesVaultFilePicker","notesVaultAttachButton","notesVaultRefreshButton"]) {
+    const el = $(id);
+    if (el) el.disabled = !editable;
+  }
+  list.replaceChildren();
+  const attachments = normalizeNoteAttachments(note.attachments);
+  if (!attachments.length) {
+    const hint = document.createElement("small");
+    hint.textContent = "No files linked yet. Files remain in your private Documents Vault.";
+    list.appendChild(hint);
+  }
+  attachments.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "notes-pro-attachment-item";
+    const title = document.createElement("span");
+    title.textContent = item.name;
+    title.title = item.name;
+    const open = document.createElement("button");
+    open.type = "button";
+    open.textContent = "Open";
+    open.disabled = !window.BoxCloud?.isReady();
+    open.addEventListener("click", () => openNotesVaultAttachment(item.id));
+    const unlink = document.createElement("button");
+    unlink.type = "button";
+    unlink.textContent = "Unlink";
+    unlink.disabled = !editable;
+    unlink.title = "Unlink from note; keep Vault file";
+    unlink.addEventListener("click", () => {
+      const current = getSelectedNoteItem();
+      if (!canEditNotesAttachment(current)) return;
+      current.attachments = normalizeNoteAttachments(current.attachments)
+        .filter((ref) => ref.id !== item.id);
+      current.updatedAt = new Date().toISOString();
+      persistNoteItems();
+      renderNotesProAttachments();
+      showToast("File unlinked; the Vault document was kept");
+    });
+    row.append(title, open, unlink);
+    list.appendChild(row);
+  });
+  if (window.BoxCloud?.isReady() && !notesVaultCatalogAt && !notesVaultLoading) {
+    loadNotesVaultCatalog();
+  }
+}
+
+function appendNotesVaultLink(note, documentItem) {
+  if (!canEditNotesAttachment(note) || !documentItem || documentItem.deleted_at) return false;
+  const current = normalizeNoteAttachments(note.attachments);
+  if (current.some((item) => item.id === String(documentItem.id))) return true;
+  if (current.length >= 30) {
+    showToast("Maximum 30 files per note");
+    return false;
+  }
+  current.push({
+    id: String(documentItem.id),
+    name: String(documentItem.name || "Vault file"),
+    mimeType: String(documentItem.mime_type || ""),
+    size: Number(documentItem.size_bytes || 0)
+  });
+  note.attachments = normalizeNoteAttachments(current);
+  note.updatedAt = new Date().toISOString();
+  persistNoteItems();
+  return true;
+}
+
+async function uploadNotesAttachments() {
+  const note = getSelectedNoteItem();
+  const field = $("notesAttachmentFileInput");
+  if (!canEditNotesAttachment(note)) {
+    showToast("Sign in and select an editable note to attach files");
+    return;
+  }
+  const files = Array.from(field.files || []);
+  if (!files.length) {
+    showToast("Choose a file to attach");
+    return;
+  }
+  if (files.length > 5) {
+    showToast("Upload at most 5 files at a time");
+    return;
+  }
+  if (normalizeNoteAttachments(note.attachments).length + files.length > 30) {
+    showToast("Maximum 30 files per note");
+    return;
+  }
+  const noteId = note.id;
+  const button = $("notesAttachmentUploadButton");
+  button.disabled = true;
+  try {
+    for (const file of files) {
+      if (file.size > 25 * 1024 * 1024) {
+        setNotesAttachmentStatus(file.name + " exceeds the 25 MB Vault limit");
+        continue;
+      }
+      setNotesAttachmentStatus("Uploading " + file.name + "…");
+      const result = await window.BoxCloud.uploadDocument(file, "Notes",
+        "Attached from Notes Pro: " + String(note.title || "Untitled note").slice(0, 120));
+      if (result.error) {
+        setNotesAttachmentStatus(result.error.message || "Upload failed");
+        continue;
+      }
+      const current = noteItems.find((item) => item.id === noteId);
+      if (current && !current.deletedAt) appendNotesVaultLink(current, result.data);
+    }
+    field.value = "";
+    await loadNotesVaultCatalog({ force: true });
+    renderNotesProAttachments();
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function linkExistingNotesVaultFile() {
+  const note = getSelectedNoteItem();
+  if (!canEditNotesAttachment(note)) return;
+  await loadNotesVaultCatalog();
+  const id = $("notesVaultFilePicker").value;
+  const documentItem = notesVaultCatalog.find((doc) => String(doc.id) === id && !doc.deleted_at);
+  if (!documentItem) {
+    showToast("Select a Vault document first");
+    return;
+  }
+  if (appendNotesVaultLink(note, documentItem)) {
+    renderNotesProAttachments();
+    showToast("Vault file linked");
+  }
+}
+
 function renderNotesList() {
   const list = $("notesList");
   if (!list) return;
@@ -1461,6 +1673,7 @@ function renderNotesEditor() {
     updateNoteEditorMeta(null);
     renderNotesProEditorControls(null);
     renderNotesInlineChecklist();
+    renderNotesProAttachments();
     updateNotePreviewVisibility();
     return;
   }
@@ -1478,6 +1691,7 @@ function renderNotesEditor() {
   updateNoteEditorMeta(note);
   renderNotesProEditorControls(note);
   renderNotesInlineChecklist();
+  renderNotesProAttachments();
   updateNotePreviewVisibility();
 }
 
@@ -17046,6 +17260,19 @@ $("noteFolderAssign").addEventListener("change", (event) => changeSelectedNoteFo
 $("notePinButton").addEventListener("click", toggleNotePin);
 $("noteArchiveButton").addEventListener("click", toggleNoteArchive);
 $("noteRestoreButton").addEventListener("click", restoreNoteFromTrash);
+$("notesAttachmentUploadButton").addEventListener("click", uploadNotesAttachments);
+$("notesVaultAttachButton").addEventListener("click", linkExistingNotesVaultFile);
+$("notesVaultRefreshButton").addEventListener("click", () => loadNotesVaultCatalog({ force: true }));
+window.addEventListener("boxcloudstatus", (event) => {
+  const owner = event.detail?.session?.user?.id || "";
+  if (owner !== notesVaultCatalogOwner) {
+    notesVaultCatalogOwner = owner;
+    notesVaultCatalog = [];
+    notesVaultCatalogAt = 0;
+    renderNotesAttachmentPicker();
+  }
+  if (isAppWindowOpen("notes")) renderNotesProAttachments();
+});
 $("notesSidebarToggle").addEventListener("click", () => setNotesListCollapsed(true));
 $("notesSidebarRestore").addEventListener("click", () => setNotesListCollapsed(false));
 $("newNoteButton").addEventListener("click", createNewNoteItem);
