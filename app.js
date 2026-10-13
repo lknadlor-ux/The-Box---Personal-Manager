@@ -1006,8 +1006,9 @@ function renderNotesProEditorControls(note) {
   const assign = $("noteFolderAssign");
   const pin = $("notePinButton");
   const archive = $("noteArchiveButton");
+  const restore = $("noteRestoreButton");
   const del = $("deleteNoteButton");
-  if (!assign || !pin || !archive || !del) return;
+  if (!assign || !pin || !archive || !restore || !del) return;
   assign.innerHTML = '<option value="">Unfiled</option>' +
     getActiveNoteFolders().map((folder) =>
       '<option value="' + escapeHtml(folder.id) + '">' +
@@ -1020,6 +1021,8 @@ function renderNotesProEditorControls(note) {
   pin.textContent = note?.pinned ? "★ Unpin" : "☆ Pin";
   archive.disabled = !note || Boolean(note.deletedAt) || isStickyNoteLockedForCurrentMode(note);
   archive.textContent = note?.archivedAt ? "Restore from archive" : "Archive";
+  restore.hidden = !note?.deletedAt;
+  restore.disabled = !note?.deletedAt || isStickyNoteLockedForCurrentMode(note);
   del.textContent = note?.deletedAt ? "Delete permanently" : "Move to Trash";
   del.disabled = !note || isStickyNoteLockedForCurrentMode(note);
 }
@@ -1128,6 +1131,17 @@ function removeNotesFolder() {
   renderNotesCenter();
 }
 
+function restoreNoteFromTrash() {
+  const note = getSelectedNoteItem();
+  if (!note || !note.deletedAt || isStickyNoteLockedForCurrentMode(note)) return;
+  note.deletedAt = null;
+  note.updatedAt = new Date().toISOString();
+  selectedNoteId = null;
+  persistNoteItems();
+  renderNotesCenter();
+  showToast("Note restored from Trash");
+}
+
 function changeSelectedNoteFolder(id) {
   const note = getSelectedNoteItem();
   if (!note || note.archivedAt || note.deletedAt || isStickyNoteLockedForCurrentMode(note)) return;
@@ -1194,7 +1208,7 @@ function renderNotesList() {
 }
 
 function setNotesEditorDisabled(disabled) {
-  ["noteTitle", "noteSticky", "noteContent", "noteFolderAssign", "notePinButton", "noteArchiveButton"].forEach((id) => {
+  ["noteTitle", "noteSticky", "noteContent", "noteFolderAssign", "notePinButton", "noteArchiveButton", "noteRestoreButton"].forEach((id) => {
     const element = $(id);
     if (element) element.disabled = disabled;
   });
@@ -17031,6 +17045,7 @@ $("notesRemoveFolderButton").addEventListener("click", removeNotesFolder);
 $("noteFolderAssign").addEventListener("change", (event) => changeSelectedNoteFolder(event.target.value));
 $("notePinButton").addEventListener("click", toggleNotePin);
 $("noteArchiveButton").addEventListener("click", toggleNoteArchive);
+$("noteRestoreButton").addEventListener("click", restoreNoteFromTrash);
 $("notesSidebarToggle").addEventListener("click", () => setNotesListCollapsed(true));
 $("notesSidebarRestore").addEventListener("click", () => setNotesListCollapsed(false));
 $("newNoteButton").addEventListener("click", createNewNoteItem);
