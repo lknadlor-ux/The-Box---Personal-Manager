@@ -1013,6 +1013,54 @@ window.BoxCloud = (() => {
     return { error: null };
   }
 
+
+  // Manual Sync Now must never upload a stale Notes snapshot over a newer
+  // cloud copy. Unlike the other collections, Notes already has its own
+  // merge/tombstone logic, so reuse that code after fetching the remote row.
+  async function syncNotesNowSafely() {
+    if (!isReady()) return { error: new Error("Sign in first.") };
+    const requestedUserId = session.user.id;
+    const recordedOwner = localStorage.getItem("theBoxOSNotesOwnerId") || "";
+    if (recordedOwner && recordedOwner !== requestedUserId) {
+      return { error: new Error("Notes belong to another account; sign in to that account first.") };
+    }
+
+    // A queued edit must not write a stale snapshot while we read the cloud.
+    clearTimeout(noteTimer);
+    noteTimer = null;
+    const { data, error } = await client.from("notes")
+      .select("content").eq("user_id", requestedUserId).maybeSingle();
+    if (!isReady() || session.user.id !== requestedUserId) {
+      return { error: new Error("Account changed during Notes sync.") };
+    }
+    if (error) return { error };
+
+    const remoteNotes = typeof data?.content === "string" ? data.content : null;
+    const localNotes = localStorage.getItem("theBoxOS4Notes") || "";
+    if (remoteNotes === null) {
+      return localNotes ? writeNoteInOrder(localNotes, requestedUserId) : { error: null };
+    }
+    if (localStorage.getItem("theBoxOSNotesPendingSync") !== "1" &&
+        localNotes === remoteNotes) {
+      return { error: null };
+    }
+    if (typeof window.BoxOSCloudHydrate !== "function") {
+      return { error: new Error("Notes merge support is unavailable.") };
+    }
+
+    // Pending changes merge via updatedAt and tombstones. Without pending
+    // changes, the existing hydration path takes the newer remote snapshot.
+    const pending = localStorage.getItem("theBoxOSNotesPendingSync") === "1";
+    window.BoxOSCloudHydrate({ notes: remoteNotes, notesUserId: requestedUserId });
+    if (!pending) return { error: null };
+
+    // Hydration queued its normal debounced write; perform that exact merged
+    // snapshot once now, in the existing serialized note-write queue.
+    clearTimeout(noteTimer);
+    noteTimer = null;
+    return writeNoteInOrder(localStorage.getItem("theBoxOS4Notes") || "", requestedUserId);
+  }
+
   async function syncNow() {
     if (!isReady()) return { error: new Error("Sign in first.") };
 
@@ -1023,9 +1071,6 @@ window.BoxCloud = (() => {
       const localTasks = JSON.parse(localStorage.getItem("theBoxOS4Tasks") || "[]");
       const localEvents = JSON.parse(localStorage.getItem("theBoxOS4Events") || "[]");
       const localFinance = JSON.parse(localStorage.getItem("theBoxOS4Finance") || "[]");
-      const previousNotesOwner = localStorage.getItem("theBoxOSNotesOwnerId") || "";
-      const localNotes = previousNotesOwner && previousNotesOwner !== session.user.id
-        ? "" : (localStorage.getItem("theBoxOS4Notes") || "");
       const localTemplates = JSON.parse(localStorage.getItem("theBoxOSCustomTemplates") || "[]");
       const localJournal = JSON.parse(localStorage.getItem("theBoxOSJournalEntries") || "[]");
       const localOurSpace = JSON.parse(localStorage.getItem("theBoxOSOurSpacePlans") || "[]");
@@ -1034,7 +1079,7 @@ window.BoxCloud = (() => {
         replaceCollection("tasks", localTasks),
         replaceCollection("events", localEvents),
         replaceCollection("finance_entries", localFinance),
-        writeNoteInOrder(localNotes),
+        syncNotesNowSafely(),
         replaceCustomTemplates(localTemplates),
         replaceJournalEntries(localJournal),
         replaceOurSpacePlans(localOurSpace)
