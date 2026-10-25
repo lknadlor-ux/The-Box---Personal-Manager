@@ -1751,6 +1751,7 @@ function renderNotesEditor() {
   $("noteStatus").textContent = note.deletedAt ? "In Trash · restore to edit" :
     note.archivedAt ? "Archived · restore to edit" :
     locked ? "Locked · unlock on desktop to edit" : "Saved";
+  if (!locked) updateNotesSaveStatus();
   updateNoteEditorMeta(note);
   renderNotesProEditorControls(note);
   renderNotesInlineChecklist();
@@ -2129,6 +2130,18 @@ function createNewNoteItem() {
   showToast("New note created");
 }
 
+// Phase 7O.18.6 — Report the actual Notes save state, not timer completion.
+function updateNotesSaveStatus() {
+  const status = $("noteStatus");
+  const note = getSelectedNoteItem();
+  if (!status || !note || note.deletedAt || note.archivedAt ||
+      isStickyNoteLockedForCurrentMode(note)) return;
+  const pending = localStorage.getItem(STORAGE.notesPendingSync) === "1";
+  status.textContent = pending
+    ? "Saved locally · cloud sync pending"
+    : (window.BoxCloud?.isReady() ? "Synced" : "Saved locally");
+}
+
 function updateSelectedNoteFromEditor() {
   const note = getSelectedNoteItem();
   if (!note) return;
@@ -2148,10 +2161,18 @@ function updateSelectedNoteFromEditor() {
   updateNoteEditorMeta(note);
   if (!$("notesInlineChecklist").contains(document.activeElement)) renderNotesInlineChecklist();
 
+  // Commit the text before scheduling UI refresh. Previously the 450ms timer
+  // delayed the only local write, losing edits if the tab closed in that gap.
+  try {
+    persistNoteItems();
+    updateNotesSaveStatus();
+  } catch (error) {
+    $("noteStatus").textContent = "Save failed · browser storage unavailable";
+    return;
+  }
+
   clearTimeout(noteSaveTimer);
   noteSaveTimer = setTimeout(() => {
-    persistNoteItems();
-    $("noteStatus").textContent = "Saved";
     renderNotesList();
     renderDesktopStickyNotes();
     renderDashboard();
@@ -13246,7 +13267,7 @@ function updateReminderSettingFromControls() {
 
 const BACKUP_FORMAT = "the-box-os-backup";
 const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_APP_VERSION = "7O.18.5-Notes-Pro-Vault-Sync";
+const BACKUP_APP_VERSION = "7O.18.6-Notes-Save-Reliability";
 const MAX_BACKUP_IMPORT_SIZE = 12 * 1024 * 1024;
 
 function escapeHtml(value) {
@@ -17305,6 +17326,7 @@ window.addEventListener("boxcloudnotesaved", (event) => {
       data.content === localStorage.getItem(STORAGE.notes)) {
     if (!known) localStorage.setItem(STORAGE.notesAccountId, owner);
     localStorage.removeItem(STORAGE.notesPendingSync);
+    updateNotesSaveStatus();
   }
 });
 
