@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-phase-7o18-7-notes-sync-safety";
+const CACHE_NAME = "the-box-os-phase-7o18-8-notes-manual-sync-safety";
 
 const APP_FILES = [
   "./",
