@@ -24,6 +24,7 @@ window.BoxCloud = (() => {
   let noteTimer = null;
   let noteWriteChain = Promise.resolve();
   let cloudHydrationSequence = 0;
+  let notesReconnectSequence = 0;
 
   const DOCUMENT_BUCKET = "box-documents";
   const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
@@ -139,6 +140,46 @@ window.BoxCloud = (() => {
     clearTimeout(noteTimer);
     const queuedUserId = session?.user?.id;
     noteTimer = setTimeout(() => { writeNoteInOrder(text, queuedUserId); }, 700);
+  }
+
+  // A failed/offline note write remains marked pending in localStorage.
+  // On reconnect, fetch the current remote snapshot FIRST and let the app's
+  // existing per-note merge reconcile local and remote timestamps/tombstones.
+  // Never upload a stale local snapshot directly over a newer cloud version.
+  async function reconcilePendingNotesOnReconnect() {
+    if (!isReady() || localStorage.getItem("theBoxOSNotesPendingSync") !== "1") {
+      return { skipped: true };
+    }
+
+    const userId = session.user.id;
+    const recordedOwner = localStorage.getItem("theBoxOSNotesOwnerId") || "";
+    if (recordedOwner && recordedOwner !== userId) return { skipped: true };
+
+    const sequence = ++notesReconnectSequence;
+    clearTimeout(noteTimer);
+    noteTimer = null;
+    emit("syncing", "Checking pending notes");
+
+    const { data, error } = await client.from("notes")
+      .select("content").eq("user_id", userId).maybeSingle();
+
+    if (!isReady() || session.user.id !== userId ||
+        sequence !== notesReconnectSequence) {
+      return { stale: true };
+    }
+    if (error) {
+      emit("error", "Notes sync pending");
+      return { error };
+    }
+
+    if (typeof window.BoxOSCloudHydrate !== "function") {
+      return { error: new Error("Notes hydration is unavailable.") };
+    }
+    window.BoxOSCloudHydrate({
+      notes: typeof data?.content === "string" ? data.content : "",
+      notesUserId: userId
+    });
+    return { error: null };
   }
 
   function createUuid() {
@@ -1032,6 +1073,12 @@ window.BoxCloud = (() => {
 
     return { session };
   }
+
+  window.addEventListener("online", () => {
+    void reconcilePendingNotesOnReconnect().catch(() => {
+      emit("error", "Notes sync pending");
+    });
+  });
 
   return {
     start,
