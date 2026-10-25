@@ -59,9 +59,9 @@ const deps = {
   timer: null
 };
 const keys = Object.keys(deps).filter(x => x !== "timer");
-const module = new Function(...keys, "let noteSaveTimer = null;\n" + app.slice(begin, end) +
+const compiled = new Function(...keys, "let noteSaveTimer = null;\n" + app.slice(begin, end) +
   "\nreturn { updateSelectedNoteFromEditor, updateNotesSaveStatus };");
-const actions = module(...keys.map(key => deps[key]));
+const actions = compiled(...keys.map(key => deps[key]));
 
 // The user's text is durable even when the delayed UI timer has not run.
 actions.updateSelectedNoteFromEditor();
