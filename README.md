@@ -1,51 +1,45 @@
-# The Box OS — Notes Pro Phase 7O.18.3–5
+# The Box OS — 7O.18.6
 
-**Review branch:** `feature/7o18-3-notes-vault-sync`, stacked on `feature/7o18-1-notes-inline-folders`.
+Current update: **Notes Pro save reliability**.
 
-## Changes
-- Allow signed-in users to upload images, PDF, Word, Excel, text and other documents into the **existing private Supabase Documents Vault**, up to the existing Vault limit of 25 MB per file, maximum five uploads per click.
-- Link existing Vault documents to notes without copying file bytes to the Notes JSON payload. Notes store document ID, name, MIME type and size only.
-- Open attachments only by looking them up within the current signed-in user's Vault catalog, then requesting a short-lived signed URL. Never store or publish signed URLs.
-- Unlinking a file from a note does not delete the source Vault file; archiving/Trash/deleting notes also leaves Vault files intact.
-- Cache the current user's Vault catalog briefly and clear it when the authenticated user changes.
-- Retain local pending-note edits when offline and merge them by updated timestamp with cloud records when the **same account** reconnects; use folder tombstones and purged-note tombstones so remote copies do not revive deleted records.
-- Preserve an additional pre-hydration snapshot locally as a recovery aid before cloud notes replace changed local notes (when browser storage permits).
-- Serialize note writes to prevent slow network requests from overtaking later edits, and only clear pending-sync status after the current payload is acknowledged.
-- Keep all previous 7O.18.1–2 features (inline checklists, folders, pinned, archive, Trash), prior sticky-note layouts, Markdown support, and 7O.17.5 scroll fixes.
-- No new paid APIs, subscription services or Supabase database tables.
+## What changed
+- Edits to an open note are saved to browser storage immediately, before the existing delayed screen refresh. This reduces the chance of losing the most recent typed text when a tab closes, refreshes, or starts cloud hydration during the former 450 ms gap.
+- Cloud writes remain batched using the existing Supabase Notes queue; this update does **not** add write requests for every keypress.
+- The Notes status now distinguishes **Saved locally · cloud sync pending**, **Synced**, **Saved locally**, and **Save failed · browser storage unavailable**.
+- Notes status is refreshed after a successful cloud acknowledgment for the current data, rather than implying that local timer completion means cloud sync.
+- Added a repeatable regression check for immediate local persistence, delayed UI refresh, offline status, cloud acknowledgment, and storage failure.
+- No new apps, paid services, dependencies, database tables, or changes to note formatting, attachments, folders, sticky-note positions, or scrolling.
 
-## Files in this PR
-- `index.html` — private Vault upload and document picker, asset versions.
-- `app.js` — link/unlink, upload, attachment management, pending-sync merger, tombstones and snapshot.
-- `cloud.js` — ordered notes writes and sync acknowledgment.
-- `style.css` — responsive attachment list/actions.
-- `service-worker.js` — offline cache bump.
-- `README.md` — this changelog and installation instructions.
+## Files modified / included
+- `app.js` — immediate local save and accurate Notes sync status, release label.
+- `index.html` — new app.js asset cache-busting version.
+- `service-worker.js` — PWA cache version bump.
+- `tests/notes-save-reliability.cjs` — new repeatable regression test.
+- `README.md` — current release notes and update instructions.
+- Existing `tests/notes-pro-data-smoke.cjs` remains unchanged.
 
-## Merge / installation sequence
-1. **First review PR #4** (`feature/7o18-1-notes-inline-folders`) and this stacked second PR. Do not merge either until you have reviewed them and are ready to update all devices.
-2. Merge PR #4 into `main`, then rebase/change this PR's base to `main` and merge it after final CI/manual checks. Do not merge the stacked PR into `main` before the first PR.
-3. Make a Notes backup on an existing device before updating, and ensure installed PWAs on Windows/Honor Pad/iPhone all update to the new version. Old clients can strip new metadata if they sync.
-4. Allow GitHub Pages to publish, refresh the app, and reopen installed PWAs to update service-worker cached scripts.
-5. Sign in to Supabase. Open Notes, choose a note, attach an existing Vault file, upload another file, open it, and unlink it. Confirm both files remain in Documents Vault.
-6. Check folder/archiving, sticky notes, inline checklist, backups, and offline reconnection.
+## Installation / replacement
+1. Review and merge the pull request for `fix/7o18-6-notes-save-feedback` into `main`.
+2. Let the existing GitHub Pages deployment publish `main` (if GitHub Pages is enabled).
+3. Refresh the website or close/reopen installed PWAs. If an old Notes status persists, reload once to pick up the refreshed service-worker cache.
+4. Type in a noncritical note, confirm **Saved locally · cloud sync pending**, and check for **Synced** when Supabase acknowledges the current data.
+5. Confirm existing folders, Archive, Trash, private Documents Vault attachments and Windows/tablet/mobile layouts continue to work.
 
-## Repeatable automated checks
-Run `node tests/notes-pro-data-smoke.cjs` from the repository root. The test uses only built-in Node.js modules and checks backward-compatible note decoding, folder and file references, conflict merging, permanent-deletion tombstones, required controls and cloud sync guard structure.
+## Tests
+Run from the repository root (Node.js required):
 
-## Verification checklist
-- [ ] Existing legacy notes load and roundtrip correctly, including note IDs, titles, content, sticky positions and timestamps.
-- [ ] All Notes views and folders work in Windows/tablet/phone.
-- [ ] Live checklist toggles and edits persist through reload.
-- [ ] Private Vault attachments open only when signed in, using signed links.
-- [ ] Uploading a document saves to private Vault; unlinking does not delete it.
-- [ ] Note Trash/permanent deletion does not delete private Vault files.
-- [ ] Cloud reconnection reconciles newer pending local notes and newer remote notes.
-- [ ] Switching cloud accounts does not merge unsynced notes from an unrelated account.
-- [ ] Backups contain notes and their attachment **references**; actual Vault file bytes remain in Supabase storage and are **not** included in JSON backups.
-- [ ] View-mode switching, sidebar collapse and window scrolling still work after formatting and attachment expansion.
+```bash
+node tests/notes-pro-data-smoke.cjs
+node tests/notes-save-reliability.cjs
+```
 
-## Constraints and privacy
-All features use existing browser capabilities and the current private Supabase setup. Current Supabase free-plan storage, bandwidth, API quotas and inactivity limits still apply. Attachments require authentication and network access; local-only/offline attachment upload is not enabled.
+These are local code regression tests, **not** full live-device or Supabase integration tests. Real-world sign-in, upload, cross-device conflict, and offline reconnect behavior should still be checked before relying on Notes for irreplaceable information.
 
-**Do not treat static tests alone as device-level or end-to-end validation.** Test with a noncritical note and private Vault file before storing irreplaceable data.
+## Existing Notes Pro functionality retained (7O.18.1–5)
+- Markdown-style formatting and preview, editable inline checklists.
+- Folders and pinned notes, Archive and Trash recovery.
+- Private attachment upload/link through the existing Supabase Documents Vault (25 MB app limit/file), using on-demand signed links.
+- Notes payload backward compatibility and pending-edit sync safeguards.
+- Separate sticky-note arrangements and responsive Notes scroll behavior.
+
+**Cost:** No new paid services. Existing Supabase free-tier limits still apply. JSON backups contain Vault attachment references, not underlying file bytes.
