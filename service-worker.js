@@ -1,9 +1,10 @@
-const CACHE_NAME = "the-box-os-phase-7o18-9-desktop-readability";
+const CACHE_NAME = "the-box-os-phase-7o18-10-crimson-silk";
 
 const APP_FILES = [
   "./",
   "./index.html",
   "./style.css",
+  "./crimson-silk.webp",
   "./config.js",
   "./cloud.js",
   "./app.js",

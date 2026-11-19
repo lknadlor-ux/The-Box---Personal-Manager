@@ -25291,3 +25291,23 @@ html:not(.phone-ui):not(.tablet-ui) .cloud-status {
   flex-shrink: 0;
   white-space: nowrap;
 }
+
+body:not(.light-theme) .live-background > span { display: none; }
+
+/* Crimson Silk uses one composited layer for all three motion settings. */
+body:not(.light-theme) .live-background::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #10080d url("./crimson-silk.webp") center / cover no-repeat;
+}
+@media (prefers-reduced-motion: no-preference) {
+  body:is(.background-live, .background-minimal):not(.light-theme) .live-background::before {
+    animation: silk-drift 48s ease-in-out infinite alternate;
+  }
+  body.background-minimal:not(.light-theme) .live-background::before { animation-duration: 120s; }
+  body.background-paused:not(.light-theme) .live-background::before { animation-play-state: paused; }
+}
+@keyframes silk-drift {
+  to { transform: scale(1.035); }
+}

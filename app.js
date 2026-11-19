@@ -16196,12 +16196,12 @@ function updateBackgroundModeUI(mode = "live") {
   if ($("backgroundModeHelp")) {
     $("backgroundModeHelp").textContent =
       document.body.classList.contains("light-theme")
-        ? "Crimson Nebula is shown in dark mode. Your selected motion level is saved."
+        ? "Crimson Silk is shown in dark mode. Your selected motion level is saved."
         : normalized === "live"
-          ? "Live uses slow layered motion. It pauses automatically when Edge is in the background."
+          ? "Live uses a slow drift. It pauses automatically when Edge is in the background."
           : normalized === "minimal"
-            ? "Minimal keeps one slow moving nebula layer for lower GPU use."
-            : "Static keeps the Crimson Nebula look without continuous animation.";
+            ? "Minimal keeps the silk folds moving gently."
+            : "Static keeps the Crimson Silk look without continuous animation.";
   }
 }
 
@@ -16222,9 +16222,9 @@ function applyBackgroundMode(mode, { persist = false, notify = false } = {}) {
 
   if (notify) {
     const labels = {
-      live: "Live Crimson Nebula",
-      minimal: "Minimal Crimson Nebula",
-      static: "Static Crimson Nebula"
+      live: "Live Crimson Silk",
+      minimal: "Minimal Crimson Silk",
+      static: "Static Crimson Silk"
     };
     showToast(`${labels[normalized]} enabled`);
   }
