@@ -3103,6 +3103,16 @@ function renderMemoryFrameDesktop() {
     memoryFrameConfig.photos.length > 0 &&
     !document.documentElement.classList.contains("desk-clock-mode");
 
+  const slot = $("homePhoto");
+  if (slot) {
+    if (mode === "windows") {
+      if (layer.parentElement !== slot) slot.prepend(layer);
+      slot.classList.toggle("has-photo", shouldShow);
+      slot.classList.toggle("multiple", shouldShow && memoryFrameConfig.photos.length > 1);
+    } else if (layer.parentElement === slot) {
+      $("windowLayer").before(layer);
+    }
+  }
   layer.hidden = !shouldShow;
 
   if (!shouldShow) {
@@ -8364,6 +8374,56 @@ function renderDashboardOurSpace() {
   $("dashboardOurSpaceMeta").textContent = meta.join(" · ");
 }
 
+function initializeWindowsHome() {
+  const host = document.createElement("div");
+  host.id = "windowsHome";
+  host.innerHTML = `
+    <section class="home-today"><header><h2>Today</h2><button data-home-app="today">Open Today</button></header>
+      <div id="homeTasks"></div><button id="homeEvent" data-home-app="calendar"></button>
+    </section>
+    <nav class="home-links" aria-label="Desktop shortcuts">
+      <button data-home-app="tasks"><b>✓</b>Tasks</button><button data-home-app="calendar"><b>▦</b>Calendar</button>
+      <button data-home-app="notes"><b>✎</b>Notes</button><button data-home-app="documents"><b>▱</b>Documents</button>
+    </nav>
+    <section class="home-frame" aria-label="Photo slideshow and note">
+      <div id="homePhoto"><button data-home-app="memoryframe" class="home-add">Set up Memory Frame</button>
+        <div class="home-arrows"><button data-step="-1" aria-label="Previous photo">‹</button><button data-step="1" aria-label="Next photo">›</button></div>
+      </div>
+      <label class="home-note">My note <textarea id="homeNote" rows="2" placeholder="Write a note…" aria-label="My desktop note"></textarea></label>
+    </section>`;
+  document.querySelector(".desktop-welcome").append(host);
+  const note = $("homeNote");
+  const key = "the-box-windows-home-note";
+  note.value = localStorage.getItem(key) || "";
+  note.addEventListener("input", () => {
+    try { localStorage.setItem(key, note.value); }
+    catch { showToast("Could not save the desktop note on this device."); }
+  });
+  host.addEventListener("click", event => {
+    const button = event.target.closest("button");
+    if (button?.dataset.homeApp) openApp(button.dataset.homeApp);
+    if (button?.dataset.step) nextMemoryFramePhoto(Number(button.dataset.step));
+  });
+}
+
+function renderWindowsTasks(open, nextEvent) {
+  const list = $("homeTasks");
+  if (!list) return;
+  list.replaceChildren();
+  const queue = getDashboardTaskQueue(open).slice(0, 2);
+  if (!queue.length) list.textContent = "No open tasks.";
+  for (const task of queue) {
+    const row = document.createElement("label");
+    const check = document.createElement("input");
+    check.type = "checkbox";
+    check.addEventListener("change", () => setTaskStatus(task, "done"));
+    row.append(check, document.createTextNode(task.text || "Untitled task"));
+    list.append(row);
+  }
+  $("homeEvent").textContent = nextEvent
+    ? formatEventDate(nextEvent.date) + " · " + nextEvent.title : "No upcoming event";
+}
+
 function renderDashboard() {
   const open = tasks.filter((task) => !task.completed);
   const done = tasks.filter((task) => task.completed);
@@ -8426,6 +8486,7 @@ function renderDashboard() {
     ? formatEventDate(nextEvent.date)
     : "No upcoming date";
 
+  renderWindowsTasks(open, nextEvent);
   renderDashboardTaskQueue(open);
   renderDashboardNextEvent();
   renderDashboardStickyNote();
@@ -18147,6 +18208,7 @@ restoreTheme();
 restoreBackgroundMode();
 updateDeskClockControls();
 updateDeskClock();
+initializeWindowsHome();
 initializeMemoryFrame();
 updateFullscreenUi();
 updateClock();
@@ -18154,7 +18216,7 @@ setInterval(updateClock, 1000);
 renderAll();
 loadWeather();
 updateTimerDisplay();
-openApp("dashboard");
+if (getEffectiveViewMode() !== "windows") openApp("dashboard");
 scheduleReminderChecks();
 setTimeout(showDailyReminderSummary, 2200);
 
