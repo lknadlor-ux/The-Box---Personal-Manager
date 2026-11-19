@@ -1,3 +1,13 @@
+# The Box OS — Phase 7O.18.9: Desktop readability
+
+Desktop labels previously used many fixed 7–11px sizes. Small fixed font sizes now respect a 0.875rem (14px at default browser settings) desktop floor. Paragraphs and writing/search fields use a 1rem floor. Existing larger headings retain their size. Muted and secondary text have stronger contrast in both themes.
+
+The floor is disabled in phone and tablet modes, including manual mode selection. Dashboard sections no longer shrink and clip when text takes more space; the window scrolls. The service-worker cache version is updated for installation after merge.
+
+Validation: inspected Dashboard and Notes in a desktop browser preview, checked light and dark themes, confirmed Notes paragraph/search/editor sizes of 16px and labels of 14px, and verified the floor is absent in manual tablet/mobile modes. Physical monitor readability, other screen sizes, and every populated workspace still need hands-on review. No app logic, cloud sync, or data format changed.
+
+---
+
 # The Box OS — Phase 7O.18.8: Stability Audit
 
 **Scope:** Audit existing Notes Pro offline/sync behavior and fix only confirmed defects. No new features, paid APIs, dependencies, storage migrations, or UI redesign.
