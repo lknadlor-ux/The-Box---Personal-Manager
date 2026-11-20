@@ -2289,6 +2289,7 @@ function normalizeMemoryFrameConfig(value = {}) {
       : {};
 
   ["windows", "tablet", "mobile"].forEach((mode) => {
+    if (mode === "tablet" && value.tabletFrameVersion !== 1) return;
     if (sourceLayouts[mode] && typeof sourceLayouts[mode] === "object") {
       layouts[mode] = normalizeMemoryFrameLayout(sourceLayouts[mode]);
     }
@@ -2298,6 +2299,7 @@ function normalizeMemoryFrameConfig(value = {}) {
 
   return {
     enabled: Boolean(value.enabled),
+    tabletFrameVersion: 1,
     interval: MEMORY_FRAME_INTERVALS.has(interval) ? interval : 10,
     shuffle: Boolean(value.shuffle),
     fit: MEMORY_FRAME_FITS.has(value.fit) ? value.fit : "adaptive",
@@ -2564,8 +2566,8 @@ function getMemoryFrameSizeLimits(mode, bounds) {
   const mobile = mode === "mobile";
   const tablet = mode === "tablet";
 
-  const minWidth = Math.min(mobile ? 220 : 250, Math.max(1, bounds.width - 8));
-  const minHeight = Math.min(mobile ? 145 : 165, Math.max(1, bounds.height - 8));
+  const minWidth = Math.min(tablet ? 152 : mobile ? 220 : 250, Math.max(1, bounds.width - 8));
+  const minHeight = Math.min(tablet ? 110 : mobile ? 145 : 165, Math.max(1, bounds.height - 8));
   const maxWidth = Math.max(
     minWidth,
     Math.min(
@@ -2592,7 +2594,7 @@ function getDefaultMemoryFrameLayout(mode, bounds) {
   const targetWidth = mobile
     ? Math.min(390, Math.round(bounds.width * 0.88))
     : tablet
-      ? Math.min(430, Math.round(bounds.width * 0.44))
+      ? Math.round(Math.min(184, bounds.width * 0.22, bounds.height * 0.26))
       : Math.min(450, Math.round(bounds.width * 0.34));
 
   const width = Math.max(
@@ -2600,7 +2602,7 @@ function getDefaultMemoryFrameLayout(mode, bounds) {
     Math.min(targetWidth, limits.maxWidth)
   );
 
-  const targetRatio = mobile ? 0.70 : 0.75;
+  const targetRatio = tablet ? 1.25 : mobile ? 0.70 : 0.75;
   const height = Math.max(
     limits.minHeight,
     Math.min(Math.round(width * targetRatio), limits.maxHeight)
@@ -2614,9 +2616,13 @@ function getDefaultMemoryFrameLayout(mode, bounds) {
     const maxY = Math.max(6, bounds.height - height - 10);
     const preferredY = Math.round(bounds.height * 0.48);
     y = Math.max(8, Math.min(preferredY, maxY));
+  } else if (tablet) {
+    const inset = 20;
+    x = bounds.width - width - inset;
+    y = bounds.height - height - inset;
   } else {
-    const centerX = bounds.width * (tablet ? 0.68 : 0.74);
-    const centerY = bounds.height * (tablet ? 0.57 : 0.59);
+    const centerX = bounds.width * 0.74;
+    const centerY = bounds.height * 0.59;
     x = Math.round(centerX - width / 2);
     y = Math.round(centerY - height / 2);
   }

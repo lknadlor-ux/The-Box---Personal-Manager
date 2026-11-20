@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-memory-frame-sync-1";
+const CACHE_NAME = "the-box-os-tablet-frame-1";
 
 const APP_FILES = [
   "./",

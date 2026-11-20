@@ -24460,7 +24460,9 @@ html:not(.tablet-ui):not(.phone-ui) .memory-frame-widget {
 
 /* Tablet ---------------------------------------------------------------- */
 html.tablet-ui .memory-frame-widget {
-  border-radius: 19px !important;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 16px !important;
 }
 
 html.tablet-ui .memory-frame-widget-actions button,
