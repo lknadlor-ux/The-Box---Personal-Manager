@@ -6399,7 +6399,10 @@ function updateClock() {
 
   if ($("greeting").textContent !== greeting) $("greeting").textContent = greeting;
   if ($("welcomeMessage").textContent !== quoteText) $("welcomeMessage").textContent = quoteText;
-  if ($("welcomeDate").textContent !== welcomeDate) $("welcomeDate").textContent = welcomeDate;
+  if ($("welcomeDate").textContent !== welcomeDate) {
+    $("welcomeDate").textContent = welcomeDate;
+    renderTabletDeadlines();
+  }
   if ($("systemTime").textContent !== systemTime) $("systemTime").textContent = systemTime;
   if ($("systemDate").textContent !== systemDate) $("systemDate").textContent = systemDate;
 
@@ -8550,6 +8553,41 @@ function initializeWindowsHome() {
   });
 }
 
+function renderTabletDeadlines() {
+  let card = $("tabletDeadlines");
+  if (!card) {
+    card = document.createElement("section");
+    card.id = "tabletDeadlines";
+    card.setAttribute("aria-labelledby", "tabletDeadlinesTitle");
+    card.innerHTML = '<header><h2 id="tabletDeadlinesTitle">Due soon</h2><button type="button">All tasks</button></header><div class="tablet-deadline-list"></div>';
+    card.querySelector("header button").addEventListener("click", () => openApp("tasks"));
+    document.querySelector(".desktop-summary").before(card);
+  }
+
+  const today = getLocalDateKey();
+  const end = new Date();
+  end.setDate(end.getDate() + 7);
+  const cutoff = getLocalDateKey(end);
+  const upcoming = tasks.filter(task => !task.completed && task.dueDate >= today && task.dueDate <= cutoff)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 3);
+  const list = card.querySelector(".tablet-deadline-list");
+  list.replaceChildren();
+  if (!upcoming.length) list.textContent = "Nothing due today or in the next 7 days.";
+  for (const task of upcoming) {
+    const row = document.createElement("button");
+    row.type = "button";
+    const title = document.createElement("span");
+    title.textContent = task.text;
+    const due = document.createElement("time");
+    due.dateTime = task.dueDate;
+    due.textContent = getDueDateInfo(task).label;
+    row.append(title, due);
+    row.addEventListener("click", () => openTaskModal(task, "tasks", task.id));
+    list.append(row);
+  }
+}
+
 function renderWindowsTasks(open, nextEvent) {
   const list = $("homeTasks");
   if (!list) return;
@@ -8630,6 +8668,7 @@ function renderDashboard() {
     ? formatEventDate(nextEvent.date)
     : "No upcoming date";
 
+  renderTabletDeadlines();
   renderWindowsTasks(open, nextEvent);
   renderDashboardTaskQueue(open);
   renderDashboardNextEvent();
@@ -18356,7 +18395,7 @@ setInterval(updateClock, 1000);
 renderAll();
 loadWeather();
 updateTimerDisplay();
-if (getEffectiveViewMode() !== "windows") openApp("dashboard");
+if (getEffectiveViewMode() === "mobile") openApp("dashboard");
 scheduleReminderChecks();
 setTimeout(showDailyReminderSummary, 2200);
 
