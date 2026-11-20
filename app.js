@@ -6509,7 +6509,10 @@ function openApp(appName) {
   }
 
   if (appName === "finance") renderFinance();
-  if (appName === "documents") renderDocuments();
+  if (appName === "documents") {
+    renderDocuments();
+    refreshFileDrop();
+  }
 
   if (["pharmacy", "clinic", "sk"].includes(appName)) {
     renderWorkspaceTaskList(appName, $(`${appName}TaskList`));
@@ -9356,6 +9359,150 @@ function setDocumentUploadStatus(message = "", type = "") {
 
   element.textContent = message;
   element.className = `document-upload-status ${type}`.trim();
+}
+
+
+function initializeFileDrop() {
+  const panel = document.createElement("details");
+  panel.id = "fileDropPanel";
+  panel.innerHTML = `<summary>10-minute File Drop</summary>
+    <p>Drop files here or choose them from your device. Download them within 10 minutes on any device signed in to your account. Up to 25 MB per file.</p>
+    <input type="file" multiple hidden>
+    <button type="button" class="secondary-button" data-pick>Choose files</button>
+    <button type="button" class="secondary-button" data-refresh>Refresh</button>
+    <p role="status" data-status></p><div data-transfers></div>`;
+  document.querySelector(".documents-hero").after(panel);
+  const input = panel.querySelector("input");
+  const pick = panel.querySelector("[data-pick]");
+  const status = panel.querySelector("[data-status]");
+  const list = panel.querySelector("[data-transfers]");
+  let revision = 0;
+  let sending = false;
+  let expiryTimer;
+  function active() {
+    return panel.open && !document.hidden && isAppWindowOpen("documents");
+  }
+  async function refresh() {
+    if (!active()) return;
+    const token = ++revision;
+    const started = Date.now();
+    if (!window.BoxCloud?.isReady()) {
+      list.replaceChildren();
+      status.textContent = "Sign in to send and receive files.";
+      return;
+    }
+    try {
+      const rows = await window.BoxCloud.listDrops();
+      if (token !== revision) return;
+      clearTimeout(expiryTimer);
+      list.replaceChildren();
+      let earliest = Infinity;
+      for (const entry of rows) {
+        const expires = started + entry.remaining_seconds * 1000;
+        if (expires <= Date.now()) continue;
+        earliest = Math.min(earliest, expires);
+        const row = document.createElement("div");
+        const title = document.createElement("span");
+        title.textContent = entry.filename;
+        const time = document.createElement("small");
+        time.dataset.expires = String(expires);
+        updateCountdown(time);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary-button";
+        button.textContent = "Download";
+        button.addEventListener("click", async () => {
+          const owner = currentDocumentUserId;
+          button.disabled = true;
+          try {
+            const blob = await window.BoxCloud.downloadDrop(entry.path);
+            if (owner !== currentDocumentUserId) return;
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = entry.filename;
+            document.body.append(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 30000);
+          } catch {
+            status.textContent = "Download unavailable. The transfer may have expired.";
+            void refresh();
+          } finally { button.disabled = false; }
+        });
+        row.append(title, time, button);
+        list.append(row);
+      }
+      if (!list.childElementCount) list.textContent = "No active transfers.";
+      if (Number.isFinite(earliest)) expiryTimer = setTimeout(() => {
+        list.replaceChildren();
+        void refresh();
+      }, Math.max(0, earliest - Date.now()));
+    } catch {
+      if (token === revision) status.textContent = "Could not refresh transfers. Try Refresh.";
+    }
+  }
+  async function send(files) {
+    if (!files.length || sending) return;
+    if (!window.BoxCloud?.isReady()) { openAuthOverlay(); return; }
+    const owner = currentDocumentUserId;
+    sending = true;
+    pick.disabled = true;
+    let uploaded = 0;
+    let failed = 0;
+    for (const file of files) {
+      if (owner !== currentDocumentUserId) break;
+      status.textContent = "Uploading " + file.name;
+      try { await window.BoxCloud.uploadDrop(file); uploaded++; }
+      catch { failed++; }
+    }
+    sending = false;
+    pick.disabled = false;
+    if (owner !== currentDocumentUserId) return;
+    status.textContent = uploaded + " uploaded." + (failed ? " " + failed + " failed. Check the 25 MB limit and your connection." : "");
+    await refresh();
+  }
+  pick.addEventListener("click", () => window.BoxCloud?.isReady() ? input.click() : openAuthOverlay());
+  input.addEventListener("change", () => { const files = Array.from(input.files); input.value = ""; void send(files); });
+  panel.addEventListener("dragover", e => {
+    if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = sending ? "none" : "copy";
+    panel.classList.add("drag-over");
+  });
+  panel.addEventListener("dragleave", e => {
+    if (!panel.contains(e.relatedTarget)) panel.classList.remove("drag-over");
+  });
+  panel.addEventListener("drop", e => {
+    e.preventDefault();
+    panel.classList.remove("drag-over");
+    panel.open = true;
+    void send(Array.from(e.dataTransfer.files));
+  });
+  panel.querySelector("[data-refresh]").addEventListener("click", refresh);
+  panel.addEventListener("toggle", refresh);
+  document.addEventListener("visibilitychange", refresh);
+  window.addEventListener("focus", refresh);
+  let account = currentDocumentUserId;
+  window.addEventListener("boxcloudstatus", event => {
+    const next = event.detail?.session?.user?.id || null;
+    if (account === next) return;
+    account = next;
+    revision++;
+    clearTimeout(expiryTimer);
+    list.replaceChildren();
+    status.textContent = "";
+    void refresh();
+  });
+  function updateCountdown(label) {
+    const seconds = Math.max(0, Math.ceil((Number(label.dataset.expires) - Date.now()) / 1000));
+    label.textContent = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0") + " left";
+  }
+  setInterval(() => {
+    if (active()) list.querySelectorAll("[data-expires]").forEach(updateCountdown);
+  }, 1000);
+  setInterval(refresh, 30000);
+  return refresh;
 }
 
 function updateDocumentAccessUI() {
@@ -18390,6 +18537,7 @@ restoreTheme();
 restoreBackgroundMode();
 updateDeskClockControls();
 updateDeskClock();
+const refreshFileDrop = initializeFileDrop();
 initializeWindowsHome();
 initializeMemoryFrame();
 updateFullscreenUi();

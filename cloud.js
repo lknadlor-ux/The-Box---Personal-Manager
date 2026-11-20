@@ -1171,7 +1171,36 @@ window.BoxCloud = (() => {
     if (error) throw error;
   }
 
+  const dropBucket = () => client.storage.from("box-file-drop");
+
+  async function uploadDrop(file) {
+    if (!isReady()) throw new Error("Sign in to use File Drop.");
+    if (file.size > MAX_DOCUMENT_SIZE) throw new Error("Maximum file size is 25 MB.");
+    const path = session.user.id + "/" + createUuid();
+    const result = await dropBucket().upload(path, file, {
+      cacheControl: "0",
+      contentType: file.type || "application/octet-stream",
+      metadata: { original_name: file.name }
+    });
+    if (result.error) throw result.error;
+  }
+
+  async function listDrops() {
+    if (!isReady()) return [];
+    const {data, error} = await client.rpc("box_active_drops");
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function downloadDrop(path) {
+    if (!isReady() || !path.startsWith(session.user.id + "/")) throw new Error("Sign in to download.");
+    const {data, error} = await dropBucket().download(path);
+    if (error) throw error;
+    return data;
+  }
+
   return {
+    uploadDrop, listDrops, downloadDrop,
     listFramePhotos, uploadFramePhoto, downloadFramePhoto, removeFramePhotos,
     start,
     isConfigured,
