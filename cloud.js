@@ -1173,21 +1173,21 @@ window.BoxCloud = (() => {
 
   const dropBucket = () => client.storage.from("box-file-drop");
 
-  async function uploadDrop(file) {
+  async function uploadDrop(file, thumbnail = null) {
     if (!isReady()) throw new Error("Sign in to use File Drop.");
     if (file.size > MAX_DOCUMENT_SIZE) throw new Error("Maximum file size is 25 MB.");
     const path = session.user.id + "/" + createUuid();
     const result = await dropBucket().upload(path, file, {
       cacheControl: "0",
       contentType: file.type || "application/octet-stream",
-      metadata: { original_name: file.name }
+      metadata: { original_name: file.name, thumbnail }
     });
     if (result.error) throw result.error;
   }
 
   async function listDrops() {
     if (!isReady()) return [];
-    const {data, error} = await client.rpc("box_active_drops");
+    const {data, error} = await client.rpc("box_drop_previews");
     if (error) throw error;
     return data || [];
   }

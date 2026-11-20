@@ -25581,3 +25581,12 @@ html:not(.phone-ui) .app-window.open:not(.maximized) .calendar-layout-redesign {
   #fileDropPanel .file-drop-thumb ~ small { grid-column: 2; }
   #fileDropPanel .file-drop-thumb ~ button { grid-column: 3; grid-row: 1 / 3; }
 }
+
+.file-drop-shortcut {
+  min-height: 44px; padding: 8px 16px; border: 1px solid var(--border-strong);
+  border-radius: 12px; background: var(--surface-solid); color: var(--text); font: inherit; cursor: pointer;
+}
+.desktop-drop-shortcut { margin-top: 10px; }
+.phone-drop-shortcut { display: none; }
+html.phone-ui .phone-drop-shortcut { display: inline-block; }
+#fileDropPanel .file-drop-thumb { opacity: 1; font-size: 10px; }
