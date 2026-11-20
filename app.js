@@ -9379,6 +9379,40 @@ function initializeFileDrop() {
   let revision = 0;
   let sending = false;
   let expiryTimer;
+  const previews = new Map();
+  function prunePreviews(livePaths = new Set()) {
+    for (const [path, item] of previews) {
+      if (livePaths.has(path)) continue;
+      previews.delete(path);
+      if (item.url) URL.revokeObjectURL(item.url);
+    }
+  }
+
+  async function loadPreview(image) {
+    const path = image.dataset.previewPath;
+    let item = previews.get(path);
+    if (!item) {
+      item = {};
+      previews.set(path, item);
+      item.pending = (async () => {
+        const original = await window.BoxCloud.downloadDrop(path);
+        if (previews.get(path) !== item) return;
+        const thumb = await createMemoryFrameThumbnail(original);
+        if (previews.get(path) === item) item.url = URL.createObjectURL(thumb || original);
+      })().catch(() => { if (previews.get(path) === item) previews.delete(path); });
+    }
+    await item.pending;
+    if (!image.isConnected || previews.get(path) !== item || !item.url) return;
+    image.src = item.url;
+  }
+  const observer = typeof IntersectionObserver === "function"
+    ? new IntersectionObserver(entries => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          observer.unobserve(entry.target);
+          void loadPreview(entry.target);
+        }
+      }) : null;
   function active() {
     return panel.open && !document.hidden && isAppWindowOpen("documents");
   }
@@ -9387,6 +9421,8 @@ function initializeFileDrop() {
     const token = ++revision;
     const started = Date.now();
     if (!window.BoxCloud?.isReady()) {
+      observer?.disconnect();
+      prunePreviews();
       list.replaceChildren();
       status.textContent = "Sign in to send and receive files.";
       return;
@@ -9395,6 +9431,8 @@ function initializeFileDrop() {
       const rows = await window.BoxCloud.listDrops();
       if (token !== revision) return;
       clearTimeout(expiryTimer);
+      observer?.disconnect();
+      prunePreviews(new Set(rows.filter(entry => started + entry.remaining_seconds * 1000 > Date.now()).map(entry => entry.path)));
       list.replaceChildren();
       let earliest = Infinity;
       for (const entry of rows) {
@@ -9432,9 +9470,21 @@ function initializeFileDrop() {
         });
         row.append(title, time, button);
         list.append(row);
+        if (/\.(?:jpe?g|jfif|png|webp|gif|avif|bmp|heic|heif|tiff?)$/i.test(entry.filename)) {
+          const image = document.createElement("img");
+          image.className = "file-drop-thumb";
+          image.alt = "";
+          image.dataset.previewPath = entry.path;
+          image.addEventListener("load", () => image.classList.add("ready"), {once:true});
+          row.prepend(image);
+          if (observer) observer.observe(image);
+          else void loadPreview(image);
+        }
       }
       if (!list.childElementCount) list.textContent = "No active transfers.";
       if (Number.isFinite(earliest)) expiryTimer = setTimeout(() => {
+        observer?.disconnect();
+        prunePreviews(new Set(rows.filter(entry => started + entry.remaining_seconds * 1000 > Date.now()).map(entry => entry.path)));
         list.replaceChildren();
         void refresh();
       }, Math.max(0, earliest - Date.now()));
@@ -9488,6 +9538,8 @@ function initializeFileDrop() {
     const next = event.detail?.session?.user?.id || null;
     if (account === next) return;
     account = next;
+    observer?.disconnect();
+    prunePreviews();
     revision++;
     clearTimeout(expiryTimer);
     list.replaceChildren();
