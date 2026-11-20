@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-shared-scrolling-1";
+const CACHE_NAME = "the-box-floating-window-scroll-1";
 
 const APP_FILES = [
   "./",

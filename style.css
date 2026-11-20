@@ -25540,3 +25540,29 @@ html.tablet-ui .app-window:not(.journal-focus-mode) > .window-content > :is(sect
 :is(html.tablet-ui, html.phone-ui) .task-modal-overlay .task-modal-card {
   max-height: calc(var(--box-viewport-height, 100dvh) - 24px) !important;
 }
+
+/* A floating window has two rows: its title bar and its scroll viewport.
+   The second row must be allowed to become smaller than its contents. */
+html:not(.phone-ui):not(.desk-clock-mode) .app-window.open:not(.maximized):not(.minimized):not(.journal-focus-mode) {
+  display: grid;
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
+}
+html:not(.phone-ui):not(.desk-clock-mode) .app-window.open:not(.maximized):not(.minimized):not(.journal-focus-mode) > .window-content {
+  grid-area: 2 / 1;
+  align-self: stretch;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none;
+  min-width: 0;
+  overflow-y: auto !important;
+  scrollbar-gutter: stable;
+  scroll-behavior: auto;
+}
+/* Keep the natural height of feature sections in a short window. */
+html:not(.phone-ui):not(.desk-clock-mode) .app-window.open:not(.maximized):not(.journal-focus-mode) > .window-content > :not(.hidden) {
+  flex-shrink: 0;
+  flex-basis: auto;
+}
+html:not(.phone-ui) .app-window.open:not(.maximized) .calendar-layout-redesign {
+  overflow-y: visible;
+}
