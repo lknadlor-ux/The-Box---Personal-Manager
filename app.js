@@ -3755,73 +3755,47 @@ function enterFullscreenFallback() {
   updateFullscreenUi();
 }
 
-function shouldPreferFullscreenFallback() {
-  const detected = getDetectedDeviceLayout();
-
-  // Tablet should use native browser fullscreen so Chrome tabs/address bars
-  // can actually disappear. Fallback is reserved for phone/iOS/safe-render
-  // paths where native page fullscreen is unavailable or unreliable.
-  return Boolean(
-    detected.iosDevice ||
-    detected.safeRenderer ||
-    document.documentElement.classList.contains("phone-ui")
-  );
-}
-
 async function enterBoxFullscreen() {
-  if (shouldPreferFullscreenFallback()) {
-    enterFullscreenFallback();
-    return;
-  }
-
   const root = document.documentElement;
-  const requestFullscreen =
-    root.requestFullscreen ||
-    root.webkitRequestFullscreen;
-
-  if (!requestFullscreen) {
+  if (root.classList.contains("phone-ui")) {
     enterFullscreenFallback();
     return;
   }
 
-  // Android/Chromium tablets can be sensitive to heavy compositing during the
-  // fullscreen transition. Prepare a solid, non-blurred surface first.
+  const request = root.requestFullscreen || root.webkitRequestFullscreen;
+  const tablet = root.classList.contains("tablet-ui") || getDetectedDeviceLayout().tablet;
+  if (!request) {
+    if (tablet) {
+      showToast("Full screen is unavailable in this tab.");
+    } else {
+      enterFullscreenFallback();
+    }
+    return;
+  }
+
   root.classList.add("box-native-fullscreen-preparing");
   closeLauncher();
-
-  await new Promise((resolve) => {
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(resolve);
-    });
-  });
-
   try {
+    // Request fullscreen directly from the tap, before yielding to a frame.
     if (root.requestFullscreen) {
-      try {
-        await root.requestFullscreen({ navigationUI: "hide" });
-      } catch (optionError) {
-        // Older Chromium builds may not accept the options object.
-        await root.requestFullscreen();
-      }
+      await root.requestFullscreen({ navigationUI: "hide" });
     } else {
       await root.webkitRequestFullscreen();
     }
-
     boxFullscreenFallbackActive = false;
-    root.classList.remove("box-native-fullscreen-preparing");
-    updateFullscreenUi();
-
-    // Chromium sometimes needs a second viewport pass after browser chrome
-    // disappears.
     window.setTimeout(() => {
       updateAppViewportHeight();
       window.dispatchEvent(new Event("resize"));
     }, 120);
-
-    return;
   } catch (error) {
+    if (tablet) {
+      showToast("Your browser couldn’t enter full screen. The desktop is still available.");
+    } else {
+      boxFullscreenFallbackActive = true;
+    }
+  } finally {
     root.classList.remove("box-native-fullscreen-preparing");
-    enterFullscreenFallback();
+    updateFullscreenUi();
   }
 }
 
