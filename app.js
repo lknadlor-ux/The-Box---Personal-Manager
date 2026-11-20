@@ -6624,6 +6624,10 @@ function closeApp(windowElement) {
 }
 
 function focusWindow(windowElement) {
+  // Taps on controls bubble to the window that already owns focus.
+  if (windowElement.classList.contains("active-window") &&
+      Number(windowElement.style.zIndex) === topWindowZ) return;
+
   topWindowZ += 1;
   windowElement.style.zIndex = topWindowZ;
 

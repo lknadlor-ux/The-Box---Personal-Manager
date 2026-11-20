@@ -25470,3 +25470,18 @@ html.tablet-ui body.light-theme #tabletDeadlines {
   white-space: nowrap;
 }
 html.tablet-ui .desktop-welcome:has(#tabletDeadlines) { max-height: calc(100% - 40px); overflow-y: auto; }
+
+/* Keep the tablet fullscreen wallpaper on the shell's own paint surface. */
+html.tablet-ui.box-native-fullscreen:not(.desk-clock-mode) body:not(.light-theme) .desktop-shell {
+  background: #10080d url("./crimson-silk.webp") center / cover no-repeat !important;
+}
+html.tablet-ui.box-native-fullscreen:not(.desk-clock-mode) .live-background {
+  display: none;
+}
+html.tablet-ui.box-native-fullscreen :is(.topbar, .dock, .launcher, .app-window, .modal-backdrop, .window-layer) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html.tablet-ui.box-native-fullscreen button:active:not(:disabled) {
+  transform: none !important;
+}
