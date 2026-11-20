@@ -1125,7 +1125,54 @@ window.BoxCloud = (() => {
     });
   });
 
+
+  function frameFolder(owner) {
+    if (!owner || owner !== session?.user?.id) throw new Error("Sign in to sync photos.");
+    return owner + "/memory-frame";
+  }
+
+  const frameBucket = () => client.storage.from(DOCUMENT_BUCKET);
+  const frameKey = photo => {
+    if (!/^[a-zA-Z0-9-]+$/.test(photo.id)) throw new Error("Invalid photo ID");
+    const encoder = new TextEncoder();
+    let displayName = Array.from(photo.name);
+    while (encoder.encode(displayName.join("")).length > 440) displayName.pop();
+    const bytes = encoder.encode(displayName.join(""));
+    return photo.id + "_" + Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+  };
+  async function listFramePhotos(owner) {
+    const folder = frameFolder(owner);
+    const photos = [];
+    for (let offset = 0; ; offset += 100) {
+      const {data, error} = await frameBucket().list(folder, {limit:100, offset, sortBy:{column:"name",order:"asc"}});
+      if (error) throw error;
+      for (const entry of data) {
+        const match = /^([a-zA-Z0-9-]+)_((?:[a-f0-9]{2})+)$/.exec(entry.name);
+        if (!match) continue;
+        const name = new TextDecoder().decode(Uint8Array.from(match[2].match(/../g), x => parseInt(x,16)));
+        photos.push({id:match[1], name, size:entry.metadata?.size, type:entry.metadata?.mimetype, createdAt:entry.created_at});
+      }
+      if (data.length < 100) return photos.sort((a,b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+    }
+  }
+  async function uploadFramePhoto(owner, photo, blob) {
+    const path = frameFolder(owner) + "/" + frameKey(photo);
+    const {error} = await frameBucket().upload(path, blob, {contentType:photo.type, upsert:false});
+    if (error && !/duplicate|already exists/i.test(error.message)) throw error;
+  }
+  async function downloadFramePhoto(owner, photo) {
+    const {data,error} = await frameBucket().download(frameFolder(owner) + "/" + frameKey(photo));
+    if (error) throw error;
+    return data;
+  }
+  async function removeFramePhotos(owner, photos) {
+    const folder = frameFolder(owner);
+    const {error} = await frameBucket().remove(photos.map(p => folder + "/" + frameKey(p)));
+    if (error) throw error;
+  }
+
   return {
+    listFramePhotos, uploadFramePhoto, downloadFramePhoto, removeFramePhotos,
     start,
     isConfigured,
     isReady,

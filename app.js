@@ -2312,9 +2312,91 @@ let memoryFrameConfig = normalizeMemoryFrameConfig(
   loadJSON(STORAGE.memoryFrameConfig, {})
 );
 
+let frameOwner = null;
+let frameRevision = 0;
+let frameRefresh = null;
+const frameDownloads = new Map();
+
+function frameConfigKey(owner) {
+  return owner ? STORAGE.memoryFrameConfig + ":" + owner : STORAGE.memoryFrameConfig;
+}
+
+function setFrameOwner(owner) {
+  if (owner === frameOwner) return;
+  frameOwner = owner;
+  frameRevision++;
+  frameRefresh = null;
+  frameDownloads.clear();
+  memoryFrameImageLoadToken++;
+  clearMemoryFrameSlideTimer();
+  clearMemoryFrameWidgetImages();
+  memoryFrameCurrentIndex = 0;
+  memoryFrameConfig = normalizeMemoryFrameConfig(loadJSON(frameConfigKey(owner), {}));
+  renderMemoryFrameManager();
+  renderMemoryFrameDesktop();
+  if (owner) setTimeout(refreshFramePhotos, 0);
+}
+
+async function refreshFramePhotos() {
+  if (!frameOwner || frameRefresh || document.hidden) return;
+  const owner = frameOwner;
+  const revision = frameRevision;
+  const request = {};
+  frameRefresh = request;
+  try {
+    const rows = await window.BoxCloud.listFramePhotos(owner);
+    if (owner !== frameOwner || revision !== frameRevision) return;
+    const previous = memoryFrameConfig.photos;
+    const byId = new Map(previous.map(p => [p.id,p]));
+    const photos = rows.map(row => byId.get(row.id) || normalizeMemoryFramePhotoMeta(row));
+    if (photos.length === previous.length && photos.every((p,i) => p === previous[i])) return;
+    const selected = previous[memoryFrameCurrentIndex]?.id;
+    memoryFrameCurrentIndex = Math.max(0, photos.findIndex(p => p.id === selected));
+    if (!previous.length && photos.length) memoryFrameConfig.enabled = true;
+    memoryFrameConfig.photos = photos;
+    if (!photos.some(p => p.id === memoryFrameCurrentPhotoId)) {
+      memoryFrameImageLoadToken++;
+      clearMemoryFrameWidgetImages();
+    }
+    saveMemoryFrameConfig();
+    renderMemoryFrameManager();
+    renderMemoryFrameDesktop();
+  } catch {
+    if (owner === frameOwner) setMemoryFrameStatus("Photo sync pending. Reconnect to refresh.");
+  } finally {
+    if (frameRefresh === request) frameRefresh = null;
+  }
+}
+
+async function importLocalFramePhotos(button) {
+  const owner = frameOwner;
+  if (!owner || button.disabled) return;
+  button.disabled = true;
+  try {
+    const remote = await window.BoxCloud.listFramePhotos(owner);
+    const known = new Set(remote.map(p => p.id));
+    const local = normalizeMemoryFrameConfig(loadJSON(STORAGE.memoryFrameConfig, {})).photos;
+    for (const photo of local) {
+      if (owner !== frameOwner) return;
+      if (known.has(photo.id)) continue;
+      if (known.size >= MEMORY_FRAME_MAX_PHOTOS) throw new Error("The account frame is full.");
+      const record = await readFrameRecord(photo.id);
+      if (!record?.blob) throw new Error("An original photo is missing on this device.");
+      await window.BoxCloud.uploadFramePhoto(owner, photo, record.blob);
+      known.add(photo.id);
+    }
+    if (owner === frameOwner) showToast("Device photos synced");
+  } catch (error) {
+    if (owner === frameOwner) showToast(error.message || "Photo sync interrupted. Try again.");
+  } finally {
+    button.disabled = false;
+    if (owner === frameOwner) await refreshFramePhotos();
+  }
+}
+
 function saveMemoryFrameConfig() {
   localStorage.setItem(
-    STORAGE.memoryFrameConfig,
+    frameConfigKey(frameOwner),
     JSON.stringify(memoryFrameConfig)
   );
 }
@@ -2375,6 +2457,27 @@ async function putMemoryFramePhotoRecord(record) {
 }
 
 async function getMemoryFramePhotoRecord(photoId) {
+  const owner = frameOwner;
+  if (!owner) return readFrameRecord(photoId);
+  const key = owner + ":" + photoId;
+  if (frameDownloads.has(key)) return frameDownloads.get(key);
+  const photo = memoryFrameConfig.photos.find(p => p.id === photoId);
+  if (!photo) return null;
+  const download = (async () => {
+    const cached = await readFrameRecord(key);
+    if (cached) return cached;
+    const blob = await window.BoxCloud.downloadFramePhoto(owner, photo);
+    if (owner !== frameOwner) return null;
+    const record = {id:key, blob, thumbnail:await createMemoryFrameThumbnail(blob)};
+    await putMemoryFramePhotoRecord(record).catch(() => {});
+    return record;
+  })();
+  frameDownloads.set(key, download);
+  try { return await download; }
+  finally { if (frameDownloads.get(key) === download) frameDownloads.delete(key); }
+}
+
+async function readFrameRecord(photoId) {
   const db = await openMemoryFrameDb();
 
   return new Promise((resolve, reject) => {
@@ -3197,6 +3300,8 @@ async function loadMemoryFrameThumbnail(card, photo, token) {
 function renderMemoryFrameManager() {
   if (!$("memoryFramePhotoList")) return;
 
+  const importButton = $("frameImportButton");
+  if (importButton) importButton.hidden = !frameOwner || !normalizeMemoryFrameConfig(loadJSON(STORAGE.memoryFrameConfig, {})).photos.some(p => !memoryFrameConfig.photos.some(row => row.id === p.id));
   $("memoryFrameEnabledToggle").checked = memoryFrameConfig.enabled;
   $("memoryFrameStyleSelect").value = memoryFrameConfig.style;
   $("memoryFrameFitSelect").value = memoryFrameConfig.fit;
@@ -3269,6 +3374,7 @@ function renderMemoryFrameManager() {
 }
 
 async function handleMemoryFrameFiles(fileList) {
+  const owner = frameOwner;
   const files = Array.from(fileList || []);
   if (!files.length) return;
 
@@ -3310,12 +3416,15 @@ async function handleMemoryFrameFiles(fileList) {
     });
 
     try {
+      if (owner !== frameOwner) return;
+      if (owner) await window.BoxCloud.uploadFramePhoto(owner, meta, file);
       const thumbnail = await createMemoryFrameThumbnail(file);
-      await putMemoryFramePhotoRecord({
-        id: meta.id,
-        blob: file,
-        thumbnail
-      });
+      const record = {id: owner ? owner + ":" + meta.id : meta.id, blob:file, thumbnail};
+      if (owner) await putMemoryFramePhotoRecord(record).catch(() => {});
+      else await putMemoryFramePhotoRecord(record);
+      if (owner !== frameOwner) return;
+      frameRevision++;
+      if (memoryFrameConfig.photos.some(p => p.id === meta.id)) continue;
       memoryFrameConfig.photos.push(meta);
       firstAddedId ||= meta.id;
       added += 1;
@@ -3351,7 +3460,7 @@ async function handleMemoryFrameFiles(fileList) {
 
   const message = added
     ? `${added} ${added === 1 ? "photo" : "photos"} added${skipped ? ` · ${skipped} skipped` : ""}`
-    : "No photos were added";
+    : owner ? "Upload failed. Check your connection and try again." : "No photos were added";
   setMemoryFrameStatus(message);
   showToast(message);
 }
@@ -3360,14 +3469,22 @@ async function removeMemoryFramePhoto(photoId) {
   const photo = memoryFrameConfig.photos.find((item) => item.id === photoId);
   if (!photo) return;
 
-  if (!window.confirm(`Remove “${photo.name}” from Memory Frame?`)) return;
+  const owner = frameOwner;
+  if (!window.confirm(owner ? "Remove this photo from Memory Frame on all signed-in devices?" : "Remove this photo from this device?")) return;
+  if (owner) {
+    try { await window.BoxCloud.removeFramePhotos(owner, [photo]); }
+    catch { showToast("Could not remove the synced photo. Try again."); return; }
+    if (owner !== frameOwner) return;
+  }
+  frameRevision++;
 
   try {
-    await deleteMemoryFramePhotoRecord(photoId);
+    await deleteMemoryFramePhotoRecord(owner ? owner + ':' + photoId : photoId);
   } catch (error) {
     // Continue removing stale metadata even if the blob is already missing.
   }
 
+  if (owner !== frameOwner) return;
   const wasCurrent = memoryFrameConfig.photos[memoryFrameCurrentIndex]?.id === photoId;
   memoryFrameConfig.photos = memoryFrameConfig.photos.filter(
     (item) => item.id !== photoId
@@ -3394,12 +3511,18 @@ async function removeMemoryFramePhoto(photoId) {
 
 async function clearMemoryFrameLibrary() {
   if (!memoryFrameConfig.photos.length) return;
-  if (!window.confirm("Remove all photos from Memory Frame on this device?")) return;
+  const owner = frameOwner;
+  if (!window.confirm(owner ? "Remove the listed Memory Frame photos from all signed-in devices?" : "Remove all photos from Memory Frame on this device?")) return;
 
   try {
-    await clearMemoryFramePhotoRecords();
+    const photos = memoryFrameConfig.photos.slice();
+    if (owner) await window.BoxCloud.removeFramePhotos(owner, photos);
+    if (owner !== frameOwner) return;
+    frameRevision++;
+    await Promise.all(photos.map(p => deleteMemoryFramePhotoRecord(owner ? owner + ":" + p.id : p.id)));
+    if (owner !== frameOwner) return;
   } catch (error) {
-    showToast("Could not clear local photo storage");
+    showToast("Could not finish clearing photos. Refresh and try again.");
     return;
   }
 
@@ -3444,6 +3567,20 @@ function initializeMemoryFrame() {
   const reset = $("memoryFrameResetLayoutButton");
   const clear = $("memoryFrameClearButton");
 
+  const importButton = document.createElement("button");
+  importButton.id = "frameImportButton";
+  importButton.type = "button";
+  importButton.textContent = "Sync existing device photos";
+  importButton.addEventListener("click", () => importLocalFramePhotos(importButton));
+  clear?.after(importButton);
+  const help = clear?.closest(".app-window")?.querySelectorAll("p, small");
+  help?.forEach(p => {
+    if (p.textContent.includes("Photos stay on this device")) p.textContent = "Sign in to sync photos across your devices. In local mode, pictures stay in this browser.";
+  });
+  window.addEventListener("online", refreshFramePhotos);
+  window.addEventListener("focus", refreshFramePhotos);
+  document.addEventListener("visibilitychange", refreshFramePhotos);
+  setInterval(refreshFramePhotos, 45000);
   fileInput?.addEventListener("change", (event) => {
     handleMemoryFrameFiles(event.currentTarget.files);
   });
@@ -18164,6 +18301,7 @@ $("signOutButton").addEventListener("click", async () => {
 window.addEventListener("boxcloudstatus", (event) => {
   const detail = event.detail || {};
   const nextUserId = detail.session?.user?.id || null;
+  setFrameOwner(nextUserId);
 
   setCloudStatus(detail.state || "offline", detail.label || "Local");
   updateAuthUI(detail.session || null);
