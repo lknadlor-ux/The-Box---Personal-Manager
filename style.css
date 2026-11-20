@@ -25496,3 +25496,47 @@ html.tablet-ui.box-native-fullscreen button:active:not(:disabled) {
 #fileDropPanel.drag-over { outline: 2px solid var(--accent); }
 #fileDropPanel [data-transfers] > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--border); }
 #fileDropPanel [data-transfers] span { flex: 1 1 120px; overflow-wrap: anywhere; }
+
+/* Use the space between the system bars for the tablet window surface. */
+html.tablet-ui.box-native-fullscreen:not(.desk-clock-mode) .desktop,
+html.tablet-ui.box-fallback-fullscreen:not(.desk-clock-mode) .desktop {
+  inset: 64px 0 76px !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+/* The actual title bar height can change with the layout and font size. */
+:is(html.tablet-ui, html.phone-ui) .app-window.open:not(.minimized):not(.journal-focus-mode) {
+  display: flex;
+  flex-direction: column;
+}
+:is(html.tablet-ui, html.phone-ui) .app-window > .window-titlebar {
+  flex: none;
+}
+:is(html.tablet-ui, html.phone-ui) .app-window.open:not(.journal-focus-mode) > .window-content {
+  box-sizing: border-box;
+  flex: 1 1 0px;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Let sections take their content height before scrolling the window. */
+html.tablet-ui .app-window:not(.journal-focus-mode) > .window-content > :is(section, form, .documents-layout, .calendar-layout, .task-workspace-panel) {
+  flex-shrink: 0;
+  flex-basis: auto;
+}
+.app-window > .window-content :is(.notes-list, .journal-entry-list, .our-space-plan-list,
+  .calendar-event-list, .document-sidebar, .document-workspace, .task-list-modern,
+  .template-library-panel, textarea) {
+  overscroll-behavior-y: auto !important;
+}
+
+/* Keep long dialogs reachable when a software keyboard reduces the viewport. */
+:is(html.tablet-ui, html.phone-ui) :is(.auth-card, .quick-capture-card, .vault-modal-card) {
+  max-height: calc(var(--box-viewport-height, 100dvh) - 24px) !important;
+  overflow-y: auto;
+}
+:is(html.tablet-ui, html.phone-ui) .task-modal-overlay .task-modal-card {
+  max-height: calc(var(--box-viewport-height, 100dvh) - 24px) !important;
+}
