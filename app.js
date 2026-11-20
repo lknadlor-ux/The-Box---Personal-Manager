@@ -8559,8 +8559,7 @@ function renderTabletDeadlines() {
     card = document.createElement("section");
     card.id = "tabletDeadlines";
     card.setAttribute("aria-labelledby", "tabletDeadlinesTitle");
-    card.innerHTML = '<header><h2 id="tabletDeadlinesTitle">Due soon</h2><button type="button">All tasks</button></header><div class="tablet-deadline-list"></div>';
-    card.querySelector("header button").addEventListener("click", () => openApp("tasks"));
+    card.innerHTML = '<header><h2 id="tabletDeadlinesTitle">Due soon</h2></header><div class="tablet-deadline-list"></div>';
     document.querySelector(".desktop-summary").before(card);
   }
 

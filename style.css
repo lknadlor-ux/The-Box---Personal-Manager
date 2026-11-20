@@ -25418,11 +25418,7 @@ html.tablet-ui body.light-theme #tabletDeadlines {
   background: linear-gradient(125deg, #fff8f2fa, #f6e5e5f7);
 }
 #tabletDeadlines header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  padding: 2px 0 5px;
+  padding: 9px 0 11px;
 }
 #tabletDeadlines h2 {
   margin: 0;
@@ -25439,12 +25435,6 @@ html.tablet-ui body.light-theme #tabletDeadlines {
   cursor: pointer;
 }
 #tabletDeadlines button:focus-visible { outline: 2px solid var(--card-muted); outline-offset: 1px; }
-#tabletDeadlines header button {
-  padding: 0 3px 0 8px;
-  color: var(--card-muted);
-  font-size: 15px;
-}
-#tabletDeadlines header button::after { content: "›"; margin-left: 6px; }
 #tabletDeadlines .tablet-deadline-list {
   font-size: 16px;
   line-height: 1.4;

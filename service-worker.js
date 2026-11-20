@@ -1,4 +1,4 @@
-const CACHE_NAME = "the-box-os-tablet-deadlines-style-1";
+const CACHE_NAME = "the-box-os-tablet-deadlines-title-1";
 
 const APP_FILES = [
   "./",
