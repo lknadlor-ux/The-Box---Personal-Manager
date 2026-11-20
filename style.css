@@ -25373,3 +25373,21 @@ html:not(.tablet-ui):not(.phone-ui) #windowsHome {
   html:not(.tablet-ui):not(.phone-ui) #windowsHome { grid-template-columns: minmax(0, 1fr); }
   #windowsHome .home-frame { grid-column: 1; grid-row: 3; width: min(100%, 290px); }
 }
+
+/* Give the tablet task list one vertical scrolling surface. */
+html.tablet-ui .tasks-window:has(#taskList:not(.hidden)) {
+  display: block;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+html.tablet-ui .tasks-window:has(#taskList:not(.hidden)) > section + section {
+  margin-top: 12px;
+}
+html.tablet-ui .tasks-window:has(#taskList:not(.hidden)) .task-workspace-panel {
+  display: block;
+}
+html.tablet-ui .tasks-window #taskList:not(.hidden) {
+  overflow: visible;
+  max-height: none;
+}

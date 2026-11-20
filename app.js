@@ -7655,9 +7655,10 @@ function getTaskRecurrenceLabel(recurrence) {
 
 function getNextRecurringDate(task) {
   const rule = normalizeTaskRecurrence(task.recurrence);
-  if (rule.type === "none" || !task.dueDate) return "";
+  if (rule.type === "none") return "";
 
-  const date = new Date(`${task.dueDate}T00:00:00`);
+  // An undated first occurrence starts its repeat interval on completion.
+  const date = new Date(`${task.dueDate || getLocalDateKey()}T00:00:00`);
   if (Number.isNaN(date.getTime())) return "";
 
   if (rule.type === "daily") date.setDate(date.getDate() + 1);
@@ -17362,11 +17363,6 @@ $("taskModalForm").addEventListener("submit", (event) => {
 
   const recurrenceType = $("taskModalRecurrence").value;
   const recurrenceDays = getTaskModalCustomDays();
-  if (recurrenceType !== "none" && !$("taskModalDueDate").value) {
-    showToast("Add a due date for recurring tasks");
-    $("taskModalDueDate").focus();
-    return;
-  }
   if (recurrenceType === "custom" && !recurrenceDays.length) {
     showToast("Select at least one repeat day");
     return;
