@@ -25393,37 +25393,90 @@ html.tablet-ui .tasks-window #taskList:not(.hidden) {
 }
 
 #tabletDeadlines { display: none; }
+
 html.tablet-ui #tabletDeadlines {
+  --card-ink: #fff4ee;
+  --card-muted: #edc8c8;
+  --card-line: #efb9b52e;
+  --card-tint: #ffd3cd10;
   display: block;
   box-sizing: border-box;
-  width: min(430px, calc(100% - 200px));
-  margin: 12px 0;
-  padding: 12px 16px;
-  border: 1px solid var(--border-strong);
-  border-radius: 16px;
-  background: var(--surface-solid);
-  color: var(--text);
+  width: min(440px, max(55%, calc(100% - 216px)), 100%);
+  margin: 16px 0;
+  padding: 8px clamp(14px, 2vw, 22px) 10px;
+  border: 1px solid var(--card-line);
+  border-radius: 18px;
+  color: var(--card-ink);
+  background: linear-gradient(125deg, #512434f5, #2a1822f5 68%);
+  box-shadow: inset 0 1px #fff5e911, 0 8px 24px #1608112b;
 }
-#tabletDeadlines header, #tabletDeadlines .tablet-deadline-list button {
+html.tablet-ui body.light-theme #tabletDeadlines {
+  --card-ink: #422430;
+  --card-muted: #713d4c;
+  --card-line: #80445230;
+  --card-tint: #803a5010;
+  background: linear-gradient(125deg, #fff8f2fa, #f6e5e5f7);
+}
+#tabletDeadlines header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   gap: 10px;
+  padding: 2px 0 5px;
 }
-#tabletDeadlines h2 { margin: 0; font-size: 20px; }
+#tabletDeadlines h2 {
+  margin: 0;
+  color: var(--card-ink);
+  font: 500 clamp(24px, 2.7vw, 30px)/1.15 Georgia, serif;
+  letter-spacing: -.035em;
+}
 #tabletDeadlines button {
   min-height: 44px;
+  border: 0;
   background: transparent;
   color: inherit;
-  border: 0;
-  cursor: pointer;
   font: inherit;
+  cursor: pointer;
 }
-#tabletDeadlines header button { text-decoration: underline; }
-#tabletDeadlines .tablet-deadline-list { font-size: 16px; }
+#tabletDeadlines button:focus-visible { outline: 2px solid var(--card-muted); outline-offset: 1px; }
+#tabletDeadlines header button {
+  padding: 0 3px 0 8px;
+  color: var(--card-muted);
+  font-size: 15px;
+}
+#tabletDeadlines header button::after { content: "›"; margin-left: 6px; }
+#tabletDeadlines .tablet-deadline-list {
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--card-muted);
+}
 #tabletDeadlines .tablet-deadline-list button {
-  width: 100%; padding: 6px 0; text-align: left; border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 0;
+  text-align: left;
+  border-top: 1px solid var(--card-line);
+  color: var(--card-ink);
 }
-#tabletDeadlines .tablet-deadline-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#tabletDeadlines time { flex-shrink: 0; font-size: 14px; }
+#tabletDeadlines .tablet-deadline-list button:active { background: var(--card-tint); }
+#tabletDeadlines .tablet-deadline-list span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-weight: 550;
+}
+#tabletDeadlines time {
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: var(--card-tint);
+  color: var(--card-muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 html.tablet-ui .desktop-welcome:has(#tabletDeadlines) { max-height: calc(100% - 40px); overflow-y: auto; }
