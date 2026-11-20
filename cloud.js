@@ -21,10 +21,7 @@ window.BoxCloud = (() => {
   let session = null;
   let syncing = false;
   let collectionTimers = {};
-  let noteTimer = null;
-  let noteWriteChain = Promise.resolve();
   let cloudHydrationSequence = 0;
-  let notesReconnectSequence = 0;
 
   const DOCUMENT_BUCKET = "box-documents";
   const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
@@ -104,82 +101,133 @@ window.BoxCloud = (() => {
     }, 700);
   }
 
-  async function saveNote(text) {
-    if (!isReady()) return { error: new Error("Sign in first.") };
-    const writingUserId = session.user.id;
+  const TASKS = "theBoxOS4Tasks";
+  const NOTES = "theBoxOS4Notes";
+  const OWNER = "theBoxOSNotesOwnerId";
+  const PENDING = "theBoxOSNotesPendingSync";
+  let workspaceChain = Promise.resolve();
+  let workspaceTimer;
+  let lastTaskSnapshot = "";
 
-    const { error } = await client
-      .from("notes")
-      .upsert({
-        user_id: writingUserId,
-        content: text,
-        updated_at: new Date().toISOString()
-      }, { onConflict: "user_id" });
-
-    emit(error ? "error" : "online", error ? "Sync error" : "Synced");
-    if (!error) {
-      window.dispatchEvent(new CustomEvent("boxcloudnotesaved", {
-        detail: { content: text, userId: writingUserId }
-      }));
-    }
-    return { error };
+  function taskQueueKey(owner) {
+    return "theBoxTaskChanges:" + owner;
   }
 
-  // Serialize writes so slow network responses cannot reorder successive edits.
-  function writeNoteInOrder(text, expectedUserId = session?.user?.id) {
-    noteWriteChain = noteWriteChain.catch(() => {}).then(() => {
-      if (!isReady() || session.user.id !== expectedUserId) {
-        return { error: new Error("Notes session changed before saving.") };
+  function recordTaskChanges(previous, items) {
+    const owner = session?.user?.id || localStorage.getItem(OWNER) || "local";
+    const changes = new Map(JSON.parse(localStorage.getItem(taskQueueKey(owner)) || "[]"));
+    const before = new Map(previous.map(item => [String(item.id), item]));
+    for (const item of items) {
+      const id = String(item.id);
+      if (JSON.stringify(before.get(id)) !== JSON.stringify(item)) changes.set(id, item);
+      before.delete(id);
+    }
+    for (const id of before.keys()) changes.set(id, null);
+    localStorage.setItem(taskQueueKey(owner), JSON.stringify([...changes]));
+    queueWorkspaceSync();
+  }
+
+  async function syncTasks(owner, bootstrap) {
+    const key = taskQueueKey(owner);
+    const previousOwner = localStorage.getItem(OWNER);
+    if (!previousOwner && localStorage.getItem(taskQueueKey("local"))) {
+      const guest = JSON.parse(localStorage.getItem(taskQueueKey("local")));
+      const account = JSON.parse(localStorage.getItem(key) || "[]");
+      localStorage.setItem(key, JSON.stringify([...new Map([...guest, ...account])]));
+      localStorage.removeItem(taskQueueKey("local"));
+    }
+    if (bootstrap && !previousOwner) {
+      const seed = JSON.parse(localStorage.getItem(TASKS) || "[]").map(item => [String(item.id), item]);
+      localStorage.setItem(key, JSON.stringify([...new Map([...seed, ...JSON.parse(localStorage.getItem(key) || "[]")])]));
+    }
+    const pending = JSON.parse(localStorage.getItem(key) || "[]");
+    for (const [id, payload] of pending) {
+      if (session?.user?.id !== owner) return;
+      const table = client.from("tasks");
+      let result;
+      if (payload === null) {
+        result = await table.delete().eq("user_id", owner).eq("id", id);
+      } else {
+        const row = {payload, updated_at: new Date().toISOString()};
+        result = await table.update(row).eq("user_id", owner).eq("id", id).select("id");
+        if (!result.error && !result.data.length && session?.user?.id === owner) {
+          result = await client.from("tasks").insert({...row, user_id: owner, id});
+        }
       }
-      return saveNote(text);
-    });
-    return noteWriteChain;
+      if (result.error) throw result.error;
+      const current = new Map(JSON.parse(localStorage.getItem(key) || "[]"));
+      if (JSON.stringify(current.get(id)) === JSON.stringify(payload)) current.delete(id);
+      localStorage.setItem(key, JSON.stringify([...current]));
+    }
+    const rows = [];
+    for (let offset = 0; ; offset += 500) {
+      if (session?.user?.id !== owner) return;
+      const {data, error} = await client.from("tasks").select("payload")
+        .eq("user_id", owner).order("id").range(offset, offset + 499);
+      if (error) throw error;
+      rows.push(...data.map(row => row.payload));
+      if (data.length < 500) break;
+    }
+    if (session?.user?.id !== owner || JSON.parse(localStorage.getItem(key) || "[]").length) return;
+    const snapshot = JSON.stringify([owner, rows]);
+    if (pending.length || snapshot !== lastTaskSnapshot) {
+      window.BoxOSCloudHydrate({tasks: rows});
+      lastTaskSnapshot = snapshot;
+    }
   }
 
-  function queueNoteSync(text) {
-    clearTimeout(noteTimer);
-    const queuedUserId = session?.user?.id;
-    noteTimer = setTimeout(() => { writeNoteInOrder(text, queuedUserId); }, 700);
+  async function syncNotes(owner, bootstrap) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const {data, error} = await client.from("notes").select("content,updated_at")
+        .eq("user_id", owner).maybeSingle();
+      if (error) throw error;
+      if (session?.user?.id !== owner) return;
+      const stored = localStorage.getItem(NOTES) || "";
+      const known = localStorage.getItem(OWNER);
+      const pending = (!known || known === owner) && (localStorage.getItem(PENDING) === "1" || (bootstrap && !known && !data && stored));
+      const remote = data?.content || "";
+      if (!pending) {
+        if (known !== owner || (data && stored !== remote)) {
+          window.BoxOSCloudHydrate({notes: remote, notesUserId: owner});
+        }
+        return;
+      }
+      const merged = remote ? window.mergePendingNotesPayload(stored, remote) : stored;
+      if (merged !== remote) {
+        const previousTime = Date.parse(data?.updated_at) || 0;
+        const row = {content: merged, updated_at: new Date(Math.max(Date.now(), previousTime + 1)).toISOString()};
+        const result = data
+          ? await client.from("notes").update(row).eq("user_id", owner)
+              .eq("updated_at", data.updated_at).select("user_id")
+          : await client.from("notes").insert({...row, user_id: owner});
+        if (result.error?.code === "23505" || (data && !result.error && !result.data.length)) continue;
+        if (result.error) throw result.error;
+      }
+      if (session?.user?.id !== owner || localStorage.getItem(NOTES) !== stored) return;
+      localStorage.removeItem(PENDING);
+      if (stored !== merged || known !== owner) window.BoxOSCloudHydrate({notes: merged, notesUserId: owner});
+      window.dispatchEvent(new CustomEvent("boxcloudnotesaved", {detail: {content: merged, userId: owner}}));
+      return;
+    }
+    throw new Error("Notes are changing on another device. Sync will retry.");
   }
 
-  // A failed/offline note write remains marked pending in localStorage.
-  // On reconnect, fetch the current remote snapshot FIRST and let the app's
-  // existing per-note merge reconcile local and remote timestamps/tombstones.
-  // Never upload a stale local snapshot directly over a newer cloud version.
-  async function reconcilePendingNotesOnReconnect() {
-    if (!isReady() || localStorage.getItem("theBoxOSNotesPendingSync") !== "1") {
-      return { skipped: true };
-    }
-
-    const userId = session.user.id;
-    const recordedOwner = localStorage.getItem("theBoxOSNotesOwnerId") || "";
-    if (recordedOwner && recordedOwner !== userId) return { skipped: true };
-
-    const sequence = ++notesReconnectSequence;
-    clearTimeout(noteTimer);
-    noteTimer = null;
-    emit("syncing", "Checking pending notes");
-
-    const { data, error } = await client.from("notes")
-      .select("content").eq("user_id", userId).maybeSingle();
-
-    if (!isReady() || session.user.id !== userId ||
-        sequence !== notesReconnectSequence) {
-      return { stale: true };
-    }
-    if (error) {
-      emit("error", "Notes sync pending");
-      return { error };
-    }
-
-    if (typeof window.BoxOSCloudHydrate !== "function") {
-      return { error: new Error("Notes hydration is unavailable.") };
-    }
-    window.BoxOSCloudHydrate({
-      notes: typeof data?.content === "string" ? data.content : "",
-      notesUserId: userId
+  function syncWorkspace(bootstrap = false) {
+    const owner = session?.user?.id;
+    if (!owner) return Promise.resolve({error: null});
+    workspaceChain = workspaceChain.catch(() => {}).then(async () => {
+      if (session?.user?.id !== owner) return {error: null};
+      const results = await Promise.allSettled([syncTasks(owner, bootstrap), syncNotes(owner, bootstrap)]);
+      const failure = results.find(result => result.status === "rejected");
+      if (session?.user?.id === owner) emit(failure ? "error" : "online", failure ? "Sync pending" : "Synced");
+      return {error: failure?.reason || null};
     });
-    return { error: null };
+    return workspaceChain;
+  }
+
+  function queueWorkspaceSync() {
+    clearTimeout(workspaceTimer);
+    workspaceTimer = setTimeout(() => syncWorkspace(), 450);
   }
 
   function createUuid() {
@@ -976,6 +1024,7 @@ window.BoxCloud = (() => {
       ourSpaceResult.error;
 
     if (firstError) {
+      await syncWorkspace();
       emit("error", "Cloud error");
       return { error: firstError };
     }
@@ -991,75 +1040,21 @@ window.BoxCloud = (() => {
 
     if (cloudHasData && typeof window.BoxOSCloudHydrate === "function") {
       window.BoxOSCloudHydrate({
-        tasks: tasksResult.data,
         events: eventsResult.data,
         finance_entries: financeResult.data,
-        notes: noteResult.data?.content,
-        notesUserId: session.user.id,
         custom_templates: templatesResult.data || [],
         journal_entries: journalResult.data || [],
         our_space_plans: ourSpaceResult.data || []
       });
     } else {
-      const previousNotesOwner = localStorage.getItem("theBoxOSNotesOwnerId") || "";
-      if (previousNotesOwner && previousNotesOwner !== session.user.id &&
-          typeof window.BoxOSCloudHydrate === "function") {
-        window.BoxOSCloudHydrate({ notes: "", notesUserId: session.user.id });
-      }
+      const seed = await syncWorkspace(true);
+      if (seed.error) return seed;
       await syncNow();
     }
 
-    emit("online", "Synced");
-    return { error: null };
+    return syncWorkspace();
   }
 
-
-  // Manual Sync Now must never upload a stale Notes snapshot over a newer
-  // cloud copy. Unlike the other collections, Notes already has its own
-  // merge/tombstone logic, so reuse that code after fetching the remote row.
-  async function syncNotesNowSafely() {
-    if (!isReady()) return { error: new Error("Sign in first.") };
-    const requestedUserId = session.user.id;
-    const recordedOwner = localStorage.getItem("theBoxOSNotesOwnerId") || "";
-    if (recordedOwner && recordedOwner !== requestedUserId) {
-      return { error: new Error("Notes belong to another account; sign in to that account first.") };
-    }
-
-    // A queued edit must not write a stale snapshot while we read the cloud.
-    clearTimeout(noteTimer);
-    noteTimer = null;
-    const { data, error } = await client.from("notes")
-      .select("content").eq("user_id", requestedUserId).maybeSingle();
-    if (!isReady() || session.user.id !== requestedUserId) {
-      return { error: new Error("Account changed during Notes sync.") };
-    }
-    if (error) return { error };
-
-    const remoteNotes = typeof data?.content === "string" ? data.content : null;
-    const localNotes = localStorage.getItem("theBoxOS4Notes") || "";
-    if (remoteNotes === null) {
-      return localNotes ? writeNoteInOrder(localNotes, requestedUserId) : { error: null };
-    }
-    if (localStorage.getItem("theBoxOSNotesPendingSync") !== "1" &&
-        localNotes === remoteNotes) {
-      return { error: null };
-    }
-    if (typeof window.BoxOSCloudHydrate !== "function") {
-      return { error: new Error("Notes merge support is unavailable.") };
-    }
-
-    // Pending changes merge via updatedAt and tombstones. Without pending
-    // changes, the existing hydration path takes the newer remote snapshot.
-    const pending = localStorage.getItem("theBoxOSNotesPendingSync") === "1";
-    window.BoxOSCloudHydrate({ notes: remoteNotes, notesUserId: requestedUserId });
-    if (!pending) return { error: null };
-
-    // Hydration queued its normal debounced write; perform that exact merged
-    // snapshot once now, in the existing serialized note-write queue.
-    clearTimeout(noteTimer);
-    noteTimer = null;
-    return writeNoteInOrder(localStorage.getItem("theBoxOS4Notes") || "", requestedUserId);
-  }
 
   async function syncNow() {
     if (!isReady()) return { error: new Error("Sign in first.") };
@@ -1068,7 +1063,7 @@ window.BoxCloud = (() => {
     emit("syncing", "Syncing");
 
     try {
-      const localTasks = JSON.parse(localStorage.getItem("theBoxOS4Tasks") || "[]");
+
       const localEvents = JSON.parse(localStorage.getItem("theBoxOS4Events") || "[]");
       const localFinance = JSON.parse(localStorage.getItem("theBoxOS4Finance") || "[]");
       const localTemplates = JSON.parse(localStorage.getItem("theBoxOSCustomTemplates") || "[]");
@@ -1076,10 +1071,9 @@ window.BoxCloud = (() => {
       const localOurSpace = JSON.parse(localStorage.getItem("theBoxOSOurSpacePlans") || "[]");
 
       const results = await Promise.all([
-        replaceCollection("tasks", localTasks),
+        syncWorkspace(),
         replaceCollection("events", localEvents),
         replaceCollection("finance_entries", localFinance),
-        syncNotesNowSafely(),
         replaceCustomTemplates(localTemplates),
         replaceJournalEntries(localJournal),
         replaceOurSpacePlans(localOurSpace)
@@ -1103,13 +1097,15 @@ window.BoxCloud = (() => {
     session = data.session;
     emit(session ? "online" : "offline", session ? "Connected" : "Sign in");
 
-    client.auth.onAuthStateChange(async (_event, nextSession) => {
+    client.auth.onAuthStateChange((_event, nextSession) => {
+      const changed = session?.user?.id !== nextSession?.user?.id;
       session = nextSession;
-      emit(session ? "online" : "offline", session ? "Connected" : "Sign in");
-
-      if (session) {
-        await hydrateFromCloud();
-      }
+      if (changed) lastTaskSnapshot = "";
+      setTimeout(() => {
+        if (session !== nextSession) return;
+        emit(session ? "online" : "offline", session ? "Connected" : "Sign in");
+        if (changed && session) void hydrateFromCloud();
+      }, 0);
     });
 
     if (session) {
@@ -1119,11 +1115,14 @@ window.BoxCloud = (() => {
     return { session };
   }
 
-  window.addEventListener("online", () => {
-    void reconcilePendingNotesOnReconnect().catch(() => {
-      emit("error", "Notes sync pending");
-    });
+  window.addEventListener("online", queueWorkspaceSync);
+  window.addEventListener("focus", queueWorkspaceSync);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) queueWorkspaceSync();
   });
+  setInterval(() => {
+    if (isReady() && !document.hidden) queueWorkspaceSync();
+  }, 20000);
 
 
   function frameFolder(owner) {
@@ -1210,7 +1209,8 @@ window.BoxCloud = (() => {
     signOut,
     syncNow,
     queueCollectionSync,
-    queueNoteSync,
+    recordTaskChanges,
+    queueNoteSync: queueWorkspaceSync,
     listDocuments,
     listDocumentFolders,
     createDocumentFolder,

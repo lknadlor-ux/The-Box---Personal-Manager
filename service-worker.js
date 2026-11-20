@@ -1,13 +1,13 @@
-const CACHE_NAME = "the-box-tablet-fullscreen-2";
+const CACHE_NAME = "the-box-workspace-sync-1";
 
 const APP_FILES = [
   "./",
   "./index.html",
-  "./style.css",
+  "./style.css?v=workspace-sync-1",
   "./crimson-silk.webp",
   "./config.js",
-  "./cloud.js",
-  "./app.js",
+  "./cloud.js?v=workspace-sync-1",
+  "./app.js?v=workspace-sync-1",
   "./manifest.json"
 ];
 

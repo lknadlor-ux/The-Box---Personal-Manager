@@ -722,11 +722,14 @@ function saveJSON(key, value) {
       ? getTaskGoalCloudRecords(value, goals)
       : value;
 
+  if (key === STORAGE.tasks) {
+    const previous = JSON.parse(localStorage.getItem(key) || "[]");
+    window.BoxCloud?.recordTaskChanges(previous, storedValue);
+  }
   localStorage.setItem(key, JSON.stringify(storedValue));
 
   if (window.BoxCloud?.isReady()) {
     const cloudCollections = {
-      [STORAGE.tasks]: "tasks",
       [STORAGE.events]: "events",
       [STORAGE.finance]: "finance_entries"
     };

@@ -25586,7 +25586,8 @@ html:not(.phone-ui) .app-window.open:not(.maximized) .calendar-layout-redesign {
   min-height: 44px; padding: 8px 16px; border: 1px solid var(--border-strong);
   border-radius: 12px; background: var(--surface-solid); color: var(--text); font: inherit; cursor: pointer;
 }
-.desktop-drop-shortcut { margin-top: 10px; }
+.desktop-drop-shortcut { display: none; }
+html.tablet-ui .desktop-drop-shortcut { display: inline-block; margin-top: 10px; }
 .phone-drop-shortcut { display: none; }
 html.phone-ui .phone-drop-shortcut { display: inline-block; }
 #fileDropPanel .file-drop-thumb { opacity: 1; font-size: 10px; }
