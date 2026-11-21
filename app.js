@@ -8574,14 +8574,20 @@ function renderWindowsTasks(open, nextEvent) {
   const list = $("homeTasks");
   if (!list) return;
   list.replaceChildren();
-  const queue = getDashboardTaskQueue(open).slice(0, 2);
-  if (!queue.length) list.textContent = "No open tasks.";
+  const today = getLocalDateKey();
+  const queue = getDashboardTaskQueue(open.filter(task => task.dueDate === today)).slice(0, 2);
+  if (!queue.length) list.textContent = "No tasks due today.";
   for (const task of queue) {
     const row = document.createElement("label");
     const check = document.createElement("input");
     check.type = "checkbox";
     check.addEventListener("change", () => setTaskStatus(task, "done"));
-    row.append(check, document.createTextNode(task.text || "Untitled task"));
+    const title = document.createElement("span");
+    title.textContent = task.text || "Untitled task";
+    const due = document.createElement("time");
+    due.dateTime = task.dueDate;
+    due.textContent = new Date(`${task.dueDate}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+    row.append(check, title, due);
     list.append(row);
   }
   $("homeEvent").textContent = nextEvent

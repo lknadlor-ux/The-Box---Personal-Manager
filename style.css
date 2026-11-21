@@ -25347,7 +25347,8 @@ html:not(.tablet-ui):not(.phone-ui) #windowsHome {
 .home-today h2 { margin: 0; font-size: 27px; }
 #windowsHome .home-today header button, #homeEvent { background: transparent; border: 0; color: #ffcec6; padding: 7px 0; }
 #homeTasks { display: grid; gap: 12px; margin: 18px 0; overflow-wrap: anywhere; }
-#homeTasks label { display: flex; gap: 10px; align-items: baseline; }
+#homeTasks label { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+#homeTasks time { justify-self: end; white-space: nowrap; font-size: .9em; font-variant-numeric: tabular-nums; }
 #homeTasks input { accent-color: #c6767e; width: 18px; height: 18px; flex: none; }
 #windowsHome #homeEvent { width: 100%; text-align: left; border-top: 1px solid #ffffff30; padding-top: 14px; }
 .home-links { grid-row: 2; flex-wrap: wrap; }

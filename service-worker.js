@@ -1,13 +1,13 @@
-const CACHE_NAME = "the-box-topbar-settings-1";
+const CACHE_NAME = "the-box-today-dates-1";
 
 const APP_FILES = [
   "./",
   "./index.html",
-  "./style.css?v=topbar-settings-1",
+  "./style.css?v=today-dates-1",
   "./crimson-silk.webp",
   "./config.js",
-  "./cloud.js?v=topbar-settings-1",
-  "./app.js?v=topbar-settings-1",
+  "./cloud.js?v=today-dates-1",
+  "./app.js?v=today-dates-1",
   "./manifest.json"
 ];
 
