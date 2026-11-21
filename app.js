@@ -8509,7 +8509,9 @@ function initializeWindowsHome() {
   host.id = "windowsHome";
   host.innerHTML = `
     <section class="home-today"><header><h2>Today</h2><button data-home-app="today">Open Today</button></header>
-      <div id="homeTasks"></div><button id="homeEvent" data-home-app="calendar"></button>
+      <div class="home-task-list" id="homeTasks"></div>
+      <h3 class="home-upcoming-title">Upcoming</h3><div class="home-task-list" id="homeUpcomingTasks"></div>
+      <button id="homeEvent" data-home-app="calendar"></button>
     </section>
     <nav class="home-links" aria-label="Desktop shortcuts">
       <button data-home-app="tasks"><b>✓</b>Tasks</button><button data-home-app="calendar"><b>▦</b>Calendar</button>
@@ -8570,6 +8572,20 @@ function renderTabletDeadlines() {
   }
 }
 
+function createHomeTaskRow(task) {
+  const row = document.createElement("label");
+  const check = document.createElement("input");
+  check.type = "checkbox";
+  check.addEventListener("change", () => setTaskStatus(task, "done"));
+  const title = document.createElement("span");
+  title.textContent = task.text || "Untitled task";
+  const due = document.createElement("time");
+  due.dateTime = task.dueDate;
+  due.textContent = new Date(`${task.dueDate}T00:00:00`).toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" });
+  row.append(check, title, due);
+  return row;
+}
+
 function renderWindowsTasks(open, nextEvent) {
   const list = $("homeTasks");
   if (!list) return;
@@ -8577,19 +8593,14 @@ function renderWindowsTasks(open, nextEvent) {
   const today = getLocalDateKey();
   const queue = getDashboardTaskQueue(open.filter(task => task.dueDate === today)).slice(0, 2);
   if (!queue.length) list.textContent = "No tasks due today.";
-  for (const task of queue) {
-    const row = document.createElement("label");
-    const check = document.createElement("input");
-    check.type = "checkbox";
-    check.addEventListener("change", () => setTaskStatus(task, "done"));
-    const title = document.createElement("span");
-    title.textContent = task.text || "Untitled task";
-    const due = document.createElement("time");
-    due.dateTime = task.dueDate;
-    due.textContent = new Date(`${task.dueDate}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric" });
-    row.append(check, title, due);
-    list.append(row);
-  }
+  list.append(...queue.map(createHomeTaskRow));
+
+  const upcoming = open.filter(task => task.dueDate > today)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 3);
+  const upcomingList = $("homeUpcomingTasks");
+  upcomingList.replaceChildren(...upcoming.map(createHomeTaskRow));
+  if (!upcoming.length) upcomingList.textContent = "No upcoming tasks.";
   $("homeEvent").textContent = nextEvent
     ? formatEventDate(nextEvent.date) + " · " + nextEvent.title : "No upcoming event";
 }

@@ -25346,10 +25346,10 @@ html:not(.tablet-ui):not(.phone-ui) #windowsHome {
 .home-today header { justify-content: space-between; }
 .home-today h2 { margin: 0; font-size: 27px; }
 #windowsHome .home-today header button, #homeEvent { background: transparent; border: 0; color: #ffcec6; padding: 7px 0; }
-#homeTasks { display: grid; gap: 12px; margin: 18px 0; overflow-wrap: anywhere; }
-#homeTasks label { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
-#homeTasks time { justify-self: end; white-space: nowrap; font-size: .9em; font-variant-numeric: tabular-nums; }
-#homeTasks input { accent-color: #c6767e; width: 18px; height: 18px; flex: none; }
+#windowsHome .home-task-list { display: grid; gap: 12px; margin: 18px 0; overflow-wrap: anywhere; }
+#windowsHome .home-task-list label { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+#windowsHome .home-task-list time { justify-self: end; white-space: nowrap; font-size: .9em; font-variant-numeric: tabular-nums; }
+#windowsHome .home-task-list input { accent-color: #c6767e; width: 18px; height: 18px; flex: none; }
 #windowsHome #homeEvent { width: 100%; text-align: left; border-top: 1px solid #ffffff30; padding-top: 14px; }
 .home-links { grid-row: 2; flex-wrap: wrap; }
 #windowsHome .home-links button { flex: 1 1 70px; padding: 12px 4px; font-size: 16px; }
@@ -25617,3 +25617,6 @@ html.phone-ui .phone-drop-shortcut { display: inline-block; }
 }
 #workspaceRefresh:disabled { opacity: .55; }
 html.phone-ui #themeButton { display: none; }
+
+.home-upcoming-title { margin: 12px 0 0; font-size: 1.05em; }
+#windowsHome #homeUpcomingTasks { margin-top: 8px; }

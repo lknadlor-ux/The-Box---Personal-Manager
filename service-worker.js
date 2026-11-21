@@ -1,13 +1,13 @@
-const CACHE_NAME = "the-box-today-dates-1";
+const CACHE_NAME = "the-box-upcoming-dates-1";
 
 const APP_FILES = [
   "./",
   "./index.html",
-  "./style.css?v=today-dates-1",
+  "./style.css?v=upcoming-dates-1",
   "./crimson-silk.webp",
   "./config.js",
-  "./cloud.js?v=today-dates-1",
-  "./app.js?v=today-dates-1",
+  "./cloud.js?v=upcoming-dates-1",
+  "./app.js?v=upcoming-dates-1",
   "./manifest.json"
 ];
 
