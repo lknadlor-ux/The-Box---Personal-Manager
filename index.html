@@ -72,7 +72,7 @@
     })();
   </script>
 <link href="manifest.json" rel="manifest"/>
-<link href="style.css?v=workspace-sync-1" rel="stylesheet"/>
+<link href="style.css?v=topbar-settings-1" rel="stylesheet"/>
 </head>
 <body>
 <div class="desktop-shell">
@@ -100,6 +100,8 @@
 <div class="cloud-status offline" id="cloudStatus" title="Cloud status">
 <span></span><strong>Local</strong>
 </div>
+<button type="button" class="topbar-button" id="workspaceRefresh" aria-label="Refresh tasks and notes" title="Refresh tasks and notes">↻</button>
+<button type="button" class="topbar-button" id="workspaceSettings" aria-label="Open settings" title="Settings" aria-haspopup="dialog" aria-controls="workspacePreferences">⚙</button>
 <button aria-label="Toggle theme" class="topbar-button" id="themeButton">☾</button>
 <button aria-label="Enter full screen" class="topbar-button fullscreen-topbar-button" id="fullscreenButton" title="Full screen" type="button">⛶</button>
 <button aria-label="Quick capture" class="topbar-button quick-capture-topbar-button" id="quickCaptureButton" title="Quick capture" type="button">＋</button>
@@ -115,6 +117,14 @@
 <div class="profile">L</div>
 </div>
 </header>
+<dialog id="workspacePreferences" aria-labelledby="preferencesTitle">
+<form method="dialog">
+<header><h2 id="preferencesTitle">Settings</h2><button class="window-button" aria-label="Close settings">✕</button></header>
+<label>Theme<select id="prefTheme"><option value="dark">Dark</option><option value="light">Light</option></select></label>
+<label>Layout<select id="prefLayout"><option value="auto">Auto</option><option value="windows">Windows</option><option value="tablet">Tablet</option><option value="mobile">Mobile</option></select></label>
+<label>Wallpaper motion<select id="prefMotion"><option value="live">Live</option><option value="minimal">Minimal</option><option value="static">Static</option></select></label>
+</form>
+</dialog>
 <aside class="launcher" id="launcher">
 <div class="launcher-header">
 <div class="launcher-title-group">
@@ -3817,7 +3827,7 @@ Photos stay on this device in browser storage. The slideshow loads only the curr
 <div aria-live="polite" id="toast" role="status"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
-<script src="cloud.js?v=workspace-sync-1"></script>
-<script src="app.js?v=workspace-sync-1"></script>
+<script src="cloud.js?v=topbar-settings-1"></script>
+<script src="app.js?v=topbar-settings-1"></script>
 </body>
 </html>

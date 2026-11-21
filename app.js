@@ -16607,9 +16607,7 @@ async function loadWeather() {
 }
 
 function restoreTheme() {
-  if (localStorage.getItem(STORAGE.theme) === "light") {
-    document.body.classList.add("light-theme");
-  }
+  document.body.classList.toggle("light-theme", localStorage.getItem(STORAGE.theme) === "light");
   $("themeButton").textContent =
     document.body.classList.contains("light-theme") ? "☀" : "☾";
 }
@@ -17427,6 +17425,42 @@ $("deskClockDateToggle").addEventListener("change", (event) => {
 $("deskClockDeskModeButton").addEventListener("click", enterDeskClockMode);
 $("deskClockExitButton").addEventListener("click", () => exitDeskClockMode());
 $("deskClockWakeButton").addEventListener("click", toggleDeskClockWakeLock);
+
+$("workspaceSettings").addEventListener("click", () => {
+  $("prefTheme").value = document.body.classList.contains("light-theme") ? "light" : "dark";
+  $("prefLayout").value = getViewModePreference();
+  $("prefMotion").value = normalizeBackgroundMode(localStorage.getItem(STORAGE.backgroundMode) || "live");
+  $("workspacePreferences").showModal();
+});
+
+$("prefTheme").addEventListener("change", event => {
+  localStorage.setItem(STORAGE.theme, event.target.value);
+  restoreTheme();
+  restoreBackgroundMode();
+});
+$("prefLayout").addEventListener("change", event => setViewModePreference(event.target.value));
+$("prefMotion").addEventListener("change", event => applyBackgroundMode(event.target.value, {persist: true}));
+
+$("workspaceRefresh").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  if (button.disabled) return;
+  if (!window.BoxCloud?.isReady()) {
+    showToast("Sign in to refresh tasks and notes from your other devices.");
+    return;
+  }
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  try {
+    const result = await window.BoxCloud.refreshTasksAndNotes();
+    if (result.error) throw result.error;
+    showToast("Tasks and notes are up to date.");
+  } catch {
+    showToast("Couldn’t refresh tasks and notes. Check your connection and try again.");
+  } finally {
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+  }
+});
 
 $("themeButton").addEventListener("click", () => {
   document.body.classList.toggle("light-theme");

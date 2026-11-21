@@ -1,13 +1,13 @@
-const CACHE_NAME = "the-box-workspace-sync-1";
+const CACHE_NAME = "the-box-topbar-settings-1";
 
 const APP_FILES = [
   "./",
   "./index.html",
-  "./style.css?v=workspace-sync-1",
+  "./style.css?v=topbar-settings-1",
   "./crimson-silk.webp",
   "./config.js",
-  "./cloud.js?v=workspace-sync-1",
-  "./app.js?v=workspace-sync-1",
+  "./cloud.js?v=topbar-settings-1",
+  "./app.js?v=topbar-settings-1",
   "./manifest.json"
 ];
 

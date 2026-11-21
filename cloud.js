@@ -1208,6 +1208,7 @@ window.BoxCloud = (() => {
     signUp,
     signOut,
     syncNow,
+    refreshTasksAndNotes: () => syncWorkspace(),
     queueCollectionSync,
     recordTaskChanges,
     queueNoteSync: queueWorkspaceSync,

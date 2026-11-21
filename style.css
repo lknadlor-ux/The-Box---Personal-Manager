@@ -25591,3 +25591,28 @@ html.tablet-ui .desktop-drop-shortcut { display: inline-block; margin-top: 10px;
 .phone-drop-shortcut { display: none; }
 html.phone-ui .phone-drop-shortcut { display: inline-block; }
 #fileDropPanel .file-drop-thumb { opacity: 1; font-size: 10px; }
+
+#workspacePreferences {
+  width: min(350px, calc(100vw - 32px));
+  max-height: 85dvh;
+  box-sizing: border-box;
+  margin: auto;
+  padding: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  color: var(--text);
+  background: var(--surface-solid);
+}
+#workspacePreferences::backdrop { background: rgb(0 0 0 / 45%); }
+#workspacePreferences form { display: grid; gap: 16px; }
+#workspacePreferences header, #workspacePreferences label {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+#workspacePreferences h2 { margin: 0; font-size: 1.25rem; }
+#workspacePreferences select {
+  min-height: 42px; min-width: 110px; padding: 6px 10px;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface-solid); color: var(--text); font: inherit;
+}
+#workspaceRefresh:disabled { opacity: .55; }
+html.phone-ui #themeButton { display: none; }
